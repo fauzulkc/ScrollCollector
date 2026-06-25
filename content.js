@@ -1,6 +1,6 @@
 /**
- * Universal Local Mindstream Analytics – Content Script
- * ─────────────────────────────────────────────────────
+ * ScrollCollector – Content Script
+ * ────────────────────────────────
  * Platform-agnostic heuristic text extraction with:
  *   • MutationObserver (debounced 250ms)
  *   • Text-density filtering
@@ -92,7 +92,7 @@
   const DEBOUNCE_MS = 250;
 
   /** Attribute used to mark already-processed elements */
-  const PROCESSED_ATTR = 'data-mindstream-processed';
+  const PROCESSED_ATTR = 'data-scrollcollector-processed';
 
   /** Platform hostname */
   const SOURCE_PLATFORM = window.location.hostname;

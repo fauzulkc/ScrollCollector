@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Mindstream — Side Panel Controller
+   ScrollCollector — Side Panel Controller
    Flat, monochromic, separator-based design
    ========================================================================== */
 
@@ -42,7 +42,7 @@ let dom = {};
 // ---------- Theme ----------
 
 function initTheme() {
-  const saved = localStorage.getItem('mindstream-theme') || 'dark';
+  const saved = localStorage.getItem('scrollcollector-theme') || 'dark';
   document.documentElement.setAttribute('data-theme', saved);
 }
 
@@ -50,7 +50,7 @@ function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('mindstream-theme', next);
+  localStorage.setItem('scrollcollector-theme', next);
 }
 
 // ---------- Utilities ----------

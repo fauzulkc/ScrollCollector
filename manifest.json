@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Universal Local Mindstream Analytics",
+  "name": "ScrollCollector",
   "description": "Privacy-first, zero-latency content categorization powered by on-device AI. Tracks your mindstream across social feeds in real time.",
   "version": "2.0.0",
   "permissions": [

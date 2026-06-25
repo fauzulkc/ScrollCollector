@@ -1,7 +1,7 @@
 /**
  * background.js
  *
- * Service worker orchestrator for Universal Local Mindstream Analytics.
+ * Service worker orchestrator for ScrollCollector.
  *
  * Responsibilities:
  *  1. Side Panel lifecycle management
