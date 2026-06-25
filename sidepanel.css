@@ -1,0 +1,648 @@
+/* ==========================================================================
+   Mindstream — Flat, Monochromic, Separator-Based Design
+   Light/Dark mode via [data-theme] on <html>
+   ========================================================================== */
+
+/* ---------- Theme Tokens ---------- */
+
+[data-theme="dark"] {
+  --bg: #111113;
+  --bg-elevated: #18181b;
+  --bg-hover: #27272a;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --border: #27272a;
+  --border-light: #3f3f46;
+  --accent: #818cf8;
+}
+
+[data-theme="light"] {
+  --bg: #ffffff;
+  --bg-elevated: #fafafa;
+  --bg-hover: #f4f4f5;
+  --text-primary: #18181b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+  --border: #e4e4e7;
+  --border-light: #d4d4d8;
+  --accent: #6366f1;
+}
+
+/* ---------- Badge / Category Colors ---------- */
+
+:root {
+  --badge-0: #6366f1;
+  --badge-1: #a855f7;
+  --badge-2: #06b6d4;
+  --badge-3: #10b981;
+  --badge-4: #f59e0b;
+  --badge-5: #f43f5e;
+  --badge-6: #0ea5e9;
+  --badge-7: #84cc16;
+  --badge-8: #f97316;
+  --badge-9: #ec4899;
+  --badge-fallback: #71717a;
+}
+
+/* ---------- Reset & Base ---------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  color-scheme: dark light;
+}
+
+body {
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text-primary);
+  min-width: 280px;
+  max-width: 500px;
+  overflow-y: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---------- Scrollbar ---------- */
+
+::-webkit-scrollbar {
+  width: 3px;
+}
+::-webkit-scrollbar-track {
+  background: var(--border);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 2px;
+}
+
+/* ---------- Header ---------- */
+
+#panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Engine status */
+
+.engine-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.engine-dot.active  { background: #10b981; }
+.engine-dot.fallback { background: #f59e0b; }
+.engine-dot.error   { background: #ef4444; }
+
+.engine-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Theme toggle */
+
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.theme-toggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.theme-icon {
+  display: none;
+}
+[data-theme="dark"] #theme-icon-sun   { display: block; }
+[data-theme="light"] #theme-icon-moon { display: block; }
+
+/* ---------- Telemetry Bar ---------- */
+
+.telemetry-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  font-size: 11px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.telemetry-bar strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.tel-divider {
+  margin: 0 2px;
+  opacity: 0.5;
+}
+
+/* ---------- Counter Grid ---------- */
+
+.counter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.counter-item {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-left: 3px solid var(--badge-fallback);
+  cursor: pointer;
+  transition: background 0.12s ease;
+  position: relative;
+}
+.counter-item:hover {
+  background: var(--bg-hover);
+}
+/* Remove right border on even items (right column) */
+.counter-item:nth-child(2n) {
+  border-right: none;
+}
+
+.counter-label {
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.counter-value {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+
+/* Counter pop animation */
+@keyframes counter-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.counter-value.pop {
+  animation: counter-pop 150ms ease-out;
+}
+
+/* ---------- Section Toggles (Collapsible) ---------- */
+
+.section-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  cursor: pointer;
+  gap: 6px;
+  transition: color 0.15s ease;
+}
+.section-toggle:hover {
+  color: var(--text-secondary);
+}
+
+.section-toggle .chevron {
+  margin-left: auto;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.section-toggle .chevron.rotated {
+  transform: rotate(180deg);
+}
+
+.section-body {
+  overflow: hidden;
+  transition: max-height 0.25s ease;
+}
+.section-body.collapsed {
+  max-height: 0 !important;
+  overflow: hidden;
+}
+
+/* Count pill (next to section headers) */
+.count-pill {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+/* ---------- Section Label (non-collapsible) ---------- */
+
+.section-label {
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---------- Item List (stack, pinned, category items) ---------- */
+
+.item-list {
+  /* Container for item rows */
+}
+
+.item-row {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.12s ease;
+}
+.item-row:hover {
+  background: var(--bg-hover);
+}
+
+/* Item enter animation */
+@keyframes item-enter {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.item-row.entering {
+  animation: item-enter 200ms ease-out;
+}
+
+/* Meta row: platform · time · link · pin */
+.item-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.item-platform {
+  font-weight: 500;
+}
+
+.meta-sep {
+  opacity: 0.4;
+}
+
+.item-time {
+  /* inherits color */
+}
+
+.item-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 11px;
+  margin-left: 2px;
+  transition: opacity 0.15s ease;
+}
+.item-link:hover {
+  opacity: 0.7;
+}
+
+.btn-pin {
+  margin-left: auto;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+.btn-pin:hover {
+  color: var(--text-primary);
+}
+.btn-pin.pinned {
+  color: var(--accent);
+}
+
+/* Text snippet */
+.item-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 6px;
+  word-break: break-word;
+}
+
+/* Footer: tag badge */
+.item-footer {
+  display: flex;
+  align-items: center;
+}
+
+.item-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.tag-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--tag-color, var(--badge-fallback));
+  flex-shrink: 0;
+}
+
+/* ---------- Tag Configurator ---------- */
+
+.tag-list {
+  /* Container for tag rows */
+}
+
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tag-row .tag-dot-indicator {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.tag-row .tag-label {
+  font-size: 12px;
+  color: var(--text-primary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Toggle switch — 28x16 slim */
+.tag-toggle {
+  position: relative;
+  width: 28px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.tag-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.tag-toggle .toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--border-light);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.tag-toggle input:checked + .toggle-track {
+  background: var(--accent);
+}
+.tag-toggle .toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+.tag-toggle input:checked + .toggle-track::after {
+  transform: translateX(12px);
+}
+
+.btn-delete-tag {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+.btn-delete-tag:hover {
+  color: #f43f5e;
+}
+
+/* Add tag row */
+.add-tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.add-tag-row input {
+  flex: 1;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  padding: 4px 0;
+  outline: none;
+  font-family: inherit;
+}
+.add-tag-row input::placeholder {
+  color: var(--text-muted);
+}
+.add-tag-row input:focus {
+  border-bottom-color: var(--accent);
+}
+
+.btn-add {
+  border: none;
+  background: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: 600;
+  padding: 0 4px;
+  line-height: 1;
+  transition: opacity 0.15s ease;
+}
+.btn-add:hover {
+  opacity: 0.7;
+}
+
+/* ---------- Clear Button ---------- */
+
+.btn-clear {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  background: none;
+  text-align: center;
+  font-size: 11px;
+  font-family: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.15s ease;
+  border-bottom: 1px solid var(--border);
+}
+.btn-clear:hover {
+  color: #f43f5e;
+}
+
+/* ---------- Category View ---------- */
+
+.category-view {
+  /* Takes over full panel when visible */
+}
+
+.category-view-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.btn-back {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+  padding: 2px 4px;
+  transition: color 0.15s ease;
+}
+.btn-back:hover {
+  color: var(--text-primary);
+}
+
+.category-view-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.category-view-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ---------- Empty State ---------- */
+
+.empty-state {
+  padding: 20px 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+/* ---------- Utilities ---------- */
+
+.hidden {
+  display: none !important;
+}
+
+/* ---------- Dynamic Tags ---------- */
+
+.counter-item.dynamic {
+  border-left-style: dashed !important;
+}
+
+.counter-item.dynamic .counter-label {
+  font-style: italic;
+}
+
+.tag-row.dynamic .tag-label {
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+.btn-promote-tag {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+.btn-promote-tag:hover {
+  color: #fbbf24; /* Amber star */
+}

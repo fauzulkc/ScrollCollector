@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Mindstream</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <!-- Compact header: title left, theme toggle + engine status right -->
+  <header id="panel-header">
+    <span class="app-title">Mindstream</span>
+    <div class="header-actions">
+      <span id="engine-dot" class="engine-dot"></span>
+      <span id="engine-label" class="engine-label">—</span>
+      <button id="theme-toggle" class="theme-toggle" title="Toggle theme">
+        <svg id="theme-icon-sun" class="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"/>
+          <line x1="12" y1="1" x2="12" y2="3"/>
+          <line x1="12" y1="21" x2="12" y2="23"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="1" y1="12" x2="3" y2="12"/>
+          <line x1="21" y1="12" x2="23" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg id="theme-icon-moon" class="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Telemetry bar: compact stats row -->
+  <div id="telemetry-bar" class="telemetry-bar">
+    <span><strong id="tel-total">0</strong> processed</span>
+    <span class="tel-divider">·</span>
+    <span><strong id="tel-rate">0%</strong> classified</span>
+    <span class="tel-divider">·</span>
+    <span id="tel-engine">—</span>
+  </div>
+
+  <!-- Counter grid -->
+  <section id="counter-grid" class="counter-grid"></section>
+
+  <!-- Category detail view (hidden by default, shown when clicking a counter) -->
+  <section id="category-view" class="category-view hidden">
+    <div class="category-view-header">
+      <button id="category-back" class="btn-back">← Back</button>
+      <span id="category-view-title" class="category-view-title"></span>
+      <span id="category-view-count" class="category-view-count"></span>
+    </div>
+    <div id="category-items" class="item-list"></div>
+  </section>
+
+  <!-- Main content (hidden when category view is shown) -->
+  <main id="main-content">
+    <!-- Pinned section -->
+    <section id="pinned-section" class="collapsible">
+      <button class="section-toggle" id="pinned-toggle">
+        <span>Pinned</span>
+        <span id="pinned-count" class="count-pill">0</span>
+        <svg class="chevron" width="12" height="12" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      </button>
+      <div id="pinned-content" class="section-body">
+        <div id="pinned-list" class="item-list"></div>
+        <div id="pinned-empty" class="empty-state">No pinned insights yet</div>
+      </div>
+    </section>
+
+    <!-- Tag Configurator -->
+    <section id="tag-section" class="collapsible">
+      <button class="section-toggle" id="config-toggle">
+        <span>Tags</span>
+        <svg class="chevron" width="12" height="12" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      </button>
+      <div id="config-content" class="section-body collapsed">
+        <div id="tag-list" class="tag-list"></div>
+        <form id="add-tag-form" class="add-tag-row">
+          <input type="text" id="new-tag-input" placeholder="New tag…" maxlength="32" autocomplete="off">
+          <button type="submit" class="btn-add">+</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Recent feed -->
+    <section id="stack-section">
+      <div class="section-label">Recent</div>
+      <div id="stack-list" class="item-list"></div>
+      <button id="clear-stack-btn" class="btn-clear">Clear all</button>
+    </section>
+  </main>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
