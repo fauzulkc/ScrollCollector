@@ -7,7 +7,8 @@
     "storage",
     "activeTab",
     "sidePanel",
-    "favicon"
+    "favicon",
+    "tabs"
   ],
   "action": {
     "default_title": "Open Mindstream Panel",

@@ -1449,6 +1449,61 @@ function triggerCsvExport() {
   URL.revokeObjectURL(url);
 }
 
+// ---------- Tab Change Auto-Detection Listener ----------
+
+function initTabChangeListener() {
+  if (!chrome.tabs) return;
+
+  chrome.tabs.onActivated.addListener(activeInfo => {
+    chrome.tabs.get(activeInfo.tabId, (tab) => {
+      if (chrome.runtime.lastError || !tab || !tab.url) return;
+      handleTabUrlChange(tab.url);
+    });
+  });
+
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+    if (tabs && tabs[0] && tabs[0].url) {
+      handleTabUrlChange(tabs[0].url);
+    }
+  });
+}
+
+function handleTabUrlChange(url) {
+  try {
+    const hostname = new URL(url).hostname.replace('www.', '').toLowerCase();
+    const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+    const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain.toLowerCase());
+    const enabledDomains = [...defaultSites, ...customSites];
+
+    let matched = 'All';
+    for (const domain of enabledDomains) {
+      if (hostname === domain || hostname.endsWith('.' + domain)) {
+        matched = domain;
+        break;
+      }
+    }
+
+    if (matched === 'twitter.com') matched = 'x.com';
+
+    const configuredSites = state.configuration.sites || [];
+    const cfg = configuredSites.find(s => s.domain.toLowerCase() === matched);
+    if (cfg && cfg.isEnabled === false) {
+      matched = 'All';
+    }
+
+    if (activeFilterSite !== matched) {
+      activeFilterSite = matched;
+      if (dom.filterSitePills) {
+        renderSiteFilterPills();
+        renderFilterPills();
+        renderFeed();
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+
 // ---------- Message Listener ----------
 
 function initMessageListener() {
@@ -1609,6 +1664,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Message listeners
   initMessageListener();
+
+  // Tab change listeners
+  initTabChangeListener();
 
   // Request initial state payload
   chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
