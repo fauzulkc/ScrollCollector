@@ -335,18 +335,24 @@ function extractTextFromContainer(container) {
     }
   }
 
-  // Facebook site-specific custom text extraction
+  // Facebook site-specific custom text extraction (for Reels)
   if (location.hostname.includes('facebook.com')) {
-    const authorEl = container.querySelector('h2 a[role="link"], h3 a[role="link"], h4 a[role="link"], strong a[role="link"], a[role="link"] strong, span > a[role="link"]');
-    const captionEl = container.querySelector('div[data-ad-preview="message"], div[dir="auto"] span[dir="auto"], div[dir="auto"]');
-    if (authorEl || captionEl) {
-      const author = authorEl ? authorEl.innerText.trim() : 'Facebook User/Page';
-      const caption = captionEl ? captionEl.innerText.trim() : '';
+    const isReel = (container.getAttribute('data-pagelet') || '').includes('Reel') || container.querySelector('a[href*="/reel/"], a[href*="/reels/"]');
+    if (isReel) {
+      const authorEl = container.querySelector('h2 a[role="link"], h3 a[role="link"], h4 a[role="link"], strong a[role="link"], a[role="link"] strong, span > a[role="link"]');
+      const spans = Array.from(container.querySelectorAll('span[dir="auto"], div[dir="auto"]'));
+      let caption = '';
+      const author = authorEl ? authorEl.innerText.trim() : 'Facebook Reel';
       
-      if (caption && caption !== author) {
-        let cleanCaption = caption;
-        if (cleanCaption.endsWith('Follow')) cleanCaption = cleanCaption.slice(0, -6).trim();
-        return `${cleanCaption}\nAuthor: ${author}`;
+      for (const span of spans) {
+        const text = span.innerText.trim();
+        if (text && text !== author && text.length > caption.length && !text.includes('Follow') && !text.includes('Like') && !text.includes('Comment') && !text.includes('Share')) {
+          caption = text;
+        }
+      }
+      
+      if (caption) {
+        return `${caption}\nAuthor: ${author}`;
       }
     }
   }
