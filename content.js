@@ -87,9 +87,9 @@ const BOUNDARY_SELECTORS = [
   '[data-urn*="urn:li:activity:"]', '[data-urn*="urn:li:share:"]', '[data-urn*="urn:li:ugcPost:"]', // LinkedIn modern
   'article[data-testid="tweet"]',                      // Twitter/X
   '[role="article"]', 'div[data-pagelet^="FeedUnit_"]', '[data-testid="key__feed_story"]', 'div[data-testid="fbfeed_story"]', // Facebook modern
-  'ytd-rich-item-renderer', 'ytd-video-renderer',       // YouTube
-  'ytd-comment-thread-renderer',
-  'article', 'main', 'div.postArticle', '[class*="post-"]', '[class*="article-"]' // Medium & Generic Articles
+  'ytd-rich-item-renderer', 'ytd-video-renderer', 'ytd-compact-video-renderer', 'ytd-grid-video-renderer', 'ytd-reel-video-renderer', // YouTube videos
+  'ytd-comment-thread-renderer', // YouTube comments
+  'article', 'div.postArticle', '[class*="post-"]', '[class*="article-"]' // Medium & Generic Articles
 ];
 
 /** Minimum / maximum accepted text length */
@@ -302,6 +302,37 @@ function findBoundaryContainer(element) {
  * Clones a container, strips noisy UI elements, and retrieves text.
  */
 function extractTextFromContainer(container) {
+  if (!container) return '';
+  
+  // YouTube site-specific custom text extraction
+  const tagName = container.tagName.toLowerCase();
+  const isYouTubeVideo = tagName.startsWith('ytd-') && tagName.includes('video-renderer') || tagName === 'ytd-rich-item-renderer' || tagName === 'ytd-reel-video-renderer';
+  
+  if (isYouTubeVideo) {
+    const titleEl = container.querySelector('#video-title, #video-title-link, #title');
+    const channelEl = container.querySelector('ytd-channel-name, #channel-name, #byline-container');
+    const metaEl = container.querySelector('#metadata-line');
+    
+    if (titleEl) {
+      const title = titleEl.innerText.trim();
+      const channel = channelEl ? channelEl.innerText.trim() : '';
+      const meta = metaEl ? metaEl.innerText.trim().replace(/\s+/g, ' ').replace(/\n/g, ' • ') : '';
+      
+      return `${title}\nChannel: ${channel}\nInfo: ${meta}`;
+    }
+  }
+  
+  if (tagName === 'ytd-comment-thread-renderer') {
+    const authorEl = container.querySelector('#author-text');
+    const textEl = container.querySelector('#content-text');
+    if (textEl) {
+      const text = textEl.innerText.trim();
+      const author = authorEl ? authorEl.innerText.trim() : '';
+      return `Comment by ${author}:\n${text}`;
+    }
+  }
+
+  // Fallback to default generic extraction
   try {
     const clone = container.cloneNode(true);
     const noiseSelector = Array.from(NOISE_TAGS).join(',').toLowerCase();
