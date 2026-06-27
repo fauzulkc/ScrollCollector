@@ -86,7 +86,7 @@ const BOUNDARY_SELECTORS = [
   'div.feed-shared-update-v2', 'div.occludable-update', // LinkedIn legacy
   '[data-urn*="urn:li:activity:"]', '[data-urn*="urn:li:share:"]', '[data-urn*="urn:li:ugcPost:"]', // LinkedIn modern
   'article[data-testid="tweet"]',                      // Twitter/X
-  'div[role="article"]', 'div[data-testid="fbfeed_story"]', // Facebook
+  '[role="article"]', 'div[data-pagelet^="FeedUnit_"]', '[data-testid="key__feed_story"]', 'div[data-testid="fbfeed_story"]', // Facebook modern
   'ytd-rich-item-renderer', 'ytd-video-renderer',       // YouTube
   'ytd-comment-thread-renderer',
   'article', 'main', 'div.postArticle', '[class*="post-"]', '[class*="article-"]' // Medium & Generic Articles
