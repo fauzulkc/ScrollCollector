@@ -86,7 +86,7 @@ const BOUNDARY_SELECTORS = [
   'div.feed-shared-update-v2', 'div.occludable-update', // LinkedIn legacy
   '[data-urn*="urn:li:activity:"]', '[data-urn*="urn:li:share:"]', '[data-urn*="urn:li:ugcPost:"]', // LinkedIn modern
   'article[data-testid="tweet"]',                      // Twitter/X
-  '[role="article"]', 'div[data-pagelet^="FeedUnit_"]', '[data-testid="key__feed_story"]', 'div[data-testid="fbfeed_story"]', // Facebook modern
+  '[role="article"]', 'div[data-pagelet^="FeedUnit_"]', 'div[data-pagelet^="ReelsConsumerVideoSheet"]', 'div[data-pagelet^="ReelsUnit"]', 'div[data-pagelet^="Reel_"]', '[data-testid="key__feed_story"]', 'div[data-testid="fbfeed_story"]', // Facebook modern & Reels
   'ytd-rich-item-renderer', 'ytd-video-renderer', 'ytd-compact-video-renderer', 'ytd-grid-video-renderer', 'ytd-reel-video-renderer', // YouTube videos
   'ytd-comment-thread-renderer', // YouTube comments
   'article', 'div.postArticle', '[class*="post-"]', '[class*="article-"]' // Medium & Generic Articles
@@ -329,6 +329,22 @@ function extractTextFromContainer(container) {
       const text = textEl.innerText.trim();
       const author = authorEl ? authorEl.innerText.trim() : '';
       return `Comment by ${author}:\n${text}`;
+    }
+  }
+
+  // Facebook site-specific custom text extraction
+  if (location.hostname.includes('facebook.com')) {
+    const authorEl = container.querySelector('h2 a[role="link"], h3 a[role="link"], h4 a[role="link"], strong a[role="link"], a[role="link"] strong, span > a[role="link"]');
+    const captionEl = container.querySelector('div[data-ad-preview="message"], div[dir="auto"] span[dir="auto"], div[dir="auto"]');
+    if (authorEl || captionEl) {
+      const author = authorEl ? authorEl.innerText.trim() : 'Facebook User/Page';
+      const caption = captionEl ? captionEl.innerText.trim() : '';
+      
+      if (caption && caption !== author) {
+        let cleanCaption = caption;
+        if (cleanCaption.endsWith('Follow')) cleanCaption = cleanCaption.slice(0, -6).trim();
+        return `${cleanCaption}\nAuthor: ${author}`;
+      }
     }
   }
 
