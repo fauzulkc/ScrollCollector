@@ -309,8 +309,8 @@ function extractTextFromContainer(container) {
   const isYouTubeVideo = tagName.startsWith('ytd-') && tagName.includes('video-renderer') || tagName === 'ytd-rich-item-renderer' || tagName === 'ytd-reel-video-renderer';
   
   if (isYouTubeVideo) {
-    const titleEl = container.querySelector('#video-title, #video-title-link, #title');
-    const channelEl = container.querySelector('ytd-channel-name, #channel-name, #byline-container');
+    const titleEl = container.querySelector('#video-title, #video-title-link, #title, yt-formatted-string.title, .title, .ytd-reel-player-header-renderer');
+    const channelEl = container.querySelector('ytd-channel-name, #channel-name, #byline-container, .channel-name, #channel-name-container');
     const metaEl = container.querySelector('#metadata-line');
     
     if (titleEl) {
