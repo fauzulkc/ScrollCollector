@@ -272,6 +272,53 @@ function dispatch(sanitizedText, element, isAd = false) {
 // §5  BOUNDARY DETECTION & TEXT EXTRACTION ENGINE
 // ════════════════════════════════════════════════════════════════════════
 
+function findCustomCardBoundary(element) {
+  if (!element || element === document.body) return null;
+
+  // Walk up from the mutated element to find the closest candidate container
+  let current = element;
+  while (current && current !== document.body) {
+    const tag = current.tagName;
+    if (tag === 'DIV' || tag === 'ARTICLE' || tag === 'SECTION' || tag === 'LI') {
+      if (isValidCustomCard(current)) {
+        return current;
+      }
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function isValidCustomCard(el) {
+  if (el.tagName === 'BODY' || el.tagName === 'HTML' || el.tagName === 'HEADER' || el.tagName === 'FOOTER' || el.tagName === 'NAV') {
+    return false;
+  }
+  
+  const links = Array.from(el.querySelectorAll('a[href]'));
+  const titleLink = links.find(a => {
+    const href = a.getAttribute('href') || '';
+    if (href.startsWith('#') || href.startsWith('javascript:') || href === '/' || href.includes('search') || href.includes('tag')) {
+      return false;
+    }
+    const text = a.innerText.trim();
+    return text.length >= 20 && text.length <= 180;
+  });
+
+  if (!titleLink) return false;
+
+  try {
+    const clone = el.cloneNode(true);
+    const cloneLinks = Array.from(clone.querySelectorAll('a[href]'));
+    cloneLinks.forEach(a => a.remove());
+    clone.querySelectorAll('button, form, script, style, time, .meta, .comments').forEach(n => n.remove());
+
+    const descText = clone.innerText.trim().replace(/\s+/g, ' ');
+    return descText.length >= 15 && descText.length <= 600;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Identifies the closest post or article container boundaries for an element.
  */
@@ -306,6 +353,17 @@ function findBoundaryContainer(element) {
     current = current.parentElement;
   }
 
+  // 3. Custom site card heuristic fallback
+  const hostname = window.location.hostname.toLowerCase();
+  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com'].some(d => hostname === d || hostname.endsWith('.' + d));
+  
+  if (!isPredefinedSite) {
+    const customBoundary = findCustomCardBoundary(element);
+    if (customBoundary) {
+      return customBoundary;
+    }
+  }
+
   return null;
 }
 
@@ -317,6 +375,37 @@ function extractTextFromContainer(container) {
   
   const tagName = container.tagName.toLowerCase();
   const hostname = window.location.hostname.toLowerCase();
+
+  // Custom site card text extraction
+  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com'].some(d => hostname === d || hostname.endsWith('.' + d));
+  if (!isPredefinedSite) {
+    const links = Array.from(container.querySelectorAll('a[href]'));
+    const titleLink = links.find(a => {
+      const href = a.getAttribute('href') || '';
+      if (href.startsWith('#') || href.startsWith('javascript:') || href === '/' || href.includes('search') || href.includes('tag')) {
+        return false;
+      }
+      const text = a.innerText.trim();
+      return text.length >= 20 && text.length <= 180;
+    });
+    
+    const titleText = titleLink ? titleLink.innerText.trim() : '';
+    
+    let descText = '';
+    try {
+      const clone = container.cloneNode(true);
+      clone.querySelectorAll('a[href]').forEach(a => a.remove());
+      clone.querySelectorAll('button, form, script, style, time, .meta, .comments').forEach(n => n.remove());
+      descText = clone.innerText.trim().replace(/\s+/g, ' ');
+    } catch {
+      // fallback
+    }
+    
+    if (titleText && descText && descText.length >= 15) {
+      return `${titleText}\n\n${descText}`;
+    }
+  }
+
   const isInstagram = hostname.includes('instagram.com') && tagName === 'article';
   
   if (isInstagram) {

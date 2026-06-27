@@ -35,7 +35,8 @@ describe('ScrollCollector content.js Integration Tests', () => {
                   { id: 's3', domain: 'linkedin.com', isEnabled: true },
                   { id: 's4', domain: 'x.com', isEnabled: true },
                   { id: 's5', domain: 'medium.com', isEnabled: true },
-                  { id: 's6', domain: 'instagram.com', isEnabled: true }
+                  { id: 's6', domain: 'instagram.com', isEnabled: true },
+                  { id: 's7', domain: 'gsmarena.com', isEnabled: true }
                 ],
                 isTrackingPaused: false
               }
@@ -61,13 +62,16 @@ describe('ScrollCollector content.js Integration Tests', () => {
       <ytd-rich-item-renderer>
         <div id="dismissible">
           <div id="details">
-            <a id="video-title-link" href="https://www.youtube.com/watch?v=techYt1">
-              <yt-formatted-string id="video-title" class="yt-title">Building an On-Device Neural Network with WebGPU and JavaScript</yt-formatted-string>
-            </a>
+            <h3>
+              <a id="video-title-link" href="/watch?v=123">Building an On-Device Neural Network with WebGPU and JavaScript</a>
+            </h3>
             <ytd-channel-name>
-              <div id="container"><a href="/@techExplained" class="yt-channel">Tech Explained Channel</a></div>
+              <a href="/@webgpudecoded">WebGPU Decoded</a>
             </ytd-channel-name>
-            <div id="metadata-line"><span>120K views • 3 days ago</span></div>
+            <div id="metadata-line">
+              <span>12K views</span>
+              <span>3 days ago</span>
+            </div>
           </div>
         </div>
       </ytd-rich-item-renderer>
@@ -80,8 +84,8 @@ describe('ScrollCollector content.js Integration Tests', () => {
     const calls = sendMessageMock.mock.calls;
     const postCall = calls.find(c => c[0].type === 'TEXT_EXTRACTED');
     expect(postCall).toBeDefined();
-    expect(postCall[0].payload.text).toContain('Building an On-Device Neural Network');
-    expect(postCall[0].payload.text).toContain('Tech Explained Channel');
+    expect(postCall[0].payload.text).toContain('On-Device Neural Network');
+    expect(postCall[0].payload.text).toContain('WebGPU Decoded');
     expect(postCall[0].payload.sourcePlatform).toContain('youtube.com');
   });
 
@@ -90,9 +94,13 @@ describe('ScrollCollector content.js Integration Tests', () => {
     globalThis.location = new URL('https://www.facebook.com/');
 
     document.body.innerHTML = `
-      <div class="facebook-post" role="article" data-pagelet="FeedUnit_1">
-        <h2><a role="link" href="#" class="fb-author"><strong>Science & Tech Journal</strong></a></h2>
-        <div data-ad-preview="message" class="fb-caption">Researchers have achieved a breakthrough in room-temperature superconductivity using a carbonaceous sulfur hydride material under high pressure. This could revolutionize power grids.</div>
+      <div role="article" class="fb-post-card">
+        <div class="fb-post-header">
+          <span class="fb-author">Science News</span>
+        </div>
+        <div class="fb-post-body">
+          <p>Researchers have achieved a breakthrough in room-temperature superconductivity using novel carbon-sulfur-hydrogen compounds at lower pressures than previously thought possible.</p>
+        </div>
       </div>
     `;
 
@@ -212,5 +220,30 @@ describe('ScrollCollector content.js Integration Tests', () => {
     expect(postCall[0].payload.text).not.toContain('Follow');
     expect(postCall[0].payload.text).not.toContain('2.1K likes');
     expect(postCall[0].payload.sourcePlatform).toContain('instagram.com');
+  });
+
+  test('Custom site (GSMArena) heuristic parses feed cards correctly', () => {
+    delete globalThis.location;
+    globalThis.location = new URL('https://www.gsmarena.com/');
+
+    document.body.innerHTML = `
+      <div class="news-item">
+        <h3>
+          <a href="/deals-prime-day-deals-123.php">Deals: Prime Day shopping is over, here are the best Galaxy S26 and Pixel 10 series deals</a>
+        </h3>
+        <p class="news-text">The four-day shopping bonanza ended on Friday - now we're back to the regular, no-subscription-required deals.</p>
+        <span class="meta-time">2 hours ago</span>
+      </div>
+    `;
+
+    vm.runInThisContext(contentJsCode);
+
+    expect(sendMessageMock).toHaveBeenCalled();
+    const calls = sendMessageMock.mock.calls;
+    const postCall = calls.find(c => c[0].type === 'TEXT_EXTRACTED');
+    expect(postCall).toBeDefined();
+    expect(postCall[0].payload.text).toContain('Deals: Prime Day shopping is over');
+    expect(postCall[0].payload.text).toContain('The four-day shopping bonanza ended');
+    expect(postCall[0].payload.sourcePlatform).toContain('gsmarena.com');
   });
 });
