@@ -285,12 +285,15 @@ function findBoundaryContainer(element) {
   let current = element;
   while (current && current !== document.body) {
     const tag = current.tagName;
-    if (tag === 'ARTICLE' || tag === 'MAIN') {
+    if (tag === 'ARTICLE') {
       return current;
     }
     const classes = current.className || '';
     if (typeof classes === 'string' && /\b(post|tweet|article|card|feed-item|story)\b/i.test(classes)) {
-      return current;
+      // Exclude layouts, list containers, and wrapping frameworks
+      if (!/(container|list|grid|deck|wrapper|feed|group|scroller|tray|stream|holder|body|page|app|main)/i.test(classes)) {
+        return current;
+      }
     }
     current = current.parentElement;
   }
