@@ -1777,6 +1777,16 @@ function initTabChangeListener() {
     });
   });
 
+  chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.url) {
+      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        if (tabs && tabs[0] && tabs[0].id === tabId) {
+          handleTabUrlChange(changeInfo.url);
+        }
+      });
+    }
+  });
+
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs && tabs[0] && tabs[0].url) {
       handleTabUrlChange(tabs[0].url);
