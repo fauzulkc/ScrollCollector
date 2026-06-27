@@ -165,13 +165,21 @@ chrome.runtime.onInstalled.addListener(async () => {
 // ---------------------------------------------------------------------------
 
 function checkIfSiteEnabled(hostname, sites) {
-  if (!sites || sites.length === 0) return true;
   const lowerHost = hostname.toLowerCase();
-  return sites.some(s => {
-    if (!s.isEnabled) return false;
-    const domain = s.domain.toLowerCase();
-    return lowerHost === domain || lowerHost.endsWith('.' + domain);
-  });
+  const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+  
+  if (sites && sites.length > 0) {
+    const match = sites.find(s => {
+      const domain = s.domain.toLowerCase();
+      return lowerHost === domain || lowerHost.endsWith('.' + domain);
+    });
+    if (match) {
+      return match.isEnabled !== false;
+    }
+  }
+  
+  // Default sites are enabled unless explicitly disabled in config
+  return defaultSites.some(d => lowerHost === d || lowerHost.endsWith('.' + d));
 }
 
 async function ensureContentScriptInjected(tabId, url) {

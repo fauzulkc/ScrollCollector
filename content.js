@@ -151,13 +151,21 @@ function isNoiseOrProcessed(el) {
  * Checks if a hostname matches any enabled site configurations.
  */
 function checkIfSiteEnabled(hostname, sites) {
-  if (!sites || sites.length === 0) return true; // fallback to true
   const lowerHost = hostname.toLowerCase();
-  return sites.some(s => {
-    if (!s.isEnabled) return false;
-    const domain = s.domain.toLowerCase();
-    return lowerHost === domain || lowerHost.endsWith('.' + domain);
-  });
+  const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+  
+  if (sites && sites.length > 0) {
+    const match = sites.find(s => {
+      const domain = s.domain.toLowerCase();
+      return lowerHost === domain || lowerHost.endsWith('.' + domain);
+    });
+    if (match) {
+      return match.isEnabled !== false;
+    }
+  }
+  
+  // Default sites are enabled unless explicitly disabled in config
+  return defaultSites.some(d => lowerHost === d || lowerHost.endsWith('.' + d));
 }
 
 /**
@@ -337,7 +345,9 @@ function extractTextFromContainer(container) {
 
   // Facebook site-specific custom text extraction (for Reels)
   if (location.hostname.includes('facebook.com')) {
-    const isReel = (container.getAttribute('data-pagelet') || '').includes('Reel') || container.querySelector('a[href*="/reel/"], a[href*="/reels/"]');
+    const isReel = (container.getAttribute('data-pagelet') || '').includes('ReelsConsumerVideoSheet') || 
+                   (container.getAttribute('data-pagelet') || '').includes('ReelsUnit') || 
+                   (container.getAttribute('data-pagelet') || '').includes('Reel_');
     if (isReel) {
       const authorEl = container.querySelector('h2 a[role="link"], h3 a[role="link"], h4 a[role="link"], strong a[role="link"], a[role="link"] strong, span > a[role="link"]');
       const spans = Array.from(container.querySelectorAll('span[dir="auto"], div[dir="auto"]'));
