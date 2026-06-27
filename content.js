@@ -599,13 +599,17 @@ if (chrome?.storage?.local) {
       handleStateChange(changes.configuration.newValue);
     }
   });
-  // Handle PING messages from background script to verify injection status
-  if (chrome?.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-      if (message && message.type === 'PING') {
-        sendResponse({ alive: true });
-      }
-      return true;
-    });
-  }
+} else {
+  startObserver();
+}
+
+// Handle PING messages from background script to verify injection status
+if (chrome?.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message && message.type === 'PING') {
+      sendResponse({ alive: true });
+    }
+    return true;
+  });
+}
 })();
