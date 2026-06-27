@@ -951,12 +951,6 @@ function createItemCardShell(item, index) {
   card.style.minHeight = '90px';
   card.innerHTML = `<div class="virtual-placeholder" style="height: 66px;"></div>`;
 
-  const tag = item.assignedTag || 'Unclassified';
-  const isNewsType = ['politics & society', 'science', 'news'].some(t => tag.toLowerCase().includes(t));
-  if (isNewsType) {
-    card.classList.add('news-glow');
-  }
-
   if (index === focusedItemIndex) {
     card.classList.add('keyboard-focused');
   }
@@ -970,6 +964,16 @@ function populateCardInner(card, item) {
   const tag = item.assignedTag || 'Unclassified';
   const tagColor = getTagColor(tag);
   card.style.setProperty('--card-accent', tagColor);
+
+  const trackedTags = state.configuration?.trackedTags || [];
+  const tagCfg = trackedTags.find(t => t.label.toLowerCase() === tag.toLowerCase());
+  const isTrackedCategory = tagCfg ? !tagCfg.isDynamic : false;
+
+  if (tag !== 'Unclassified' && isTrackedCategory) {
+    card.classList.add('news-glow');
+  } else {
+    card.classList.remove('news-glow');
+  }
 
   const { title, body } = parseCardText(item.textSnippet);
   const entities = extractLocalEntities(item.textSnippet, tag);
