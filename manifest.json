@@ -8,7 +8,11 @@
     "activeTab",
     "sidePanel",
     "favicon",
-    "tabs"
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
   ],
   "action": {
     "default_title": "Open Mindstream Panel",

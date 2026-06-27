@@ -116,6 +116,39 @@ chrome.runtime.onInstalled.addListener(async () => {
       console.info('[background] Upgraded existing configuration and stack.');
     }
   }
+
+  // Programmatically inject content scripts into matching open tabs
+  // on installation/update to avoid requiring tab refresh.
+  if (chrome.scripting && chrome.tabs) {
+    try {
+      const state = await chrome.storage.local.get('configuration');
+      const customSites = state.configuration?.sites?.filter(s => s.isCustom).map(s => s.domain) || [];
+      const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+      const uniqueDomains = Array.from(new Set([...defaultSites, ...customSites]));
+      
+      const queryUrls = uniqueDomains.map(d => `*://*.${d}/*`);
+      const tabs = await chrome.tabs.query({ url: queryUrls });
+      
+      for (const tab of tabs) {
+        if (!tab.id || !tab.url) continue;
+        
+        // Inject polyfill helper
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['vendor/browser-polyfill.js']
+        }).catch(() => {});
+        
+        // Inject content script
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        }).catch(() => {});
+      }
+      console.info('[background] Programmatic content script auto-injection complete.');
+    } catch (err) {
+      console.warn('[background] Content script auto-injection failed:', err);
+    }
+  }
 });
 
 // ---------------------------------------------------------------------------

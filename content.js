@@ -398,7 +398,7 @@ function processGenericContent(el) {
  * Scans a subtree for boundary containers, falling back to density blocks.
  */
 function scanSubtree(root) {
-  if (!root) return;
+  if (!root || isPaused || !isSiteEnabled) return;
 
   const boundaryElements = [];
 
@@ -448,6 +448,8 @@ function flushPending() {
 }
 
 function onMutations(mutations) {
+  if (isPaused || !isSiteEnabled) return;
+
   for (let i = 0; i < mutations.length; i++) {
     const added = mutations[i].addedNodes;
     for (let j = 0; j < added.length; j++) {
@@ -470,6 +472,7 @@ const observer = new MutationObserver(onMutations);
 
 let isObserverActive = false;
 let isSiteEnabled = true;
+let isPaused = false;
 
 function startObserver() {
   if (isObserverActive) return;
@@ -505,7 +508,7 @@ function stopObserver() {
 
 function handleStateChange(config) {
   const sites = config ? (config.sites || []) : [];
-  const isPaused = config ? !!config.isTrackingPaused : false;
+  isPaused = config ? !!config.isTrackingPaused : false;
   
   isSiteEnabled = checkIfSiteEnabled(SOURCE_PLATFORM, sites);
   
