@@ -83,7 +83,8 @@ const CONTENT_TAGS = new Set([
 
 /** Boundary selectors for posts/articles on specific platforms */
 const BOUNDARY_SELECTORS = [
-  'div.feed-shared-update-v2', 'div.occludable-update', // LinkedIn
+  'div.feed-shared-update-v2', 'div.occludable-update', // LinkedIn legacy
+  '[data-urn*="urn:li:activity:"]', '[data-urn*="urn:li:share:"]', '[data-urn*="urn:li:ugcPost:"]', // LinkedIn modern
   'article[data-testid="tweet"]',                      // Twitter/X
   'div[role="article"]', 'div[data-testid="fbfeed_story"]', // Facebook
   'ytd-rich-item-renderer', 'ytd-video-renderer',       // YouTube

@@ -18,8 +18,9 @@ It is designed as a high-performance keyboard-driven curator to capture, filter,
   - **Websites Bar**: A second horizontal scrollable pills row to filter items by source domain (LinkedIn, X/Twitter, YouTube, Medium, Facebook, Instagram, or custom sites).
   - Supports click-and-drag horizontal mouse-scrolling on both scrollers.
 - **Active Tab Auto-Detection**: Auto-detects when you change active browser tabs and automatically selects the corresponding website filter pill (e.g. switching to a YouTube tab focuses the YouTube feed, switching to LinkedIn focuses LinkedIn items), falling back to "All Sites" on untracked domains.
-- **Instant Activation (No Refresh Required)**: Programmatically injects content scripts into existing open browser tabs matching our tracking domains immediately upon extension installation or reload.
+- **Instant Activation (No Refresh Required)**: Programmatically injects content scripts into existing open browser tabs matching both root domains and subdomains immediately upon extension installation or reload.
 - **Scroll-Optimized Observers**: Uses globally-cached states inside content scripts to evaluate pause states and site activation synchronously in memory, ensuring scrolling remains lag-free and free from storage API throttling.
+- **Obfuscation-Proof Selectors**: Uses modern HTML React data attributes (like `[data-urn*="urn:li:"]` for LinkedIn) to detect posts, remaining completely immune to dynamic class obfuscations.
 - **Native Favicon Collector**: Automatically resolves and displays the site's official favicon in each card header using Chrome's offline `_favicon` API.
 - **Keyboard-driven Curation (HUD)**:
   - <kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> to focus cards (scrolls into view smoothly).

@@ -126,7 +126,11 @@ chrome.runtime.onInstalled.addListener(async () => {
       const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
       const uniqueDomains = Array.from(new Set([...defaultSites, ...customSites]));
       
-      const queryUrls = uniqueDomains.map(d => `*://*.${d}/*`);
+      const queryUrls = [];
+      uniqueDomains.forEach(d => {
+        queryUrls.push(`*://${d}/*`);
+        queryUrls.push(`*://*.${d}/*`);
+      });
       const tabs = await chrome.tabs.query({ url: queryUrls });
       
       for (const tab of tabs) {
