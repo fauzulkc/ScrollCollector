@@ -490,12 +490,21 @@ body {
   transform: translateY(-1px);
 }
 
-/* Subtle News Card Border Glow */
+/* Subtle News Card bottom accent line */
 .item-row.news-glow {
-  border: 1px solid transparent;
-  background: linear-gradient(var(--bg-elevated), var(--bg-elevated)) padding-box,
-              linear-gradient(135deg, #6366f1, #a855f7, #3b82f6) border-box !important;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.12), var(--shadow);
+  border-color: var(--border);
+}
+
+.item-row.news-glow::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: 0 0 7px 7px; /* match card border-radius minus border width */
+  background: linear-gradient(90deg, var(--card-accent, var(--accent)) 0%, transparent 100%);
+  pointer-events: none;
 }
 
 /* Keyboard navigation focused card style */

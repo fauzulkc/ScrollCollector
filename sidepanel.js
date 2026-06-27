@@ -652,6 +652,55 @@ function renderFilterPills() {
 
 // ---------- Rendering: Site Filters ----------
 
+function setFilterSite(site) {
+  if (activeFilterSite === site) return;
+  activeFilterSite = site;
+
+  // If the active tag filter is not 'All' or 'Favorites', check if any items match the activeTag + new site
+  if (activeFilterTag !== 'All' && activeFilterTag !== 'Favorites' && activeFilterTag !== 'Ads') {
+    const hasItemsForTagOnSite = (state.stack || []).some(item => {
+      const tagMatch = item.assignedTag === activeFilterTag;
+      if (!tagMatch) return false;
+      
+      if (activeFilterSite === 'All') return true;
+      const rawPlatform = (item.sourcePlatform || '').toLowerCase();
+      if (activeFilterSite === 'Other') {
+        const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
+        const configuredSites = state.configuration.sites || [];
+        const enabledDomains = [...defaultSites, ...customSites].filter(d => {
+          const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
+          return !cfg || cfg.isEnabled !== false;
+        });
+        return !enabledDomains.some(domain => rawPlatform === domain || rawPlatform.endsWith('.' + domain));
+      }
+      return rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
+    });
+    
+    if (!hasItemsForTagOnSite) {
+      activeFilterTag = 'All';
+    }
+  } else if (activeFilterTag === 'Ads') {
+    const hasAdsOnSite = (state.stack || []).some(item => {
+      if (!item.isAd) return false;
+      if (activeFilterSite === 'All') return true;
+      const rawPlatform = (item.sourcePlatform || '').toLowerCase();
+      if (activeFilterSite === 'Other') {
+        const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        return !defaultSites.some(d => rawPlatform === d || rawPlatform.endsWith('.' + d));
+      }
+      return rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
+    });
+    if (!hasAdsOnSite) {
+      activeFilterTag = 'All';
+    }
+  }
+
+  renderFilterPills();
+  renderSiteFilterPills();
+  renderFeed();
+}
+
 function renderSiteFilterPills() {
   const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
   const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
@@ -665,78 +714,82 @@ function renderSiteFilterPills() {
       if (!candidateSites.includes(d)) candidateSites.push(d);
     }
   });
+
   customSites.forEach(d => {
     const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
-    if (!cfg || cfg.isEnabled !== false) {
+    if (cfg && cfg.isEnabled !== false) {
       if (!candidateSites.includes(d)) candidateSites.push(d);
     }
   });
 
-  const list = state.stack || [];
+  // 2. Compute counts dynamically
+  const counts = { All: state.stack ? state.stack.length : 0 };
+  let otherCount = 0;
 
-  // 2. Find the most recent post's timestamp for each site
-  const latestSiteTimestampMap = {};
-  list.forEach(item => {
+  (state.stack || []).forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
-    let matchedSite = null;
-    for (const domain of candidateSites) {
-      if (rawPlatform === domain || rawPlatform.endsWith('.' + domain)) {
-        matchedSite = domain;
+    
+    // Find matching site candidate
+    let matchedCandidate = null;
+    for (const site of candidateSites) {
+      if (rawPlatform === site || rawPlatform.endsWith('.' + site)) {
+        matchedCandidate = site;
         break;
       }
     }
     
-    if (matchedSite && !latestSiteTimestampMap[matchedSite]) {
-      latestSiteTimestampMap[matchedSite] = item.timestamp;
+    if (matchedCandidate) {
+      counts[matchedCandidate] = (counts[matchedCandidate] || 0) + 1;
+    } else {
+      otherCount++;
     }
   });
+  counts.Other = otherCount;
 
-  // 3. Sort candidate sites by recency (highest timestamp first)
-  candidateSites.sort((a, b) => {
-    const timeA = latestSiteTimestampMap[a] || 0;
-    const timeB = latestSiteTimestampMap[b] || 0;
-    return timeB - timeA;
-  });
-
-  // 4. Construct final sorted list
-  const activeSitesList = ['All', ...candidateSites];
-
-  const counts = { All: list.length };
-  list.forEach(item => {
+  // 3. Sort candidate sites by recency (last item added timestamp)
+  const siteTimestamps = {};
+  (state.stack || []).forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
-    let matched = 'Other';
-    for (const domain of activeSitesList) {
-      if (domain !== 'All' && (rawPlatform === domain || rawPlatform.endsWith('.' + domain))) {
-        matched = domain;
+    let matchedCandidate = null;
+    for (const site of candidateSites) {
+      if (rawPlatform === site || rawPlatform.endsWith('.' + site)) {
+        matchedCandidate = site;
         break;
       }
     }
-    if (matched !== 'Other') {
-      counts[matched] = (counts[matched] || 0) + 1;
-    } else {
-      counts['Other'] = (counts['Other'] || 0) + 1;
+    if (matchedCandidate && !siteTimestamps[matchedCandidate]) {
+      siteTimestamps[matchedCandidate] = item.timestamp;
     }
   });
-  
-  if (counts['Other'] > 0 && !activeSitesList.includes('Other')) {
-    activeSitesList.push('Other');
+
+  candidateSites.sort((a, b) => {
+    const tA = siteTimestamps[a] || 0;
+    const tB = siteTimestamps[b] || 0;
+    return tB - tA;
+  });
+
+  // 4. Final ordered list of site pills
+  const orderedSites = ['All', ...candidateSites];
+  if (otherCount > 0) {
+    orderedSites.push('Other');
   }
 
-  // Capture starting layout coordinates of existing site pills (First)
-  const firstRects = {};
-  Array.from(dom.filterSitePills.children).forEach(child => {
-    const site = child.dataset.site;
+  // Preserve positions for FLIP animation
+  const oldRects = new Map();
+  Array.from(dom.filterSitePills.children).forEach(pill => {
+    const site = pill.dataset.site;
     if (site) {
-      firstRects[site] = child.getBoundingClientRect();
+      oldRects.set(site, pill.getBoundingClientRect());
     }
   });
 
   dom.filterSitePills.innerHTML = '';
-  activeSitesList.forEach(site => {
+
+  orderedSites.forEach(site => {
     const count = counts[site] || 0;
-    const pill = document.createElement('button');
-    pill.className = `filter-pill ${activeFilterSite === site ? 'active' : ''}`;
+    const pill = document.createElement('div');
     pill.dataset.site = site;
+    pill.className = `filter-pill ${activeFilterSite === site ? 'active' : ''}`;
     
     let labelText = site;
     if (site === 'All') labelText = 'All Sites';
@@ -751,10 +804,7 @@ function renderSiteFilterPills() {
     `;
     
     pill.addEventListener('click', () => {
-      activeFilterSite = site;
-      renderFilterPills();
-      renderSiteFilterPills();
-      renderFeed();
+      setFilterSite(site);
     });
 
     dom.filterSitePills.appendChild(pill);
@@ -763,10 +813,10 @@ function renderSiteFilterPills() {
   // Apply FLIP (First, Last, Invert, Play) transition
   Array.from(dom.filterSitePills.children).forEach(pill => {
     const site = pill.dataset.site;
-    if (site && firstRects[site]) {
-      const firstRect = firstRects[site];
+    const oldRect = oldRects.get(site);
+    if (site && oldRect) {
       const lastRect = pill.getBoundingClientRect();
-      const deltaX = firstRect.left - lastRect.left;
+      const deltaX = oldRect.left - lastRect.left;
       
       if (deltaX !== 0) {
         // Invert: shift instantly to the old layout position
@@ -919,6 +969,7 @@ function populateCardInner(card, item) {
   const timeStr = relativeTime(item.timestamp);
   const tag = item.assignedTag || 'Unclassified';
   const tagColor = getTagColor(tag);
+  card.style.setProperty('--card-accent', tagColor);
 
   const { title, body } = parseCardText(item.textSnippet);
   const entities = extractLocalEntities(item.textSnippet, tag);
@@ -1757,12 +1808,7 @@ function handleTabUrlChange(url) {
     }
 
     if (activeFilterSite !== matched) {
-      activeFilterSite = matched;
-      if (dom.filterSitePills) {
-        renderSiteFilterPills();
-        renderFilterPills();
-        renderFeed();
-      }
+      setFilterSite(matched);
     }
   } catch (err) {
     // ignore

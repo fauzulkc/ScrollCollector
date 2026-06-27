@@ -422,7 +422,11 @@ function processBoundaryContainer(el) {
   el.setAttribute(PROCESSED_ATTR, 'true');
 
   const text = extractTextFromContainer(el);
-  if (text.length < MIN_TEXT_LEN || text.length > MAX_TEXT_LEN) return;
+  const hostname = window.location.hostname.toLowerCase();
+  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com'].some(d => hostname === d || hostname.endsWith('.' + d));
+  const minLen = isPredefinedSite ? 20 : MIN_TEXT_LEN;
+
+  if (text.length < minLen || text.length > MAX_TEXT_LEN) return;
 
   const hash = hashString(text);
   if (seenHashes.has(hash)) return;
