@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Facebook Integration Mock — ScrollCollector</title>
+  <style>
+    :root {
+      --bg: #18191a;
+      --bg-card: #242526;
+      --border: #3e4042;
+      --text: #e4e6eb;
+      --text-muted: #b0b3b8;
+      --accent: #1877f2;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: Segoe UI, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      color: var(--accent);
+    }
+
+    button.btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.btn:hover {
+      background: #166fe5;
+    }
+
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Facebook Card Styles */
+    div[role="article"].facebook-post, div[data-pagelet^="ReelsConsumerVideoSheet"] {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: block;
+    }
+
+    .fb-author {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 8px;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .fb-caption {
+      font-size: 14px;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
+
+    .ad-pill {
+      display: inline-block;
+      font-size: 10px;
+      font-weight: bold;
+      color: #f87171;
+      border: 1px solid rgba(248, 113, 113, 0.3);
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-top: 8px;
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>Facebook Simulator</h1>
+    <button class="btn" id="btn-scroll">Simulate Facebook Scroll</button>
+  </header>
+
+  <div class="feed" id="feed">
+
+    <!-- Standard Feed Post -->
+    <div class="facebook-post" role="article" data-pagelet="FeedUnit_1">
+      <h2><a role="link" href="#" class="fb-author"><strong>Science & Tech Journal</strong></a></h2>
+      <div data-ad-preview="message" class="fb-caption">Researchers have achieved a breakthrough in room-temperature superconductivity using a carbonaceous sulfur hydride material under high pressure. This could revolutionize power grids.</div>
+    </div>
+
+    <!-- Sponsored Ad -->
+    <div class="facebook-post" role="article" data-pagelet="FeedUnit_2">
+      <h2><a role="link" href="#" class="fb-author"><strong>Learn Solidity Platform</strong></a></h2>
+      <div data-ad-preview="message" class="fb-caption">Master blockchain engineering and smart contract auditing. Sign up today for our certified bootcamp and get hired in Web3.</div>
+      <span class="ad-pill">Sponsored</span>
+    </div>
+
+    <!-- Reels Video Sheet -->
+    <div data-pagelet="ReelsConsumerVideoSheet">
+      <h3><a role="link" href="#" class="fb-author"><strong>Adventure Outdoors</strong></a></h3>
+      <div dir="auto"><span dir="auto" class="fb-caption">Kayaking through the crystal clear waters of the Swiss Alps glaciers! #switzerland #travel #kayak</span></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let postCount = 0;
+  document.getElementById('btn-scroll').addEventListener('click', () => {
+    postCount++;
+    const feed = document.getElementById('feed');
+    const newFb = document.createElement('div');
+    newFb.className = 'facebook-post';
+    newFb.setAttribute('role', 'article');
+    newFb.setAttribute('data-pagelet', `FeedUnit_dynamic_${postCount}`);
+    newFb.innerHTML = `
+      <h2><a role="link" href="#" class="fb-author"><strong>Macro Trends Digest [Scroll ${postCount}]</strong></a></h2>
+      <div data-ad-preview="message" class="fb-caption">Federal reserve interest rate cuts are expected in the upcoming quarter. Financial analysts suggest diversification into bond indices and commodities.</div>
+    `;
+    feed.appendChild(newFb);
+    
+    const btn = document.getElementById('btn-scroll');
+    const originalText = btn.innerText;
+    btn.innerText = "⚡ Post Injected!";
+    btn.style.background = "#22c55e";
+    setTimeout(() => {
+      btn.innerText = originalText;
+      btn.style.background = "";
+    }, 800);
+  });
+</script>
+</body>
+</html>

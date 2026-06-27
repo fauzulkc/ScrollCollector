@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube Integration Mock — ScrollCollector</title>
+  <style>
+    :root {
+      --bg: #0f0f0f;
+      --bg-card: #212121;
+      --border: #3d3d3d;
+      --text: #f1f1f1;
+      --text-muted: #aaa;
+      --accent: #ff0000;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: Roboto, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      color: var(--accent);
+    }
+
+    button.btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 4px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.btn:hover {
+      background: #cc0000;
+    }
+
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* YouTube Card Styles */
+    ytd-rich-item-renderer, ytd-reel-video-renderer, ytd-comment-thread-renderer {
+      display: block;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .yt-title {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 6px;
+      text-decoration: none;
+      display: block;
+    }
+
+    .yt-channel {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    .yt-meta {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>YouTube Simulator</h1>
+    <button class="btn" id="btn-scroll">Simulate YouTube Scroll</button>
+  </header>
+
+  <div class="feed" id="feed">
+    
+    <!-- Standard Video Card -->
+    <ytd-rich-item-renderer>
+      <div id="dismissible">
+        <div id="details">
+          <a id="video-title-link" href="https://www.youtube.com/watch?v=techYt1">
+            <yt-formatted-string id="video-title" class="yt-title">Building an On-Device Neural Network with WebGPU and JavaScript</yt-formatted-string>
+          </a>
+          <ytd-channel-name>
+            <div id="container"><div id="text-container"><a href="/@techExplained" class="yt-channel">Tech Explained Channel</a></div></div>
+          </ytd-channel-name>
+          <div id="metadata-line"><span class="yt-meta">120K views • 3 days ago</span></div>
+        </div>
+      </div>
+    </ytd-rich-item-renderer>
+
+    <!-- Shorts Reel Card -->
+    <ytd-reel-video-renderer>
+      <div class="ytd-reel-player-header-renderer">
+        <span class="title yt-title">Is on-device AI faster than cloud APIs? Here is the truth #shorts</span>
+        <span class="channel-name yt-channel">WebSpeed Hacks</span>
+      </div>
+    </ytd-reel-video-renderer>
+
+    <!-- Comment Card -->
+    <ytd-comment-thread-renderer>
+      <a id="author-text" class="yt-channel" href="/@coder101">@coder101</a>
+      <div id="content-text" class="yt-meta" style="font-size: 13px; color: var(--text); margin-top: 4px;">
+        This on-device setup works incredibly well. The latency went down from 300ms to just 15ms!
+      </div>
+    </ytd-comment-thread-renderer>
+
+  </div>
+</div>
+
+<script>
+  let postCount = 0;
+  document.getElementById('btn-scroll').addEventListener('click', () => {
+    postCount++;
+    const feed = document.getElementById('feed');
+    const newYt = document.createElement('ytd-rich-item-renderer');
+    newYt.innerHTML = `
+      <div id="dismissible">
+        <div id="details">
+          <a id="video-title-link" href="https://www.youtube.com/watch?v=dynamicYt${postCount}">
+            <yt-formatted-string id="video-title" class="yt-title">Deploying Local LLMs on Raspberry Pi 5 — Step-by-Step [Scroll ${postCount}]</yt-formatted-string>
+          </a>
+          <ytd-channel-name>
+            <div id="container"><div id="text-container"><a href="/@pi_hacker" class="yt-channel">Hardware Hacker</a></div></div>
+          </ytd-channel-name>
+          <div id="metadata-line"><span class="yt-meta">45K views • 1 hour ago</span></div>
+        </div>
+      </div>
+    `;
+    feed.appendChild(newYt);
+    
+    const btn = document.getElementById('btn-scroll');
+    const originalText = btn.innerText;
+    btn.innerText = "⚡ Video Injected!";
+    btn.style.background = "#22c55e";
+    setTimeout(() => {
+      btn.innerText = originalText;
+      btn.style.background = "";
+    }, 800);
+  });
+</script>
+</body>
+</html>
