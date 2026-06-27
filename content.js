@@ -509,14 +509,118 @@ function extractTextFromContainer(container) {
     }
   }
 
+  // LinkedIn custom text extraction
+  if (hostname.includes('linkedin.com')) {
+    const actorNameEl = container.querySelector('.update-components-actor__title, span[class*="actor__title"]');
+    const actorDescEl = container.querySelector('.update-components-actor__description, span[class*="actor__description"]');
+    const textEl = container.querySelector('.update-components-text, [class*="break-words"]');
+    
+    if (textEl) {
+      const postText = textEl.innerText.trim();
+      const author = actorNameEl ? actorNameEl.innerText.trim() : '';
+      const bio = actorDescEl ? actorDescEl.innerText.trim().replace(/\s+/g, ' ') : '';
+      
+      if (postText) {
+        let header = '';
+        if (author) {
+          header = bio ? `Post by: ${author} (${bio})` : `Post by: ${author}`;
+        }
+        return header ? `${header}\n\n${postText}` : postText;
+      }
+    }
+  }
+
+  // Twitter/X custom text extraction
+  if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
+    const userEl = container.querySelector('[data-testid="User-Name"]');
+    const textEl = container.querySelector('[data-testid="tweetText"]');
+    
+    if (textEl) {
+      const tweetText = textEl.innerText.trim();
+      let authorLine = '';
+      if (userEl) {
+        const fullUser = userEl.innerText.trim().replace(/\s+/g, ' ');
+        const parts = fullUser.split('·');
+        authorLine = parts[0].trim();
+      }
+      
+      if (tweetText) {
+        return authorLine ? `Tweet by: ${authorLine}\n\n${tweetText}` : tweetText;
+      }
+    }
+  }
+
+  // Facebook custom text extraction
+  if (hostname.includes('facebook.com')) {
+    const isReel = (container.getAttribute('data-pagelet') || '').includes('ReelsConsumerVideoSheet') || 
+                   (container.getAttribute('data-pagelet') || '').includes('ReelsUnit') || 
+                   (container.getAttribute('data-pagelet') || '').includes('Reel_');
+    if (isReel) {
+      const authorEl = container.querySelector('h2 a[role="link"], h3 a[role="link"], h4 a[role="link"], strong a[role="link"], a[role="link"] strong, span > a[role="link"]');
+      const spans = Array.from(container.querySelectorAll('span[dir="auto"], div[dir="auto"]'));
+      let caption = '';
+      const author = authorEl ? authorEl.innerText.trim() : 'Facebook Reel';
+      
+      for (const span of spans) {
+        const text = span.innerText.trim();
+        if (text && text !== author && text.length > caption.length && !text.includes('Follow') && !text.includes('Like') && !text.includes('Comment') && !text.includes('Share')) {
+          caption = text;
+        }
+      }
+      
+      if (caption) {
+        return `${caption}\n\nAuthor: ${author}`;
+      }
+    } else {
+      const authorEl = container.querySelector('h2 strong, h3 strong, h4 strong, span strong, a strong, h2 a[role="link"], h3 a[role="link"], h4 a[role="link"]');
+      const author = authorEl ? authorEl.innerText.trim() : '';
+      
+      const bodyElements = Array.from(container.querySelectorAll('div[dir="auto"], span[dir="auto"], p'));
+      let bodyText = '';
+      for (const el of bodyElements) {
+        if (el.closest('h2') || el.closest('h3') || el.closest('h4') || el.closest('[role="button"]') || el.closest('a')) {
+          continue;
+        }
+        const text = el.innerText.trim();
+        if (text && text.length > bodyText.length && !text.includes('Follow') && !text.includes('Like') && !text.includes('Comment') && !text.includes('Share')) {
+          bodyText = text;
+        }
+      }
+      
+      if (author && bodyText && bodyText.length > 10) {
+        return `Post by: ${author}\n\n${bodyText}`;
+      }
+    }
+  }
+
   // YouTube site-specific custom text extraction
   const isYouTubeVideo = tagName.startsWith('ytd-') && tagName.includes('video-renderer') || tagName === 'ytd-rich-item-renderer' || tagName === 'ytd-reel-video-renderer';
   
   if (isYouTubeVideo) {
     let titleEl = container.querySelector('#video-title, #video-title-link, #title, yt-formatted-string.title, .title, .ytd-reel-player-header-renderer');
+    if (titleEl) {
+      const text = titleEl.innerText.trim();
+      if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(text)) {
+        titleEl = null;
+      }
+    }
     if (!titleEl) {
       const watchLinks = Array.from(container.querySelectorAll('a[href*="watch?v="]'));
-      titleEl = watchLinks.find(a => a.innerText.trim().length > 0);
+      titleEl = watchLinks.find(a => {
+        const text = a.innerText.trim();
+        if (text.length === 0) return false;
+        
+        // Exclude thumbnail links
+        const id = a.getAttribute('id') || '';
+        const cls = a.getAttribute('class') || '';
+        if (id.includes('thumbnail') || cls.includes('thumbnail')) return false;
+        if (a.querySelector('img, ytd-thumbnail, yt-img-shadow')) return false;
+        
+        // Exclude duration badges (e.g. "10:23", "1:28:45")
+        if (/^\d{1,2}:\d{2}(:\d{2})?$/.test(text)) return false;
+        
+        return true;
+      });
     }
     
     let channelEl = container.querySelector('ytd-channel-name, #channel-name, #byline-container, .channel-name, #channel-name-container');
@@ -533,7 +637,10 @@ function extractTextFromContainer(container) {
       const meta = metaEl ? metaEl.innerText.trim().replace(/\s+/g, ' ').replace(/\n/g, ' • ') : '';
       
       if (title.length > 0) {
-        return `${title}\nChannel: ${channel}\nInfo: ${meta}`;
+        let result = title;
+        if (channel) result += `\nChannel: ${channel}`;
+        if (meta) result += `\nInfo: ${meta}`;
+        return result;
       }
     }
   }
