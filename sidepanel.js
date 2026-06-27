@@ -116,11 +116,22 @@ function relativeTime(ts) {
 }
 
 function getTagColor(tag) {
-  if (tag === 'Ads') return '#ef4444';
+  if (tag === 'All') return '#8b5cf6'; // Indigo/Purple
+  if (tag === 'Favorites') return '#f43f5e'; // Rose Red
+  if (tag === 'Ads') return '#ef4444'; // Red
+  if (tag === 'Unclassified') return '#71717a'; // Zinc Gray
+  
   const tags = state.configuration.trackedTags || [];
   const idx = tags.findIndex(t => (typeof t === 'string' ? t : t.label) === tag);
   if (idx === -1) return FALLBACK_COLOR;
   return BADGE_COLORS[idx % BADGE_COLORS.length];
+}
+
+function hexToRgb(hex) {
+  const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+  const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+  return result ? `${parseInt(result[1], 16)}, ${parseInt(result[2], 16)}, ${parseInt(result[3], 16)}` : '113, 113, 122';
 }
 
 function extractDomain(url) {
@@ -560,10 +571,19 @@ function renderFilterPills() {
     pill.className = `filter-pill ${activeFilterTag === cat ? 'active' : ''}`;
     pill.dataset.category = cat;
     
-    let labelText = cat;
-    if (cat === 'Favorites') labelText = '❤️ Favorites';
+    const color = getTagColor(cat);
+    const rgb = hexToRgb(color);
+    pill.style.setProperty('--pill-color', color);
+    pill.style.setProperty('--pill-color-rgb', rgb);
 
-    pill.innerHTML = `<span>${escapeHTML(labelText)}</span> <span style="opacity: 0.6; font-size: 9px; margin-left: 2px;">${count}</span>`;
+    let labelText = cat;
+    if (cat === 'Favorites') labelText = 'Favorites';
+
+    pill.innerHTML = `
+      <span class="pill-dot" style="background: ${color}"></span>
+      <span class="pill-label">${escapeHTML(labelText)}</span>
+      <span class="pill-count">${count}</span>
+    `;
     
     pill.addEventListener('click', () => {
       activeFilterTag = cat;
@@ -610,25 +630,52 @@ function renderFilterPills() {
 function renderSiteFilterPills() {
   const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
   const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
-  const activeSitesList = ['All'];
-  
   const configuredSites = state.configuration.sites || [];
   
+  // 1. Gather all active configured sites (excluding All and Other)
+  const candidateSites = [];
   defaultSites.forEach(d => {
     const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
     if (!cfg || cfg.isEnabled !== false) {
-      if (!activeSitesList.includes(d)) activeSitesList.push(d);
+      if (!candidateSites.includes(d)) candidateSites.push(d);
     }
   });
-  
   customSites.forEach(d => {
     const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
     if (!cfg || cfg.isEnabled !== false) {
-      if (!activeSitesList.includes(d)) activeSitesList.push(d);
+      if (!candidateSites.includes(d)) candidateSites.push(d);
     }
   });
 
   const list = state.stack || [];
+
+  // 2. Find the most recent post's timestamp for each site
+  const latestSiteTimestampMap = {};
+  list.forEach(item => {
+    const rawPlatform = (item.sourcePlatform || '').toLowerCase();
+    let matchedSite = null;
+    for (const domain of candidateSites) {
+      if (rawPlatform === domain || rawPlatform.endsWith('.' + domain)) {
+        matchedSite = domain;
+        break;
+      }
+    }
+    
+    if (matchedSite && !latestSiteTimestampMap[matchedSite]) {
+      latestSiteTimestampMap[matchedSite] = item.timestamp;
+    }
+  });
+
+  // 3. Sort candidate sites by recency (highest timestamp first)
+  candidateSites.sort((a, b) => {
+    const timeA = latestSiteTimestampMap[a] || 0;
+    const timeB = latestSiteTimestampMap[b] || 0;
+    return timeB - timeA;
+  });
+
+  // 4. Construct final sorted list
+  const activeSitesList = ['All', ...candidateSites];
+
   const counts = { All: list.length };
   list.forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
@@ -650,16 +697,33 @@ function renderSiteFilterPills() {
     activeSitesList.push('Other');
   }
 
+  // Capture starting layout coordinates of existing site pills (First)
+  const firstRects = {};
+  Array.from(dom.filterSitePills.children).forEach(child => {
+    const site = child.dataset.site;
+    if (site) {
+      firstRects[site] = child.getBoundingClientRect();
+    }
+  });
+
   dom.filterSitePills.innerHTML = '';
   activeSitesList.forEach(site => {
     const count = counts[site] || 0;
     const pill = document.createElement('button');
     pill.className = `filter-pill ${activeFilterSite === site ? 'active' : ''}`;
+    pill.dataset.site = site;
     
     let labelText = site;
     if (site === 'All') labelText = 'All Sites';
     
-    pill.innerHTML = `<span>${escapeHTML(labelText)}</span> <span style="opacity: 0.6; font-size: 9px; margin-left: 2px;">${count}</span>`;
+    // Add custom icon if available
+    const iconHtml = PLATFORM_ICONS[site] || PLATFORM_ICONS['fallback'];
+    
+    pill.innerHTML = `
+      <span class="pill-icon">${iconHtml}</span>
+      <span>${escapeHTML(labelText)}</span>
+      <span style="opacity: 0.6; font-size: 9px; margin-left: 2px;">${count}</span>
+    `;
     
     pill.addEventListener('click', () => {
       activeFilterSite = site;
@@ -669,6 +733,35 @@ function renderSiteFilterPills() {
     });
 
     dom.filterSitePills.appendChild(pill);
+  });
+
+  // Apply FLIP (First, Last, Invert, Play) transition
+  Array.from(dom.filterSitePills.children).forEach(pill => {
+    const site = pill.dataset.site;
+    if (site && firstRects[site]) {
+      const firstRect = firstRects[site];
+      const lastRect = pill.getBoundingClientRect();
+      const deltaX = firstRect.left - lastRect.left;
+      
+      if (deltaX !== 0) {
+        // Invert: shift instantly to the old layout position
+        pill.style.transform = `translateX(${deltaX}px)`;
+        pill.style.transition = 'none';
+        
+        // Force synchronous browser layout reflow
+        void pill.offsetWidth;
+        
+        // Play: smoothly animate back to natural origin
+        pill.style.transition = 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)';
+        pill.style.transform = '';
+        
+        // Cleanup transition property after animation completes
+        pill.addEventListener('transitionend', function handler() {
+          pill.style.transition = '';
+          pill.removeEventListener('transitionend', handler);
+        });
+      }
+    }
   });
 }
 
