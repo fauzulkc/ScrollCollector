@@ -161,6 +161,75 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Dynamic Content Script Injection
+// ---------------------------------------------------------------------------
+
+function checkIfSiteEnabled(hostname, sites) {
+  if (!sites || sites.length === 0) return true;
+  const lowerHost = hostname.toLowerCase();
+  return sites.some(s => {
+    if (!s.isEnabled) return false;
+    const domain = s.domain.toLowerCase();
+    return lowerHost === domain || lowerHost.endsWith('.' + domain);
+  });
+}
+
+async function ensureContentScriptInjected(tabId, url) {
+  if (!tabId || !url) return;
+  if (!url.startsWith('http://') && !url.startsWith('https://')) return;
+
+  try {
+    const hostname = new URL(url).hostname.replace('www.', '').toLowerCase();
+    const state = await chrome.storage.local.get('configuration');
+    const config = state.configuration || {};
+    
+    const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+    const allConfiguredSites = config.sites || defaultSites.map((d, i) => ({ id: 's' + i, domain: d, isEnabled: true }));
+
+    const isEnabled = checkIfSiteEnabled(hostname, allConfiguredSites);
+    if (!isEnabled) return;
+
+    // Ping the tab to check if the content script is active
+    chrome.tabs.sendMessage(tabId, { type: 'PING' }, () => {
+      if (chrome.runtime.lastError) {
+        console.info(`[background] Tab ${tabId} has no active content script. Injecting...`);
+        (async () => {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['vendor/browser-polyfill.js']
+            });
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content.js']
+            });
+            console.info(`[background] Injected content script successfully on tab ${tabId}`);
+          } catch (err) {
+            console.warn(`[background] Failed to inject content script on tab ${tabId}:`, err);
+          }
+        })();
+      }
+    });
+  } catch (err) {
+    // Ignore URL parse errors
+  }
+}
+
+// Track tab activation and loading updates to ensure content scripts are active
+chrome.tabs.onActivated.addListener(activeInfo => {
+  chrome.tabs.get(activeInfo.tabId, (tab) => {
+    if (chrome.runtime.lastError || !tab || !tab.url) return;
+    ensureContentScriptInjected(tab.id, tab.url);
+  });
+});
+
+chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+  if (changeInfo.status === 'loading' && tab.url) {
+    ensureContentScriptInjected(tabId, tab.url);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
