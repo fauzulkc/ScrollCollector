@@ -516,9 +516,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const { tag: tagLabel } = message.payload;
           const { configuration } = await chrome.storage.local.get('configuration');
 
-          const updatedTags = configuration.trackedTags.map(t =>
-            t.label === tagLabel ? { ...t, isDynamic: false, isSticky: false } : t
-          );
+          let exists = false;
+          const updatedTags = configuration.trackedTags.map(t => {
+            if (t.label.toLowerCase() === tagLabel.toLowerCase()) {
+              exists = true;
+              return { ...t, isDynamic: false, isSticky: false };
+            }
+            return t;
+          });
+
+          if (!exists) {
+            updatedTags.push({
+              id: 't_' + Date.now(),
+              label: tagLabel,
+              isEnabled: true,
+              isCustom: true
+            });
+          }
 
           await chrome.storage.local.set({
             configuration: { ...configuration, trackedTags: updatedTags }

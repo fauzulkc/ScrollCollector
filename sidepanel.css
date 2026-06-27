@@ -1218,3 +1218,144 @@ kbd {
   }
 }
 
+/* Category Label Chip styling */
+.card-category-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.card-category-label:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+}
+
+/* Dynamic chips dotted border styling */
+.filter-pill.is-dynamic,
+.card-category-label.is-dynamic {
+  border-style: dotted !important;
+  border-width: 1px !important;
+}
+
+/* Confirm untracking modal dialog overlay style */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(9, 9, 11, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: overlayFadeIn 0.2s ease-out forwards;
+}
+
+.confirm-dialog {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  width: 280px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: dialogScaleIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.confirm-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.confirm-message {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn-confirm-cancel {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-confirm-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.btn-confirm-ok {
+  background: #ef4444;
+  border: 1px solid #ef4444;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-confirm-ok:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+/* Modal Animations */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialogScaleIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.confirm-overlay.fadeOut {
+  animation: overlayFadeOut 0.2s ease-in forwards;
+}
+
+.confirm-overlay.fadeOut .confirm-dialog {
+  animation: dialogScaleOut 0.2s ease-in forwards;
+}
+
+@keyframes overlayFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes dialogScaleOut {
+  from { transform: scale(1); opacity: 1; }
+  to { transform: scale(0.95); opacity: 0; }
+}
+

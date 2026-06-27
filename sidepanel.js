@@ -127,6 +127,82 @@ function getTagColor(tag) {
   return BADGE_COLORS[idx % BADGE_COLORS.length];
 }
 
+function isTagDynamic(tag) {
+  if (tag === 'All' || tag === 'Favorites' || tag === 'Ads' || tag === 'Unclassified') {
+    return false;
+  }
+  const trackedTags = state.configuration?.trackedTags || [];
+  const tagCfg = trackedTags.find(t => t.label.toLowerCase() === tag.toLowerCase());
+  return tagCfg ? !!tagCfg.isDynamic : true;
+}
+
+function handleTagTrackToggle(tag) {
+  if (tag === 'All' || tag === 'Favorites' || tag === 'Ads' || tag === 'Unclassified') {
+    return;
+  }
+  const isDynamic = isTagDynamic(tag);
+  if (isDynamic) {
+    // Dynamic -> Tracked (Solid)
+    chrome.runtime.sendMessage({
+      type: 'TAG_PROMOTED',
+      payload: { tag }
+    });
+  } else {
+    // Tracked -> Untracked (Dynamic/Remove)
+    showUntrackConfirmation(tag);
+  }
+}
+
+function showUntrackConfirmation(tag) {
+  // Create dialog overlay container
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  
+  overlay.innerHTML = `
+    <div class="confirm-dialog">
+      <div class="confirm-title">Stop tracking tag?</div>
+      <div class="confirm-message">Are you sure you want to stop tracking tag <strong>#${escapeHTML(tag)}</strong>? It will revert to a dynamic tag.</div>
+      <div class="confirm-actions">
+        <button class="btn-confirm-cancel">Cancel</button>
+        <button class="btn-confirm-ok">Stop tracking</button>
+      </div>
+    </div>
+  `;
+  
+  const cancelBtn = overlay.querySelector('.btn-confirm-cancel');
+  const okBtn = overlay.querySelector('.btn-confirm-ok');
+  
+  const closeDialog = () => {
+    overlay.classList.add('fadeOut');
+    overlay.addEventListener('animationend', () => {
+      overlay.remove();
+    });
+  };
+  
+  cancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDialog();
+  });
+  
+  okBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    chrome.runtime.sendMessage({
+      type: 'TAG_REMOVED',
+      payload: { tag }
+    });
+    closeDialog();
+  });
+  
+  overlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target === overlay) {
+      closeDialog();
+    }
+  });
+  
+  document.body.appendChild(overlay);
+}
+
 function hexToRgb(hex) {
   const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
   const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
@@ -593,7 +669,8 @@ function renderFilterPills() {
   categories.forEach(cat => {
     const count = counts[cat] || 0;
     const pill = document.createElement('button');
-    pill.className = `filter-pill ${activeFilterTag === cat ? 'active' : ''}`;
+    const isDyn = isTagDynamic(cat);
+    pill.className = `filter-pill ${activeFilterTag === cat ? 'active' : ''} ${isDyn ? 'is-dynamic' : ''}`.trim();
     pill.dataset.category = cat;
     
     const color = getTagColor(cat);
@@ -609,6 +686,11 @@ function renderFilterPills() {
       <span class="pill-label">${escapeHTML(labelText)}</span>
       <span class="pill-count">${count}</span>
     `;
+
+    pill.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      handleTagTrackToggle(cat);
+    });
     
     pill.addEventListener('click', () => {
       activeFilterTag = cat;
@@ -1049,7 +1131,7 @@ function populateCardInner(card, item) {
     ${entityChips}
     
     <div class="card-footer">
-      <span class="card-category-label" style="--tag-color: ${tagColor}">
+      <span class="card-category-label ${isTagDynamic(tag) ? 'is-dynamic' : ''}" style="--tag-color: ${tagColor}">
         <span class="cat-dot"></span>
         <span>${escapeHTML(tag)}</span>
       </span>
@@ -1068,6 +1150,14 @@ function populateCardInner(card, item) {
   `;
 
   // Bind Event Listeners
+  const catLabel = card.querySelector('.card-category-label');
+  if (catLabel) {
+    catLabel.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      handleTagTrackToggle(tag);
+    });
+  }
+
   const link = card.querySelector('.card-site-link');
   if (link) {
     link.addEventListener('click', (e) => {
