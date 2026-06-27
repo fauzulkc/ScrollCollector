@@ -45,7 +45,6 @@ chrome.runtime.onInstalled.addListener(async () => {
         sites: [
           { id: 's1', domain: 'facebook.com', isEnabled: true, isCustom: false },
           { id: 's2', domain: 'linkedin.com', isEnabled: true, isCustom: false },
-          { id: 's3', domain: 'twitter.com', isEnabled: true, isCustom: false },
           { id: 's4', domain: 'x.com', isEnabled: true, isCustom: false },
           { id: 's5', domain: 'instagram.com', isEnabled: true, isCustom: false },
           { id: 's6', domain: 'youtube.com', isEnabled: true, isCustom: false },
@@ -73,13 +72,24 @@ chrome.runtime.onInstalled.addListener(async () => {
       existing.configuration.sites = [
         { id: 's1', domain: 'facebook.com', isEnabled: true, isCustom: false },
         { id: 's2', domain: 'linkedin.com', isEnabled: true, isCustom: false },
-        { id: 's3', domain: 'twitter.com', isEnabled: true, isCustom: false },
         { id: 's4', domain: 'x.com', isEnabled: true, isCustom: false },
         { id: 's5', domain: 'instagram.com', isEnabled: true, isCustom: false },
         { id: 's6', domain: 'youtube.com', isEnabled: true, isCustom: false },
         { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false }
       ];
       updated = true;
+    } else {
+      const hasTwitter = existing.configuration.sites.some(s => s.domain === 'twitter.com');
+      if (hasTwitter) {
+        // Remove twitter.com
+        existing.configuration.sites = existing.configuration.sites.filter(s => s.domain !== 'twitter.com');
+        // Ensure x.com exists in the list
+        const hasX = existing.configuration.sites.some(s => s.domain === 'x.com');
+        if (!hasX) {
+          existing.configuration.sites.push({ id: 's4', domain: 'x.com', isEnabled: true, isCustom: false });
+        }
+        updated = true;
+      }
     }
     
     const hasAds = existing.configuration.trackedTags.some(t => t.label === 'Ads');
@@ -165,8 +175,11 @@ chrome.runtime.onInstalled.addListener(async () => {
 // ---------------------------------------------------------------------------
 
 function checkIfSiteEnabled(hostname, sites) {
-  const lowerHost = hostname.toLowerCase();
-  const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+  let lowerHost = hostname.toLowerCase();
+  if (lowerHost === 'twitter.com' || lowerHost.endsWith('.twitter.com')) {
+    lowerHost = 'x.com';
+  }
+  const defaultSites = ['facebook.com', 'linkedin.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
   
   if (sites && sites.length > 0) {
     const match = sites.find(s => {
@@ -191,7 +204,7 @@ async function ensureContentScriptInjected(tabId, url) {
     const state = await chrome.storage.local.get('configuration');
     const config = state.configuration || {};
     
-    const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+    const defaultSites = ['facebook.com', 'linkedin.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
     const allConfiguredSites = config.sites || defaultSites.map((d, i) => ({ id: 's' + i, domain: d, isEnabled: true }));
 
     const isEnabled = checkIfSiteEnabled(hostname, allConfiguredSites);
@@ -295,6 +308,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           try {
             const { text, sourcePlatform, sourceUrl, isAd } = message.payload;
 
+            let normalizedPlatform = sourcePlatform || '';
+            const lowerPlatform = normalizedPlatform.toLowerCase();
+            if (lowerPlatform === 'twitter.com' || lowerPlatform.endsWith('.twitter.com')) {
+              normalizedPlatform = 'x.com';
+            }
+
             // Read current state atomically
             const state = await chrome.storage.local.get(['configuration', 'metrics', 'stack', 'telemetry']);
             const config = state.configuration || {};
@@ -319,7 +338,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             const enabledDynamic = getEnabledDynamicLabels(trackedTags);
 
             // Run the inference pipeline (Tier 1 → Tier 2)
-            const { category, dynamicTag } = await classify(text, sourcePlatform, enabledCustom, enabledDynamic);
+            const { category, dynamicTag } = await classify(text, normalizedPlatform, enabledCustom, enabledDynamic);
 
             // --- Atomic state mutation ---
             let finalCategory = category;
@@ -374,7 +393,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             const newItem = {
               id:             `item_${Date.now()}`,
               timestamp:      Date.now(),
-              sourcePlatform,
+              sourcePlatform: normalizedPlatform,
               sourceUrl:      sourceUrl || '',
               textSnippet:    text, // Store full body so cards can expand properly
               assignedTag:    finalCategory,

@@ -665,7 +665,7 @@ function setFilterSite(site) {
       if (activeFilterSite === 'All') return true;
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
       if (activeFilterSite === 'Other') {
-        const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
         const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
         const configuredSites = state.configuration.sites || [];
         const enabledDomains = [...defaultSites, ...customSites].filter(d => {
@@ -686,7 +686,7 @@ function setFilterSite(site) {
       if (activeFilterSite === 'All') return true;
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
       if (activeFilterSite === 'Other') {
-        const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
         return !defaultSites.some(d => rawPlatform === d || rawPlatform.endsWith('.' + d));
       }
       return rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
@@ -702,7 +702,7 @@ function setFilterSite(site) {
 }
 
 function renderSiteFilterPills() {
-  const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+  const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
   const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
   const configuredSites = state.configuration.sites || [];
   
@@ -867,7 +867,7 @@ function renderFeed() {
     filteredStack = filteredStack.filter(i => {
       const rawPlatform = (i.sourcePlatform || '').toLowerCase();
       if (activeFilterSite === 'Other') {
-        const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
         const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
         const configuredSites = state.configuration.sites || [];
         const enabledDomains = [...defaultSites, ...customSites].filter(d => {
