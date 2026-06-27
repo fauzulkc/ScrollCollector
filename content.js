@@ -315,21 +315,137 @@ function findBoundaryContainer(element) {
 function extractTextFromContainer(container) {
   if (!container) return '';
   
-  // YouTube site-specific custom text extraction
   const tagName = container.tagName.toLowerCase();
+  const hostname = window.location.hostname.toLowerCase();
+  const isInstagram = hostname.includes('instagram.com') && tagName === 'article';
+  
+  if (isInstagram) {
+    // 1. Try to find the username link to identify the author
+    const profileLinks = Array.from(container.querySelectorAll('a[href]'));
+    const profileLink = profileLinks.find(a => {
+      const href = a.getAttribute('href');
+      return /^\/[a-zA-Z0-9_\.]+\/?$/.test(href) && href !== '/explore/' && href !== '/reels/' && href !== '/direct/';
+    });
+    const username = profileLink ? profileLink.innerText.trim() : '';
+
+    if (username) {
+      // 2. Search for the element that contains the username link followed by the caption
+      const candidateElements = Array.from(container.querySelectorAll('span, div, h1, h2, h3'));
+      const captionEl = candidateElements.find(el => {
+        if (el.children.length > 15) return false;
+        
+        // Exclude header elements to avoid matching username + suggested/follow badges in the header
+        if (el.closest('header') || el.closest('[class*="header"]') || el.closest('[class*="head"]')) {
+          return false;
+        }
+        
+        const firstLink = el.querySelector('a[href]');
+        if (firstLink) {
+          const href = firstLink.getAttribute('href');
+          if (/^\/[a-zA-Z0-9_\.]+\/?$/.test(href) && href !== '/explore/' && href !== '/reels/') {
+            const text = el.innerText.trim();
+            return text.startsWith(username) && text.length > username.length + 4;
+          }
+        }
+        return false;
+      });
+
+      if (captionEl) {
+        const fullText = captionEl.innerText.trim();
+        if (fullText.startsWith(username)) {
+          return fullText.slice(username.length).trim();
+        }
+        return fullText;
+      }
+    }
+
+    // 3. Fallback: Clean cloned node from Follow and Suggested noise
+    try {
+      const clone = container.cloneNode(true);
+      
+      const noiseSelectors = [
+        'header', 
+        'button', 
+        'span[role="button"]', 
+        'ul',
+        'a[href*="/liked_by/"]',
+        'a[href*="/likers/"]'
+      ];
+      noiseSelectors.forEach(sel => {
+        clone.querySelectorAll(sel).forEach(el => el.remove());
+      });
+
+      const allElements = Array.from(clone.querySelectorAll('*'));
+      allElements.forEach(el => {
+        if (el.innerText) {
+          const txt = el.innerText.trim();
+          if (txt.includes('Suggested for you') || txt === 'Follow' || /^\d+ likes?$/i.test(txt)) {
+            el.remove();
+          }
+        }
+      });
+
+      const defaultNoise = Array.from(NOISE_TAGS).join(',').toLowerCase();
+      clone.querySelectorAll(defaultNoise).forEach(n => n.remove());
+
+      return (clone.innerText || clone.textContent || '').trim().replace(/\s+/g, ' ');
+    } catch {
+      return (container.innerText || '').trim().replace(/\s+/g, ' ');
+    }
+  }
+
+  const isMedium = hostname.includes('medium.com') || 
+                   document.querySelector('meta[property="al:ios:app_name"][content="Medium"]') ||
+                   document.querySelector('link[title="Medium"]');
+
+  if (isMedium && (tagName === 'article' || container.classList.contains('postArticle'))) {
+    const titleEl = container.querySelector('h2, h3, [data-testid="post-title"]');
+    const title = titleEl ? titleEl.innerText.trim() : (container.getAttribute('aria-label') || '');
+    
+    let subtitle = '';
+    if (titleEl) {
+      const nextPara = titleEl.closest('a')?.nextElementSibling || titleEl.nextElementSibling;
+      if (nextPara && (nextPara.tagName === 'P' || nextPara.tagName === 'H3' || nextPara.tagName === 'DIV')) {
+        subtitle = nextPara.innerText.trim();
+      }
+    }
+    
+    const authorLinks = Array.from(container.querySelectorAll('a[href*="/@"]'));
+    const authorEl = authorLinks.find(a => a.innerText.trim().length > 0);
+    const author = authorEl ? authorEl.innerText.trim() : '';
+    
+    if (title) {
+      const authorLine = author ? `By: ${author}` : '';
+      return `${title}\n${subtitle}\n${authorLine}`.trim().replace(/\s+/g, ' ');
+    }
+  }
+
+  // YouTube site-specific custom text extraction
   const isYouTubeVideo = tagName.startsWith('ytd-') && tagName.includes('video-renderer') || tagName === 'ytd-rich-item-renderer' || tagName === 'ytd-reel-video-renderer';
   
   if (isYouTubeVideo) {
-    const titleEl = container.querySelector('#video-title, #video-title-link, #title, yt-formatted-string.title, .title, .ytd-reel-player-header-renderer');
-    const channelEl = container.querySelector('ytd-channel-name, #channel-name, #byline-container, .channel-name, #channel-name-container');
-    const metaEl = container.querySelector('#metadata-line');
+    let titleEl = container.querySelector('#video-title, #video-title-link, #title, yt-formatted-string.title, .title, .ytd-reel-player-header-renderer');
+    if (!titleEl) {
+      const watchLinks = Array.from(container.querySelectorAll('a[href*="watch?v="]'));
+      titleEl = watchLinks.find(a => a.innerText.trim().length > 0);
+    }
+    
+    let channelEl = container.querySelector('ytd-channel-name, #channel-name, #byline-container, .channel-name, #channel-name-container');
+    if (!channelEl) {
+      const channelLinks = Array.from(container.querySelectorAll('a[href*="/@"], a[href*="/user/"], a[href*="/channel/"]'));
+      channelEl = channelLinks.find(a => a.innerText.trim().length > 0);
+    }
+    
+    const metaEl = container.querySelector('#metadata-line, ytd-video-meta-block, .metadata-line, #metadata');
     
     if (titleEl) {
       const title = titleEl.innerText.trim();
       const channel = channelEl ? channelEl.innerText.trim() : '';
       const meta = metaEl ? metaEl.innerText.trim().replace(/\s+/g, ' ').replace(/\n/g, ' • ') : '';
       
-      return `${title}\nChannel: ${channel}\nInfo: ${meta}`;
+      if (title.length > 0) {
+        return `${title}\nChannel: ${channel}\nInfo: ${meta}`;
+      }
     }
   }
   
@@ -419,14 +535,15 @@ function detectAd(container) {
  */
 function processBoundaryContainer(el) {
   if (el.hasAttribute(PROCESSED_ATTR)) return;
-  el.setAttribute(PROCESSED_ATTR, 'true');
 
   const text = extractTextFromContainer(el);
   const hostname = window.location.hostname.toLowerCase();
-  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com'].some(d => hostname === d || hostname.endsWith('.' + d));
+  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com'].some(d => hostname === d || hostname.endsWith('.' + d));
   const minLen = isPredefinedSite ? 20 : MIN_TEXT_LEN;
 
   if (text.length < minLen || text.length > MAX_TEXT_LEN) return;
+
+  el.setAttribute(PROCESSED_ATTR, 'true');
 
   const hash = hashString(text);
   if (seenHashes.has(hash)) return;

@@ -34,7 +34,8 @@ describe('ScrollCollector content.js Integration Tests', () => {
                   { id: 's2', domain: 'youtube.com', isEnabled: true },
                   { id: 's3', domain: 'linkedin.com', isEnabled: true },
                   { id: 's4', domain: 'x.com', isEnabled: true },
-                  { id: 's5', domain: 'medium.com', isEnabled: true }
+                  { id: 's5', domain: 'medium.com', isEnabled: true },
+                  { id: 's6', domain: 'instagram.com', isEnabled: true }
                 ],
                 isTrackingPaused: false
               }
@@ -150,17 +151,20 @@ describe('ScrollCollector content.js Integration Tests', () => {
     expect(postCall[0].payload.sourcePlatform).toContain('x.com');
   });
 
-  test('Medium integration parses text density blocks', () => {
+  test('Medium integration parses article cards correctly', () => {
     delete globalThis.location;
     globalThis.location = new URL('https://medium.com/');
 
     document.body.innerHTML = `
-      <div class="article-card">
-        <div class="author-line">Alex Jenkins in Towards Data Science</div>
-        <h2 class="article-title">How we optimized our local transformer performance by 300% using quantization</h2>
-        <p class="article-snippet">Optimizing large language models for client-side web applications has always been a bottleneck. In this guide, we dive into INT8 and INT4 quantization techniques on-device.</p>
-        <span class="read-time">5 min read</span>
-      </div>
+      <article data-testid="post-preview" aria-label="The Obvious Ways To Spot Someone Secretly Writing With AI">
+        <div>
+          <a href="/@mattthenomad">Matt Lillywhite</a>
+        </div>
+        <a href="/the-daily-draft/the-obvious-ways-to-spot-someone-secretly-writing-with-ai-f36ce8d4d715">
+          <h2>The Obvious Ways To Spot Someone Secretly Writing With AI</h2>
+        </a>
+        <p>The biggest giveaways usually have nothing to do with the writing itself.</p>
+      </article>
     `;
 
     vm.runInThisContext(contentJsCode);
@@ -169,8 +173,44 @@ describe('ScrollCollector content.js Integration Tests', () => {
     const calls = sendMessageMock.mock.calls;
     const postCall = calls.find(c => c[0].type === 'TEXT_EXTRACTED');
     expect(postCall).toBeDefined();
-    expect(postCall[0].payload.text).toContain('Alex Jenkins');
-    expect(postCall[0].payload.text).toContain('quantization');
+    expect(postCall[0].payload.text).toContain('The Obvious Ways To Spot Someone Secretly Writing With AI');
+    expect(postCall[0].payload.text).toContain('The biggest giveaways');
+    expect(postCall[0].payload.text).toContain('Matt Lillywhite');
     expect(postCall[0].payload.sourcePlatform).toContain('medium.com');
+  });
+
+  test('Instagram integration parses posts correctly', () => {
+    delete globalThis.location;
+    globalThis.location = new URL('https://www.instagram.com/');
+
+    document.body.innerHTML = `
+      <article class="instagram-post">
+        <div class="post-header">
+          <a href="/orientwatches/" class="username-link">orientwatches</a>
+          <span class="suggested-label">• Suggested for you</span>
+          <button class="follow-btn">Follow</button>
+        </div>
+        <div class="post-metrics">
+          <span>2.1K likes</span>
+          <span>20 comments</span>
+        </div>
+        <div class="caption-container">
+          <a href="/orientwatches/" class="username-link">orientwatches</a>
+          <span>Our classic Bambino dress watch arrives with an Arabic numeral index for the very first time. Say hello to the Orient... more</span>
+        </div>
+      </article>
+    `;
+
+    vm.runInThisContext(contentJsCode);
+
+    expect(sendMessageMock).toHaveBeenCalled();
+    const calls = sendMessageMock.mock.calls;
+    const postCall = calls.find(c => c[0].type === 'TEXT_EXTRACTED');
+    expect(postCall).toBeDefined();
+    expect(postCall[0].payload.text).toContain('Our classic Bambino dress watch');
+    expect(postCall[0].payload.text).not.toContain('Suggested for you');
+    expect(postCall[0].payload.text).not.toContain('Follow');
+    expect(postCall[0].payload.text).not.toContain('2.1K likes');
+    expect(postCall[0].payload.sourcePlatform).toContain('instagram.com');
   });
 });
