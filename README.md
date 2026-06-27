@@ -7,13 +7,15 @@ ScrollCollector is a privacy-first, zero-latency Chromium browser extension that
 ## Key Features
 
 - **On-Device AI Engine**: Tier-1 classification using Chrome's native **Gemini Nano** model, with a Tier-2 offline **Keyword Fallback** engine.
-- **Dynamic Tag Generation**: Automatically extracts and suggests new category tags (e.g. *Cooking*, *Space*, *Tesla*) for items that do not match existing tags.
-- **Priority Routing**: Custom and default tags (e.g., Tech, Finance, Business) always take classification priority over dynamic tags.
-- **Sleek Side Panel UI**: Persistent flat monochromatic layout containing category counters, stack feeds, and tags with animated scales on increment.
-- **Tag Configurator**: Add, delete, toggle, or **promote (★)** dynamic tags to permanent status with a single click.
-- **Privacy First**: Built-in inline PII sanitizer scrub emails, credit cards (Luhn-validated), and phone numbers before any text is processed.
-- **Link Collection**: Every captured feed unit extracts its nearest clickable link so you can revisit the source post later.
-- **Light & Dark Mode**: Respects your browser's preference and can be toggled manually.
+- **Interactive Retagging**: Every card features a minimal select dropdown, letting you manually override classification and shift category metrics atomically.
+- **Site configurations**: Enable/disable scanning on standard feeds (LinkedIn, YouTube, X, Facebook, Instagram) or register custom domains (e.g., `reddit.com`) to filter your tracking space.
+- **Structured Boundary Parsing**: Groups text blocks by card/post boundaries (tweets, LinkedIn updates, article sections) and strips noise elements (like buttons and comments) before processing.
+- **PII Sanitizer**: built-in regex scrubber for email, phone numbers, and Luhn-validated credit cards.
+- **Dynamic Tag Generation**: Auto-extracts topics (e.g. *Tesla*, *Space*) for unclassified content.
+- **Sticky Dynamic Tags**: Pin dynamic tags in configuration (`📌`/`📍`) to protect them from purging during stack clears.
+- **Ad Detection & Red Chips**: Highlights sponsored/promoted updates with a red badge and counts them under a dedicated **Ads** category.
+- **Language Detection**: Automatically identifies post languages (using `chrome.i18n`) and adds a flat badge (e.g. `🇬🇧 EN`, `🇯🇵 JA`) to the card.
+- **Link Collection**: Extracts the nearest post permalinks, letting you visit sources later.
 
 ---
 
@@ -63,17 +65,36 @@ To unlock Tier-1 classification powered by **Gemini Nano**, you must enable the 
 
 ## How to Use
 
-1. **Browse**: Navigate to any scrollable social feed (LinkedIn, YouTube, Twitter/X, Medium, etc.).
-2. **Track**: As you scroll, check the side panel to see text segments auto-classifying. Counters will pop on increment.
+1. **Browse**: Navigate to any enabled feed (LinkedIn, X/Twitter, YouTube, Facebook, Medium, or custom added sites).
+2. **Track**: Scroll through posts. ScrollCollector extracts text dynamically, showing the language code (e.g., `🇬🇧 EN`) and an `Ad` badge if it is sponsored.
 3. **Pin Insights**: Click the **pin button (◇/◆)** on any feed item to save it in your persistent *Pinned Insights* stack.
-4. **Manage Tags**: Open the *Tags* configurator section:
-   - Toggle switches to ignore/track categories.
-   - Add new custom keywords.
-   - Click **★** on dynamic tags to promote them to permanent status.
-5. **Clear**: Click **Clear all** at the bottom to empty the recent stack, reset counters, and purge unpromoted dynamic tags.
+4. **Reclassify**: Choose a new tag from a card's footer select dropdown to override category classifications.
+5. **Manage Tags & Sites**: Open the configurator toggles in the sidepanel:
+   - Customize tracked categories or click **★** to promote dynamic tags.
+   - Toggle **pin (📌)** on dynamic tags to make them sticky.
+   - Enable or disable domains to configure where ScrollCollector tracks scrolling.
+6. **Clear**: Click **Clear all** at the bottom to empty the recent stack, reset counters, and purge unpromoted, non-sticky dynamic tags.
+
+---
+
+## Running Automated Tests
+
+ScrollCollector comes with a zero-dependency test suite using Node's native `node:test` runner.
+
+To run tests:
+1. Ensure Node.js (v18 or higher) is installed on your machine.
+2. In the project directory, run:
+   ```bash
+   node test.mjs
+   ```
+   *or*
+   ```bash
+   npm test
+   ```
 
 ---
 
 ## License
 
 MIT License. Operates 100% locally with zero external network tracking.
+
