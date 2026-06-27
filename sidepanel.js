@@ -800,6 +800,8 @@ function renderFeed() {
     virtualizerObserver.disconnect();
   }
 
+  const oldFilteredStack = [...filteredStack];
+
   // Filter 1: Tag
   filteredStack = stack;
   if (activeFilterTag === 'Favorites') {
@@ -828,9 +830,8 @@ function renderFeed() {
     });
   }
 
-  list.innerHTML = '';
-
   if (filteredStack.length === 0) {
+    list.innerHTML = '';
     dom.streamEmpty.classList.remove('hidden');
     list.classList.add('hidden');
     focusedItemIndex = -1;
@@ -840,11 +841,55 @@ function renderFeed() {
   dom.streamEmpty.classList.add('hidden');
   list.classList.remove('hidden');
 
+  // Perform smart DOM reconciliation to allow slide-down animation for new items
+  const currentCards = Array.from(list.children);
+  const currentCardMap = new Map();
+  currentCards.forEach(card => {
+    if (card.dataset && card.dataset.id) {
+      currentCardMap.set(card.dataset.id, card);
+    }
+  });
+
+  const newIds = new Set(filteredStack.map(i => i.id));
+  const oldIds = new Set(oldFilteredStack.map(i => i.id));
+
+  // Remove cards that are no longer present
+  currentCardMap.forEach((card, id) => {
+    if (!newIds.has(id)) {
+      card.remove();
+    }
+  });
+
+  // Render and position cards
   filteredStack.forEach((item, index) => {
-    const shell = createItemCardShell(item, index);
-    list.appendChild(shell);
+    let card = currentCardMap.get(item.id);
+    const isNew = oldIds.size > 0 && !oldIds.has(item.id);
+
+    if (!card) {
+      card = createItemCardShell(item, index);
+      if (isNew) {
+        card.classList.add('slide-down-new');
+        setTimeout(() => {
+          card.classList.remove('slide-down-new');
+        }, 500);
+      }
+    } else {
+      card.dataset.index = index;
+      if (index === focusedItemIndex) {
+        card.classList.add('keyboard-focused');
+      } else {
+        card.classList.remove('keyboard-focused');
+      }
+    }
+
+    // Insert card at correct position relative to live children
+    const expectedNextSibling = list.children[index];
+    if (expectedNextSibling !== card) {
+      list.insertBefore(card, expectedNextSibling || null);
+    }
+
     if (virtualizerObserver) {
-      virtualizerObserver.observe(shell);
+      virtualizerObserver.observe(card);
     }
   });
 }

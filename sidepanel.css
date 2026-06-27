@@ -1182,3 +1182,30 @@ kbd {
   border-color: transparent !important;
   box-shadow: none !important;
 }
+
+/* Card slide down animation for new additions */
+.item-row.slide-down-new {
+  animation: slide-down-card-new 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards !important;
+  overflow: hidden !important;
+}
+
+@keyframes slide-down-card-new {
+  from {
+    max-height: 0;
+    opacity: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-color: transparent;
+    transform: translateY(-20px);
+  }
+  to {
+    max-height: 500px;
+    opacity: 1;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    margin-bottom: 10px;
+    transform: translateY(0);
+  }
+}
+
