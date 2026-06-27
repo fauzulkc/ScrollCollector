@@ -215,6 +215,40 @@ body {
   100% { box-shadow: 0 0 2px var(--success); }
 }
 
+/* Processing indicator */
+.processing-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(14, 165, 233, 0.15); /* Soft cyan glow */
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  color: #0ea5e9;
+  cursor: default;
+  animation: pulse-border 1.5s infinite alternate;
+}
+
+.processing-indicator .spinner {
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+.processing-count {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-border {
+  from { border-color: rgba(14, 165, 233, 0.25); box-shadow: 0 0 2px rgba(14, 165, 233, 0.1); }
+  to { border-color: rgba(14, 165, 233, 0.5); box-shadow: 0 0 6px rgba(14, 165, 233, 0.25); }
+}
+
 /* Theme toggle button */
 .theme-toggle {
   display: flex;

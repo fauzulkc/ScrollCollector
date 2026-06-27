@@ -8,7 +8,7 @@ It is designed as a high-performance keyboard-driven curator to capture, filter,
 
 ## Key Features
 
-- **On-Device AI Engine**: Tier-1 classification using Chrome's native **Gemini Nano** model, with a Tier-2 offline **Keyword Fallback** engine.
+- **On-Device AI Engine**: Tier-1 classification using Chrome's native **Gemini Nano** model, with a Tier-2 offline **Rule-based Classifier** engine.
 - **Dynamic Tag Generation**: Automatically extracts and suggests new category tags (e.g. *Cooking*, *Space*, *Tesla*) for items that do not match existing tags.
 - **Priority Routing**: Custom and default tags always take classification priority over dynamic tags.
 - **Segmented Workspace**: A clean, modern tabbed interface (**Stream**, **Export**, **Settings**) replacing vertical collapsible widgets to optimize narrow side panels.

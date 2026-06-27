@@ -33,6 +33,13 @@
         <span id="engine-dot" class="engine-dot"></span>
         <span id="engine-label" class="engine-label">—</span>
       </div>
+      <div id="processing-indicator" class="processing-indicator hidden" title="Analyzing scrolls in background">
+        <svg class="spinner" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25"></circle>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor"></path>
+        </svg>
+        <span id="processing-count" class="processing-count">0</span>
+      </div>
       <button id="theme-toggle" class="theme-toggle" title="Toggle theme">
         <svg id="theme-icon-sun" class="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"/>

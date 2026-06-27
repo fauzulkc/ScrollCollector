@@ -56,11 +56,16 @@ chrome.runtime.onInstalled.addListener(async () => {
       },
       metrics: { counts: {} },
       stack: [],
-      telemetry: { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now(), lastProcessed: null }
+      telemetry: { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now(), lastProcessed: null },
+      inFlightCount: 0
     });
 
     console.info('[background] Default state initialized.');
   } else {
+    if (existing.inFlightCount === undefined) {
+      existing.inFlightCount = 0;
+      await chrome.storage.local.set({ inFlightCount: 0 });
+    }
     // Upgrade existing state to include sites & Ads tag if missing
     let updated = false;
     
@@ -159,6 +164,17 @@ chrome.runtime.onInstalled.addListener(async () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
+async function updateInFlightCount(delta) {
+  try {
+    const state = await chrome.storage.local.get('inFlightCount');
+    const count = Math.max(0, (state.inFlightCount || 0) + delta);
+    await chrome.storage.local.set({ inFlightCount: count });
+    await broadcastStateUpdate();
+  } catch (err) {
+    console.error('[background] Error updating inFlightCount:', err);
+  }
+}
+
 /**
  * Broadcasts a message to every extension context (side panel, popups, etc.).
  * Swallows errors from contexts that have already been destroyed.
@@ -172,7 +188,8 @@ async function broadcastStateUpdate() {
         configuration: fullState.configuration,
         metrics: fullState.metrics,
         stack: fullState.stack,
-        telemetry: fullState.telemetry
+        telemetry: fullState.telemetry,
+        inFlightCount: fullState.inFlightCount || 0
       }
     });
   } catch {
@@ -201,109 +218,117 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // TEXT_EXTRACTED — classify incoming text and update state
         // -----------------------------------------------------------------
         case 'TEXT_EXTRACTED': {
-          const { text, sourcePlatform, sourceUrl, isAd } = message.payload;
+          await updateInFlightCount(1);
+          try {
+            const { text, sourcePlatform, sourceUrl, isAd } = message.payload;
 
-          // Read current state atomically
-          const state = await chrome.storage.local.get(['configuration', 'metrics', 'stack', 'telemetry']);
-          const config = state.configuration || {};
+            // Read current state atomically
+            const state = await chrome.storage.local.get(['configuration', 'metrics', 'stack', 'telemetry']);
+            const config = state.configuration || {};
 
-          // Guard 1: Ignore if tracking is paused
-          if (config.isTrackingPaused) {
-            sendResponse({ success: false, reason: 'paused' });
-            break;
-          }
+            // Guard 1: Ignore if tracking is paused
+            if (config.isTrackingPaused) {
+              sendResponse({ success: false, reason: 'paused' });
+              break;
+            }
 
-          // Guard 2: Ignore if contains ignored keywords
-          const ignoredKeywords = config.ignoredKeywords || [];
-          const lowerText = text.toLowerCase();
-          const shouldIgnore = ignoredKeywords.some(kw => lowerText.includes(kw.toLowerCase()));
-          if (shouldIgnore) {
-            sendResponse({ success: false, reason: 'ignored' });
-            break;
-          }
+            // Guard 2: Ignore if contains ignored keywords
+            const ignoredKeywords = config.ignoredKeywords || [];
+            const lowerText = text.toLowerCase();
+            const shouldIgnore = ignoredKeywords.some(kw => lowerText.includes(kw.toLowerCase()));
+            if (shouldIgnore) {
+              sendResponse({ success: false, reason: 'ignored' });
+              break;
+            }
 
-          const trackedTags = config.trackedTags || [];
-          const enabledCustom = getEnabledCustomLabels(trackedTags);
-          const enabledDynamic = getEnabledDynamicLabels(trackedTags);
+            const trackedTags = config.trackedTags || [];
+            const enabledCustom = getEnabledCustomLabels(trackedTags);
+            const enabledDynamic = getEnabledDynamicLabels(trackedTags);
 
-          // Run the inference pipeline (Tier 1 → Tier 2)
-          const { category, dynamicTag } = await classify(text, sourcePlatform, enabledCustom, enabledDynamic);
+            // Run the inference pipeline (Tier 1 → Tier 2)
+            const { category, dynamicTag } = await classify(text, sourcePlatform, enabledCustom, enabledDynamic);
 
-          // --- Atomic state mutation ---
-          let finalCategory = category;
-          const updatedTags = [...trackedTags];
+            // --- Atomic state mutation ---
+            let finalCategory = category;
+            const updatedTags = [...trackedTags];
 
-          // Register new dynamic tag if matched
-          if (category === 'Unclassified' && dynamicTag) {
-            const exists = updatedTags.some(t => t.label.toLowerCase() === dynamicTag.toLowerCase());
-            if (!exists) {
-              const dynamicTagsCount = updatedTags.filter(t => t.isDynamic).length;
-              if (dynamicTagsCount < 10) {
-                updatedTags.push({
-                  id: 'dt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-                  label: dynamicTag,
-                  isEnabled: true,
-                  isDynamic: true,
-                  isSticky: false
-                });
-                finalCategory = dynamicTag;
+            // Register new dynamic tag if matched
+            if (category === 'Unclassified' && dynamicTag) {
+              const exists = updatedTags.some(t => t.label.toLowerCase() === dynamicTag.toLowerCase());
+              if (!exists) {
+                const dynamicTagsCount = updatedTags.filter(t => t.isDynamic).length;
+                if (dynamicTagsCount < 10) {
+                  updatedTags.push({
+                    id: 'dt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                    label: dynamicTag,
+                    isEnabled: true,
+                    isDynamic: true,
+                    isSticky: false
+                  });
+                  finalCategory = dynamicTag;
+                } else {
+                  finalCategory = 'Unclassified';
+                }
               } else {
-                finalCategory = 'Unclassified';
-              }
-            } else {
-              const existingTag = updatedTags.find(t => t.label.toLowerCase() === dynamicTag.toLowerCase());
-              if (existingTag && existingTag.isEnabled) {
-                finalCategory = existingTag.label;
-              } else {
-                finalCategory = 'Unclassified';
+                const existingTag = updatedTags.find(t => t.label.toLowerCase() === dynamicTag.toLowerCase());
+                if (existingTag && existingTag.isEnabled) {
+                  finalCategory = existingTag.label;
+                } else {
+                  finalCategory = 'Unclassified';
+                }
               }
             }
+
+            // 1. Increment metrics counter
+            const counts = { ...state.metrics.counts };
+            counts[finalCategory] = (counts[finalCategory] || 0) + 1;
+            
+            if (isAd) {
+              counts['Ads'] = (counts['Ads'] || 0) + 1;
+            }
+
+            // 2. Update telemetry
+            const telemetry = state.telemetry || { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now() };
+            telemetry.totalProcessed++;
+            if (finalCategory === 'Unclassified') {
+              telemetry.unclassifiedCount++;
+            } else {
+              telemetry.classifiedCount++;
+            }
+            telemetry.lastProcessed = Date.now();
+
+            // 3. Prepend new item to the stack
+            const newItem = {
+              id:             `item_${Date.now()}`,
+              timestamp:      Date.now(),
+              sourcePlatform,
+              sourceUrl:      sourceUrl || '',
+              textSnippet:    text, // Store full body so cards can expand properly
+              assignedTag:    finalCategory,
+              isFavorite:     false,
+              favoritedAt:    null,
+              isAd:           !!isAd
+            };
+
+            const updatedStack = [newItem, ...state.stack];
+
+            // 4. Persist
+            await chrome.storage.local.set({
+              configuration: { ...state.configuration, trackedTags: updatedTags },
+              metrics:   { counts },
+              stack:     updatedStack,
+              telemetry
+            });
+
+            await broadcastStateUpdate();
+
+            sendResponse({ success: true, category: finalCategory });
+          } catch (err) {
+            console.error(`[background] Error processing TEXT_EXTRACTED:`, err);
+            sendResponse({ error: err.message });
+          } finally {
+            await updateInFlightCount(-1);
           }
-
-          // 1. Increment metrics counter
-          const counts = { ...state.metrics.counts };
-          counts[finalCategory] = (counts[finalCategory] || 0) + 1;
-          
-          if (isAd) {
-            counts['Ads'] = (counts['Ads'] || 0) + 1;
-          }
-
-          // 2. Update telemetry
-          const telemetry = state.telemetry || { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now() };
-          telemetry.totalProcessed++;
-          if (finalCategory === 'Unclassified') {
-            telemetry.unclassifiedCount++;
-          } else {
-            telemetry.classifiedCount++;
-          }
-          telemetry.lastProcessed = Date.now();
-
-          // 3. Prepend new item to the stack
-          const newItem = {
-            id:             `item_${Date.now()}`,
-            timestamp:      Date.now(),
-            sourcePlatform,
-            sourceUrl:      sourceUrl || '',
-            textSnippet:    text, // Store full body so cards can expand properly
-            assignedTag:    finalCategory,
-            isFavorite:     false,
-            favoritedAt:    null,
-            isAd:           !!isAd
-          };
-
-          const updatedStack = [newItem, ...state.stack];
-
-          // 4. Persist
-          await chrome.storage.local.set({
-            configuration: { ...state.configuration, trackedTags: updatedTags },
-            metrics:   { counts },
-            stack:     updatedStack,
-            telemetry
-          });
-
-          await broadcastStateUpdate();
-
-          sendResponse({ success: true, category: finalCategory });
           break;
         }
 

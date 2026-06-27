@@ -37,7 +37,7 @@ let state = {
     sessionStart: 0,
     lastProcessed: null
   },
-  engineStatus: { tier: 2, name: 'Keyword Fallback', status: 'ready' }
+  engineStatus: { tier: 2, name: 'Rule-based Classifier', status: 'ready' }
 };
 
 let activeFilterTag = 'All'; // Horizontal category tag filter
@@ -217,6 +217,16 @@ function renderEngineStatus() {
   }
 
   dom.engineLabel.textContent = es.name || '—';
+}
+
+function renderProcessingStatus() {
+  const count = state.inFlightCount || 0;
+  if (count > 0) {
+    dom.processingCount.textContent = count;
+    dom.processingIndicator.classList.remove('hidden');
+  } else {
+    dom.processingIndicator.classList.add('hidden');
+  }
 }
 
 function renderPauseStatus() {
@@ -989,6 +999,7 @@ function renderIgnoredKeywords() {
 function renderAll() {
   renderTelemetry();
   renderEngineStatus();
+  renderProcessingStatus();
   renderPauseStatus();
   renderFilterPills();
   renderSiteFilterPills();
@@ -1534,6 +1545,8 @@ document.addEventListener('DOMContentLoaded', () => {
     telEngine: $('#tel-engine'),
     engineDot: $('#engine-dot'),
     engineLabel: $('#engine-label'),
+    processingIndicator: $('#processing-indicator'),
+    processingCount: $('#processing-count'),
     streamList: $('#stream-list'),
     streamEmpty: $('#stream-empty'),
     filterPills: $('#filter-pills'),
