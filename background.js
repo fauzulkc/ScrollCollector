@@ -39,7 +39,17 @@ chrome.runtime.onInstalled.addListener(async () => {
           { id: 't7',  label: 'Sports',                 isEnabled: true },
           { id: 't8',  label: 'Science',                isEnabled: true },
           { id: 't9',  label: 'Education',              isEnabled: true },
-          { id: 't10', label: 'Business & Startups',    isEnabled: true }
+          { id: 't10', label: 'Business & Startups',    isEnabled: true },
+          { id: 't_ads', label: 'Ads',                  isEnabled: true }
+        ],
+        sites: [
+          { id: 's1', domain: 'facebook.com', isEnabled: true, isCustom: false },
+          { id: 's2', domain: 'linkedin.com', isEnabled: true, isCustom: false },
+          { id: 's3', domain: 'twitter.com', isEnabled: true, isCustom: false },
+          { id: 's4', domain: 'x.com', isEnabled: true, isCustom: false },
+          { id: 's5', domain: 'instagram.com', isEnabled: true, isCustom: false },
+          { id: 's6', domain: 'youtube.com', isEnabled: true, isCustom: false },
+          { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false }
         ]
       },
       metrics: { counts: {} },
@@ -48,6 +58,30 @@ chrome.runtime.onInstalled.addListener(async () => {
     });
 
     console.info('[background] Default state initialized.');
+  } else {
+    // Upgrade existing state to include sites & Ads tag if missing
+    let updated = false;
+    if (!existing.configuration.sites) {
+      existing.configuration.sites = [
+        { id: 's1', domain: 'facebook.com', isEnabled: true, isCustom: false },
+        { id: 's2', domain: 'linkedin.com', isEnabled: true, isCustom: false },
+        { id: 's3', domain: 'twitter.com', isEnabled: true, isCustom: false },
+        { id: 's4', domain: 'x.com', isEnabled: true, isCustom: false },
+        { id: 's5', domain: 'instagram.com', isEnabled: true, isCustom: false },
+        { id: 's6', domain: 'youtube.com', isEnabled: true, isCustom: false },
+        { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false }
+      ];
+      updated = true;
+    }
+    const hasAds = existing.configuration.trackedTags.some(t => t.label === 'Ads');
+    if (!hasAds) {
+      existing.configuration.trackedTags.push({ id: 't_ads', label: 'Ads', isEnabled: true });
+      updated = true;
+    }
+    if (updated) {
+      await chrome.storage.local.set({ configuration: existing.configuration });
+      console.info('[background] Upgraded existing configuration.');
+    }
   }
 });
 
@@ -112,7 +146,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // TEXT_EXTRACTED — classify incoming text and update state
         // -----------------------------------------------------------------
         case 'TEXT_EXTRACTED': {
-          const { text, sourcePlatform, sourceUrl } = message.payload;
+          const { text, sourcePlatform, sourceUrl, isAd } = message.payload;
 
           // Read current state atomically
           const state = await chrome.storage.local.get(['configuration', 'metrics', 'stack', 'telemetry']);
@@ -138,7 +172,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                   id: 'dt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                   label: dynamicTag,
                   isEnabled: true,
-                  isDynamic: true
+                  isDynamic: true,
+                  isSticky: false
                 });
                 finalCategory = dynamicTag;
               } else {
@@ -157,6 +192,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           // 1. Increment metrics counter
           const counts = { ...state.metrics.counts };
           counts[finalCategory] = (counts[finalCategory] || 0) + 1;
+          
+          // Increment Ads counter if this item is flagged as an ad
+          if (isAd) {
+            counts['Ads'] = (counts['Ads'] || 0) + 1;
+          }
 
           // 2. Update telemetry
           const telemetry = state.telemetry || { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now() };
@@ -168,6 +208,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           }
           telemetry.lastProcessed = Date.now();
 
+          // Detect language (built-in Chrome Language Detection API)
+          let langCode = 'UN';
+          try {
+            langCode = await new Promise((resolve) => {
+              chrome.i18n.detectLanguage(text, (result) => {
+                if (result && result.languages && result.languages.length > 0) {
+                  resolve(result.languages[0].language.toUpperCase());
+                } else {
+                  resolve('UN');
+                }
+              });
+            });
+          } catch {
+            langCode = 'UN';
+          }
+
           // 3. Prepend new item to the stack
           const newItem = {
             id:             `item_${Date.now()}`,
@@ -176,14 +232,16 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             sourceUrl:      sourceUrl || '',
             textSnippet:    text.substring(0, 200),
             assignedTag:    finalCategory,
-            isPinned:       false
+            isPinned:       false,
+            isAd:           !!isAd,
+            language:       langCode
           };
 
           const updatedStack = [newItem, ...state.stack];
 
           // 4. Persist
           await chrome.storage.local.set({
-            configuration: { trackedTags: updatedTags },
+            configuration: { ...state.configuration, trackedTags: updatedTags },
             metrics:   { counts },
             stack:     updatedStack,
             telemetry
@@ -289,11 +347,139 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const { configuration } = await chrome.storage.local.get('configuration');
 
           const updatedTags = configuration.trackedTags.map(t =>
-            t.label === tagLabel ? { ...t, isDynamic: false } : t
+            t.label === tagLabel ? { ...t, isDynamic: false, isSticky: false } : t
           );
 
           await chrome.storage.local.set({
-            configuration: { trackedTags: updatedTags }
+            configuration: { ...configuration, trackedTags: updatedTags }
+          });
+
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // TAG_STICKY_TOGGLED — toggle dynamic tag sticky state
+        // -----------------------------------------------------------------
+        case 'TAG_STICKY_TOGGLED': {
+          const { tag: tagLabel, isSticky } = message.payload;
+          const { configuration } = await chrome.storage.local.get('configuration');
+
+          const updatedTags = configuration.trackedTags.map(t =>
+            t.label === tagLabel ? { ...t, isSticky: !!isSticky } : t
+          );
+
+          await chrome.storage.local.set({
+            configuration: { ...configuration, trackedTags: updatedTags }
+          });
+
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // ITEM_RETAGGED — update category tag on a specific stack item
+        // -----------------------------------------------------------------
+        case 'ITEM_RETAGGED': {
+          const { itemId, newTag } = message.payload;
+          const state = await chrome.storage.local.get(['metrics', 'stack', 'configuration']);
+          const stack = state.stack || [];
+
+          let oldTag = null;
+          const updatedStack = stack.map(item => {
+            if (item.id === itemId) {
+              oldTag = item.assignedTag;
+              return { ...item, assignedTag: newTag };
+            }
+            return item;
+          });
+
+          if (oldTag && oldTag !== newTag) {
+            const counts = { ...state.metrics.counts };
+            if (counts[oldTag] > 0) {
+              counts[oldTag]--;
+            }
+            counts[newTag] = (counts[newTag] || 0) + 1;
+
+            await chrome.storage.local.set({
+              stack: updatedStack,
+              metrics: { counts }
+            });
+          } else {
+            await chrome.storage.local.set({
+              stack: updatedStack
+            });
+          }
+
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // SITE_TOGGLED — enable or disable scanning on a site
+        // -----------------------------------------------------------------
+        case 'SITE_TOGGLED': {
+          const { siteId, enabled } = message.payload;
+          const { configuration } = await chrome.storage.local.get('configuration');
+
+          const updatedSites = (configuration.sites || []).map(s =>
+            s.id === siteId ? { ...s, isEnabled: enabled } : s
+          );
+
+          await chrome.storage.local.set({
+            configuration: { ...configuration, sites: updatedSites }
+          });
+
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // SITE_ADDED — register a new site in configurations
+        // -----------------------------------------------------------------
+        case 'SITE_ADDED': {
+          const { domain } = message.payload;
+          const { configuration } = await chrome.storage.local.get('configuration');
+          const sites = configuration.sites || [];
+
+          const exists = sites.some(s => s.domain.toLowerCase() === domain.toLowerCase());
+          if (exists) {
+            sendResponse({ success: false, error: 'Site already exists' });
+            break;
+          }
+
+          sites.push({
+            id: 's_' + Date.now(),
+            domain: domain.toLowerCase(),
+            isEnabled: true,
+            isCustom: true
+          });
+
+          await chrome.storage.local.set({
+            configuration: { ...configuration, sites }
+          });
+
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // SITE_REMOVED — remove a registered site configuration
+        // -----------------------------------------------------------------
+        case 'SITE_REMOVED': {
+          const { siteId } = message.payload;
+          const { configuration } = await chrome.storage.local.get('configuration');
+          const sites = configuration.sites || [];
+
+          const filteredSites = sites.filter(s => s.id !== siteId);
+
+          await chrome.storage.local.set({
+            configuration: { ...configuration, sites: filteredSites }
           });
 
           await broadcastStateUpdate();
@@ -338,13 +524,22 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           // Retain only pinned items
           const pinnedItems = stack.filter(item => item.isPinned);
 
-          // Clear any dynamic tags (retain custom ones)
-          const customTagsOnly = (configuration.trackedTags || []).filter(t => !t.isDynamic);
+          // Clear any dynamic tags unless they are sticky
+          const preservedTags = (configuration.trackedTags || []).filter(t => !t.isDynamic || t.isSticky);
+
+          // Rebuild counts based on pinned items
+          const counts = {};
+          pinnedItems.forEach(item => {
+            counts[item.assignedTag] = (counts[item.assignedTag] || 0) + 1;
+            if (item.isAd) {
+              counts['Ads'] = (counts['Ads'] || 0) + 1;
+            }
+          });
 
           await chrome.storage.local.set({
-            configuration: { trackedTags: customTagsOnly },
+            configuration: { ...configuration, trackedTags: preservedTags },
             stack:   pinnedItems,
-            metrics: { counts: {} },
+            metrics: { counts },
             telemetry: { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now(), lastProcessed: null }
           });
 

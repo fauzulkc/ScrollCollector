@@ -646,3 +646,84 @@ body {
 .btn-promote-tag:hover {
   color: #fbbf24; /* Amber star */
 }
+
+/* ---------- Ad Chips & Retag UI ---------- */
+
+.ad-chip {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: rgba(239, 68, 68, 0.15); /* Light red tint */
+  color: #ef4444; /* Pure red */
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  margin-left: 6px;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.retag-container {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.select-retag {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 20px 2px 4px; /* Space for native dropdown arrow */
+  outline: none;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none; /* Strip native chrome arrow styling */
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 8px;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.select-retag:hover, .select-retag:focus {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.btn-sticky-tag {
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 0 4px;
+  line-height: 1;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.btn-sticky-tag:hover {
+  color: #3b82f6; /* Blue pin */
+  transform: scale(1.1);
+}
+.btn-sticky-tag.sticky {
+  color: #3b82f6; /* Blue active pin */
+}
+
+.lang-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  margin-left: 6px;
+  vertical-align: middle;
+  line-height: 1;
+}
+

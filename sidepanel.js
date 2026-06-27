@@ -12,6 +12,19 @@ const BADGE_COLORS = [
 const FALLBACK_COLOR = '#71717a';
 const MAX_STACK_DISPLAY = 15;
 
+const LANG_FLAGS = {
+  'EN': '🇬🇧', 'US': '🇺🇸', 'ES': '🇪🇸', 'FR': '🇫🇷', 'DE': '🇩🇪',
+  'IT': '🇮🇹', 'JA': '🇯🇵', 'ZH': '🇨🇳', 'RU': '🇷🇺', 'PT': '🇵🇹',
+  'KO': '🇰🇷', 'AR': '🇸🇦', 'HI': '🇮🇳', 'TR': '🇹🇷', 'NL': '🇳🇱',
+  'PL': '🇵🇱', 'VI': '🇻🇳', 'ID': '🇮🇩', 'SV': '🇸🇪', 'FI': '🇫🇮',
+  'DA': '🇩🇰', 'NO': '🇳🇴'
+};
+
+function getLanguageSymbol(lang) {
+  const code = (lang || '').toUpperCase();
+  return LANG_FLAGS[code] || '🌐';
+}
+
 // ---------- State ----------
 
 let state = {
@@ -81,6 +94,7 @@ function relativeTime(ts) {
 
 /** Get color for a tag based on its position in trackedTags */
 function getTagColor(tag) {
+  if (tag === 'Ads') return '#ef4444';
   const tags = state.configuration.trackedTags || [];
   const idx = tags.findIndex(
     (t) => (typeof t === 'string' ? t : t.label) === tag
@@ -156,7 +170,13 @@ function renderCounterGrid() {
 
       const item = document.createElement('div');
       item.className = isDynamic ? 'counter-item dynamic' : 'counter-item';
-      item.style.borderLeftColor = label === 'Unclassified' ? FALLBACK_COLOR : BADGE_COLORS[i % BADGE_COLORS.length];
+      if (label === 'Ads') {
+        item.style.borderLeftColor = '#ef4444';
+      } else if (label === 'Unclassified') {
+        item.style.borderLeftColor = FALLBACK_COLOR;
+      } else {
+        item.style.borderLeftColor = BADGE_COLORS[i % BADGE_COLORS.length];
+      }
       item.dataset.tag = label;
 
       item.innerHTML = `
@@ -250,6 +270,7 @@ function renderTagConfigurator() {
     const label = typeof tag === 'string' ? tag : tag.label;
     const enabled = typeof tag === 'string' ? true : tag.isEnabled !== false;
     const isDynamic = typeof tag === 'object' && tag.isDynamic;
+    const isSticky = typeof tag === 'object' && tag.isSticky;
     const color = BADGE_COLORS[i % BADGE_COLORS.length];
 
     const row = document.createElement('div');
@@ -259,6 +280,10 @@ function renderTagConfigurator() {
       ? `<button class="btn-promote-tag" data-tag="${escapeHTML(label)}" title="Promote to custom tag">★</button>`
       : '';
 
+    const stickyHtml = isDynamic
+      ? `<button class="btn-sticky-tag ${isSticky ? 'sticky' : ''}" data-tag="${escapeHTML(label)}" title="${isSticky ? 'Make tag temporary' : 'Make tag sticky'}">${isSticky ? '📌' : '📍'}</button>`
+      : '';
+
     row.innerHTML = `
       <span class="tag-dot-indicator" style="background: ${color}"></span>
       <span class="tag-label">${escapeHTML(label)} ${isDynamic ? '<span style="font-size: 9px; opacity: 0.6; font-style: italic;">(dynamic)</span>' : ''}</span>
@@ -266,6 +291,7 @@ function renderTagConfigurator() {
         <input type="checkbox" ${enabled ? 'checked' : ''} data-tag="${escapeHTML(label)}">
         <span class="toggle-track"></span>
       </label>
+      ${stickyHtml}
       ${promoteHtml}
       <button class="btn-delete-tag" data-tag="${escapeHTML(label)}" title="Remove tag">×</button>
     `;
@@ -278,6 +304,17 @@ function renderTagConfigurator() {
         payload: { tag: label, enabled: checkbox.checked }
       });
     });
+
+    // Sticky handler
+    if (isDynamic) {
+      const stickyBtn = row.querySelector('.btn-sticky-tag');
+      stickyBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({
+          type: 'TAG_STICKY_TOGGLED',
+          payload: { tag: label, isSticky: !isSticky }
+        });
+      });
+    }
 
     // Promote handler
     if (isDynamic) {
@@ -385,9 +422,37 @@ function createItemRow(item, showPin = true) {
     ? `<button class="btn-pin ${pinClass}" data-id="${item.id}" title="${item.isPinned ? 'Unpin' : 'Pin'}">${pinIcon}</button>`
     : '';
 
+  // Ad chip markup
+  const adChipHtml = item.isAd ? `<span class="ad-chip">Ad</span>` : '';
+
+  // Language badge markup
+  const flag = getLanguageSymbol(item.language);
+  const langHtml = item.language && item.language !== 'UN'
+    ? `<span class="lang-badge" title="Language: ${item.language}">${flag} ${escapeHTML(item.language)}</span>`
+    : '';
+
+  // Dropdown options for retagging
+  const tagsList = state.configuration.trackedTags || [];
+  const tagOptions = tagsList
+    .map(t => typeof t === 'string' ? t : t.label)
+    .filter(label => label !== 'Ads') // Don't retag main category to Ads
+    .concat(['Unclassified'])
+    .map(label => `<option value="${escapeHTML(label)}" ${label === tag ? 'selected' : ''}>${escapeHTML(label)}</option>`)
+    .join('');
+
+  const selectHtml = `
+    <div class="retag-container">
+      <select class="select-retag" data-id="${item.id}" title="Reclassify this item">
+        ${tagOptions}
+      </select>
+    </div>
+  `;
+
   div.innerHTML = `
     <div class="item-meta">
       <span class="item-platform">${escapeHTML(platform)}</span>
+      ${adChipHtml}
+      ${langHtml}
       <span class="meta-sep">·</span>
       <span class="item-time">${time}</span>
       ${linkHtml}
@@ -396,6 +461,7 @@ function createItemRow(item, showPin = true) {
     <div class="item-text">${snippet}</div>
     <div class="item-footer">
       <span class="item-tag" style="--tag-color: ${tagColor}"><span class="tag-dot"></span>${escapeHTML(tag)}</span>
+      ${selectHtml}
     </div>
   `;
 
@@ -405,6 +471,21 @@ function createItemRow(item, showPin = true) {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       window.open(link.dataset.url, '_blank');
+    });
+  }
+
+  // Retag selector handler
+  const select = div.querySelector('.select-retag');
+  if (select) {
+    select.addEventListener('change', (e) => {
+      const newTag = e.target.value;
+      chrome.runtime.sendMessage({
+        type: 'ITEM_RETAGGED',
+        payload: { itemId: item.id, newTag }
+      });
+      // Optimistic update
+      item.assignedTag = newTag;
+      renderAll();
     });
   }
 
@@ -446,11 +527,69 @@ function initCollapsibles() {
   const configToggle = dom.configToggle;
   const configContent = dom.configContent;
   const configChevron = configToggle.querySelector('.chevron');
-  // starts collapsed, chevron not rotated
 
   configToggle.addEventListener('click', () => {
     const isCollapsed = configContent.classList.toggle('collapsed');
     configChevron.classList.toggle('rotated', !isCollapsed);
+  });
+
+  // Sites section — collapsed by default
+  const sitesToggle = dom.sitesToggle;
+  const sitesContent = dom.sitesContent;
+  const sitesChevron = sitesToggle.querySelector('.chevron');
+
+  sitesToggle.addEventListener('click', () => {
+    const isCollapsed = sitesContent.classList.toggle('collapsed');
+    sitesChevron.classList.toggle('rotated', !isCollapsed);
+  });
+}
+
+// ---------- Rendering: Sites Configurator ----------
+
+function renderSitesConfigurator() {
+  const sites = state.configuration.sites || [];
+  const list = dom.sitesList;
+  list.innerHTML = '';
+
+  sites.forEach((site) => {
+    const row = document.createElement('div');
+    row.className = site.isCustom ? 'tag-row custom-site' : 'tag-row';
+    
+    const deleteBtnHtml = site.isCustom
+      ? `<button class="btn-delete-tag btn-delete-site" data-id="${site.id}" title="Remove site">×</button>`
+      : '';
+
+    row.innerHTML = `
+      <span class="tag-dot-indicator" style="background: var(--text-muted); opacity: 0.5;"></span>
+      <span class="tag-label" style="font-family: monospace;">${escapeHTML(site.domain)}</span>
+      <label class="tag-toggle">
+        <input type="checkbox" ${site.isEnabled ? 'checked' : ''} data-id="${site.id}">
+        <span class="toggle-track"></span>
+      </label>
+      ${deleteBtnHtml}
+    `;
+
+    // Toggle handler
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    checkbox.addEventListener('change', () => {
+      chrome.runtime.sendMessage({
+        type: 'SITE_TOGGLED',
+        payload: { siteId: site.id, enabled: checkbox.checked }
+      });
+    });
+
+    // Delete handler
+    if (site.isCustom) {
+      const deleteBtn = row.querySelector('.btn-delete-site');
+      deleteBtn.addEventListener('click', () => {
+        chrome.runtime.sendMessage({
+          type: 'SITE_REMOVED',
+          payload: { siteId: site.id }
+        });
+      });
+    }
+
+    list.appendChild(row);
   });
 }
 
@@ -463,6 +602,7 @@ function renderAll() {
   renderStack();
   renderPinnedSection();
   renderTagConfigurator();
+  renderSitesConfigurator();
 
   // If category view is active, refresh it
   if (activeCategory) {
@@ -521,6 +661,12 @@ document.addEventListener('DOMContentLoaded', () => {
     newTagInput: $('#new-tag-input'),
     clearStackBtn: $('#clear-stack-btn'),
     themeToggle: $('#theme-toggle'),
+    // Sites references
+    sitesToggle: $('#sites-toggle'),
+    sitesContent: $('#sites-content'),
+    sitesList: $('#sites-list'),
+    addSiteForm: $('#add-site-form'),
+    newSiteInput: $('#new-site-input'),
   };
 
   // Theme
@@ -543,6 +689,22 @@ document.addEventListener('DOMContentLoaded', () => {
       payload: { tag: value }
     });
     dom.newTagInput.value = '';
+  });
+
+  // Add site form
+  dom.addSiteForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const value = dom.newSiteInput.value.trim();
+    if (!value) return;
+    if (!value.includes('.')) {
+      alert('Please enter a valid domain name (e.g. reddit.com)');
+      return;
+    }
+    chrome.runtime.sendMessage({
+      type: 'SITE_ADDED',
+      payload: { domain: value }
+    });
+    dom.newSiteInput.value = '';
   });
 
   // Clear stack

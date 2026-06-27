@@ -1,0 +1,11 @@
+{
+  "name": "scrollcollector",
+  "version": "1.2.0",
+  "description": "Deterministic web page feed tracking and categorizer using Gemini Nano.",
+  "type": "module",
+  "scripts": {
+    "test": "node test.mjs"
+  },
+  "author": "Fauzul Chowdhury",
+  "license": "MIT"
+}

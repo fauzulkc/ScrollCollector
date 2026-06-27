@@ -83,6 +83,22 @@
       </div>
     </section>
 
+    <!-- Sites Configurator -->
+    <section id="site-section" class="collapsible">
+      <button class="section-toggle" id="sites-toggle">
+        <span>Sites</span>
+        <svg class="chevron" width="12" height="12" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+      </button>
+      <div id="sites-content" class="section-body collapsed">
+        <div id="sites-list" class="tag-list"></div>
+        <form id="add-site-form" class="add-tag-row">
+          <input type="text" id="new-site-input" placeholder="New site domain (e.g. reddit.com)…" maxlength="64" autocomplete="off">
+          <button type="submit" class="btn-add">+</button>
+        </form>
+      </div>
+    </section>
+
+
     <!-- Recent feed -->
     <section id="stack-section">
       <div class="section-label">Recent</div>
