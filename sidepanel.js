@@ -343,6 +343,13 @@ function rotateFocusedCardTag(direction) {
   focusCard(focusedItemIndex);
 }
 
+function scrollActivePillIntoView() {
+  const activePill = dom.filterPills.querySelector(`.filter-pill.active`);
+  if (activePill) {
+    activePill.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
+}
+
 function initKeyboardNavigation() {
   document.addEventListener('keydown', (e) => {
     const activeEl = document.activeElement;
@@ -350,10 +357,41 @@ function initKeyboardNavigation() {
       return;
     }
 
-    if (filteredStack.length === 0) return;
-
     switch (e.key) {
+      case 'ArrowRight': {
+        e.preventDefault();
+        const categories = getFilterCategories();
+        const currentIndex = categories.indexOf(activeFilterTag);
+        if (currentIndex !== -1) {
+          const nextIndex = (currentIndex + 1) % categories.length;
+          activeFilterTag = categories[nextIndex];
+          
+          renderFilterPills();
+          renderSiteFilterPills();
+          renderFeed();
+          scrollActivePillIntoView();
+        }
+        break;
+      }
+
+      case 'ArrowLeft': {
+        e.preventDefault();
+        const categories = getFilterCategories();
+        const currentIndex = categories.indexOf(activeFilterTag);
+        if (currentIndex !== -1) {
+          const prevIndex = (currentIndex - 1 + categories.length) % categories.length;
+          activeFilterTag = categories[prevIndex];
+          
+          renderFilterPills();
+          renderSiteFilterPills();
+          renderFeed();
+          scrollActivePillIntoView();
+        }
+        break;
+      }
+
       case 'Tab':
+        if (filteredStack.length === 0) return;
         if (!e.shiftKey) {
           e.preventDefault();
           focusCard(focusedItemIndex + 1);
@@ -361,16 +399,19 @@ function initKeyboardNavigation() {
         break;
 
       case 'ArrowDown':
+        if (filteredStack.length === 0) return;
         e.preventDefault();
         focusCard(focusedItemIndex + 1);
         break;
 
       case 'ArrowUp':
+        if (filteredStack.length === 0) return;
         e.preventDefault();
         focusCard(focusedItemIndex - 1);
         break;
 
       case ' ':
+        if (filteredStack.length === 0) return;
         e.preventDefault();
         if (focusedItemIndex !== -1) {
           const item = filteredStack[focusedItemIndex];
@@ -387,6 +428,7 @@ function initKeyboardNavigation() {
         break;
 
       case 'Enter':
+        if (filteredStack.length === 0) return;
         if (focusedItemIndex !== -1) {
           const item = filteredStack[focusedItemIndex];
           
@@ -404,16 +446,6 @@ function initKeyboardNavigation() {
             }
           }
         }
-        break;
-
-      case 'ArrowRight':
-        e.preventDefault();
-        rotateFocusedCardTag(1);
-        break;
-
-      case 'ArrowLeft':
-        e.preventDefault();
-        rotateFocusedCardTag(-1);
         break;
     }
   });
@@ -468,20 +500,40 @@ function initVirtualizer() {
 
 // ---------- Rendering: Tag Filters ----------
 
-function renderFilterPills() {
+function getFilterCategories() {
   const tags = state.configuration.trackedTags || [];
   const list = state.stack || [];
 
-  const categories = ['All', 'Favorites'];
+  const enabledTags = [];
   tags.forEach(t => {
     const label = typeof t === 'string' ? t : t.label;
     const enabled = typeof t === 'string' ? true : t.isEnabled !== false;
     if (enabled && label !== 'Ads') {
-      categories.push(label);
+      enabledTags.push(label);
     }
   });
-  categories.push('Ads');
-  categories.push('Unclassified');
+
+  // Calculate the most recent item timestamp for each tag to sort by recency
+  const latestTimestampMap = {};
+  list.forEach(item => {
+    const tag = item.assignedTag;
+    if (tag && !latestTimestampMap[tag]) {
+      latestTimestampMap[tag] = item.timestamp;
+    }
+  });
+
+  enabledTags.sort((a, b) => {
+    const timeA = latestTimestampMap[a] || 0;
+    const timeB = latestTimestampMap[b] || 0;
+    return timeB - timeA;
+  });
+
+  return ['All', 'Favorites', ...enabledTags, 'Ads', 'Unclassified'];
+}
+
+function renderFilterPills() {
+  const categories = getFilterCategories();
+  const list = state.stack || [];
 
   const counts = { All: list.length, Favorites: list.filter(i => i.isFavorite).length };
   list.forEach(item => {
@@ -492,11 +544,21 @@ function renderFilterPills() {
     }
   });
 
+  // Capture starting layout coordinates of existing category pills (First)
+  const firstRects = {};
+  Array.from(dom.filterPills.children).forEach(child => {
+    const cat = child.dataset.category;
+    if (cat) {
+      firstRects[cat] = child.getBoundingClientRect();
+    }
+  });
+
   dom.filterPills.innerHTML = '';
   categories.forEach(cat => {
     const count = counts[cat] || 0;
     const pill = document.createElement('button');
     pill.className = `filter-pill ${activeFilterTag === cat ? 'active' : ''}`;
+    pill.dataset.category = cat;
     
     let labelText = cat;
     if (cat === 'Favorites') labelText = '❤️ Favorites';
@@ -511,6 +573,35 @@ function renderFilterPills() {
     });
 
     dom.filterPills.appendChild(pill);
+  });
+
+  // Apply FLIP (First, Last, Invert, Play) transition
+  Array.from(dom.filterPills.children).forEach(pill => {
+    const cat = pill.dataset.category;
+    if (cat && firstRects[cat]) {
+      const firstRect = firstRects[cat];
+      const lastRect = pill.getBoundingClientRect();
+      const deltaX = firstRect.left - lastRect.left;
+      
+      if (deltaX !== 0) {
+        // Invert: shift instantly to the old layout position
+        pill.style.transform = `translateX(${deltaX}px)`;
+        pill.style.transition = 'none';
+        
+        // Force synchronous browser layout reflow
+        void pill.offsetWidth;
+        
+        // Play: smoothly animate back to natural origin
+        pill.style.transition = 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)';
+        pill.style.transform = '';
+        
+        // Cleanup transition property after animation completes
+        pill.addEventListener('transitionend', function handler() {
+          pill.style.transition = '';
+          pill.removeEventListener('transitionend', handler);
+        });
+      }
+    }
   });
 }
 
