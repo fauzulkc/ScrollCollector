@@ -230,13 +230,38 @@ function renderEngineStatus() {
   dom.engineLabel.textContent = es.name || '—';
 }
 
+let visualProcessingTimeout = null;
+let lastProcessingTime = 0;
+
 function renderProcessingStatus() {
   const count = state.inFlightCount || 0;
+  
   if (count > 0) {
     dom.processingCount.textContent = count;
     dom.processingIndicator.classList.remove('hidden');
+    lastProcessingTime = Date.now();
+    if (visualProcessingTimeout) {
+      clearTimeout(visualProcessingTimeout);
+      visualProcessingTimeout = null;
+    }
   } else {
-    dom.processingIndicator.classList.add('hidden');
+    const elapsed = Date.now() - lastProcessingTime;
+    const minDuration = 800; // minimum visible duration in ms
+    
+    if (elapsed < minDuration) {
+      if (!visualProcessingTimeout) {
+        visualProcessingTimeout = setTimeout(() => {
+          dom.processingIndicator.classList.add('hidden');
+          visualProcessingTimeout = null;
+        }, minDuration - elapsed);
+      }
+    } else {
+      dom.processingIndicator.classList.add('hidden');
+      if (visualProcessingTimeout) {
+        clearTimeout(visualProcessingTimeout);
+        visualProcessingTimeout = null;
+      }
+    }
   }
 }
 

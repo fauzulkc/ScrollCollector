@@ -164,15 +164,11 @@ chrome.runtime.onInstalled.addListener(async () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function updateInFlightCount(delta) {
-  try {
-    const state = await chrome.storage.local.get('inFlightCount');
-    const count = Math.max(0, (state.inFlightCount || 0) + delta);
-    await chrome.storage.local.set({ inFlightCount: count });
-    await broadcastStateUpdate();
-  } catch (err) {
-    console.error('[background] Error updating inFlightCount:', err);
-  }
+let inFlightCount = 0;
+
+function updateInFlightCount(delta) {
+  inFlightCount = Math.max(0, inFlightCount + delta);
+  broadcastStateUpdate();
 }
 
 /**
@@ -189,7 +185,7 @@ async function broadcastStateUpdate() {
         metrics: fullState.metrics,
         stack: fullState.stack,
         telemetry: fullState.telemetry,
-        inFlightCount: fullState.inFlightCount || 0
+        inFlightCount: inFlightCount
       }
     });
   } catch {
@@ -570,6 +566,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'GET_STATE': {
           const state = await chrome.storage.local.get(null);
+          state.inFlightCount = inFlightCount;
           sendResponse(state);
           break;
         }
