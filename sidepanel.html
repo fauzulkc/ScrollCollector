@@ -6,14 +6,35 @@
   <link rel="stylesheet" href="sidepanel.css">
 </head>
 <body>
-  <!-- Compact header: title left, theme toggle + engine status right -->
+  <!-- Header: Brand Title, Pause Toggle, Status dot, Theme Toggle -->
   <header id="panel-header">
-    <span class="app-title">ScrollCollector</span>
+    <div class="brand-container">
+      <svg class="brand-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+        <polyline points="14 2 14 8 20 8"/>
+        <line x1="16" y1="13" x2="8" y2="13"/>
+        <line x1="16" y1="17" x2="8" y2="17"/>
+        <polyline points="10 9 9 9 8 9"/>
+      </svg>
+      <span class="app-title">ScrollCollector</span>
+    </div>
     <div class="header-actions">
-      <span id="engine-dot" class="engine-dot"></span>
-      <span id="engine-label" class="engine-label">—</span>
+      <!-- Master Pause Toggle -->
+      <button id="pause-toggle" class="pause-toggle" title="Pause tracking">
+        <svg id="pause-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="6" y="4" width="4" height="16"></rect>
+          <rect x="14" y="4" width="4" height="16"></rect>
+        </svg>
+        <svg id="play-icon" class="hidden" viewBox="0 0 24 24" width="13" height="13" fill="currentColor">
+          <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+      </button>
+      <div class="status-indicator" title="Model Status">
+        <span id="engine-dot" class="engine-dot"></span>
+        <span id="engine-label" class="engine-label">—</span>
+      </div>
       <button id="theme-toggle" class="theme-toggle" title="Toggle theme">
-        <svg id="theme-icon-sun" class="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg id="theme-icon-sun" class="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="5"/>
           <line x1="12" y1="1" x2="12" y2="3"/>
           <line x1="12" y1="21" x2="12" y2="23"/>
@@ -24,87 +45,180 @@
           <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
           <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
         </svg>
-        <svg id="theme-icon-moon" class="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg id="theme-icon-moon" class="theme-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
         </svg>
       </button>
     </div>
   </header>
 
-  <!-- Telemetry bar: compact stats row -->
-  <div id="telemetry-bar" class="telemetry-bar">
-    <span><strong id="tel-total">0</strong> processed</span>
-    <span class="tel-divider">·</span>
-    <span><strong id="tel-rate">0%</strong> classified</span>
-    <span class="tel-divider">·</span>
-    <span id="tel-engine">—</span>
+  <!-- Global Paused Banner -->
+  <div id="pause-banner" class="pause-banner hidden">
+    <span>Collection paused since <strong id="pause-time">—</strong></span>
   </div>
 
-  <!-- Counter grid -->
-  <section id="counter-grid" class="counter-grid"></section>
+  <!-- Segmented Tab Navigation -->
+  <nav class="tab-navigation">
+    <button class="tab-btn active" data-tab="stream">
+      <span>Stream</span>
+      <span id="tab-count-stream" class="tab-badge">0</span>
+    </button>
+    <button class="tab-btn" data-tab="export">
+      <span>Export</span>
+    </button>
+    <button class="tab-btn" data-tab="settings">
+      <span>Settings</span>
+    </button>
+  </nav>
 
-  <!-- Category detail view (hidden by default, shown when clicking a counter) -->
-  <section id="category-view" class="category-view hidden">
-    <div class="category-view-header">
-      <button id="category-back" class="btn-back">← Back</button>
-      <span id="category-view-title" class="category-view-title"></span>
-      <span id="category-view-count" class="category-view-count"></span>
-    </div>
-    <div id="category-items" class="item-list"></div>
-  </section>
+  <!-- Main Viewports container -->
+  <main class="panel-content">
+    
+    <!-- Tab 1: Stream Panel -->
+    <section id="panel-stream" class="tab-panel active">
+      <!-- Horizontal Filter Pills (Tags & Sites) -->
+      <div class="filter-wrapper">
+        <div id="filter-pills" class="filter-pills">
+          <!-- Dynamically populated: e.g. All, Favorites (<3), Tech, Finance... -->
+        </div>
+      </div>
+      <div class="filter-wrapper" style="padding-top: 0; margin-top: -4px;">
+        <div id="filter-site-pills" class="filter-pills">
+          <!-- Dynamically populated: e.g. All Sites, linkedin.com, youtube.com... -->
+        </div>
+      </div>
+      
+      <!-- Feed Container -->
+      <div id="feed-container">
+        <div id="stream-list" class="item-list"></div>
+        <div id="stream-empty" class="empty-state">No items collected yet. Start scrolling feeds!</div>
+      </div>
 
-  <!-- Main content (hidden when category view is shown) -->
-  <main id="main-content">
-    <!-- Pinned section -->
-    <section id="pinned-section" class="collapsible">
-      <button class="section-toggle" id="pinned-toggle">
-        <span>Pinned</span>
-        <span id="pinned-count" class="count-pill">0</span>
-        <svg class="chevron" width="12" height="12" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-      </button>
-      <div id="pinned-content" class="section-body">
-        <div id="pinned-list" class="item-list"></div>
-        <div id="pinned-empty" class="empty-state">No pinned insights yet</div>
+      <!-- Compact Footer Actions -->
+      <div class="stream-footer">
+        <button id="clear-stack-btn" class="btn-clear">Clear stream</button>
       </div>
     </section>
 
-    <!-- Tag Configurator -->
-    <section id="tag-section" class="collapsible">
-      <button class="section-toggle" id="config-toggle">
-        <span>Tags</span>
-        <svg class="chevron" width="12" height="12" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-      </button>
-      <div id="config-content" class="section-body collapsed">
-        <div id="tag-list" class="tag-list"></div>
-        <form id="add-tag-form" class="add-tag-row">
-          <input type="text" id="new-tag-input" placeholder="New tag…" maxlength="32" autocomplete="off">
-          <button type="submit" class="btn-add">+</button>
+    <!-- Tab 2: Export Panel -->
+    <section id="panel-export" class="tab-panel">
+      <!-- Telemetry Info Card -->
+      <div class="telemetry-card">
+        <div class="tel-header">Telemetry Overview</div>
+        <div class="tel-grid">
+          <div class="tel-item">
+            <span class="tel-lbl">Processed</span>
+            <span id="tel-total" class="tel-val">0</span>
+          </div>
+          <div class="tel-item">
+            <span class="tel-lbl">Classified</span>
+            <span id="tel-rate" class="tel-val">0%</span>
+          </div>
+          <div class="tel-item">
+            <span class="tel-lbl">Active Engine</span>
+            <span id="tel-engine" class="tel-val">—</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Export Cards -->
+      <div class="export-options">
+        <div class="export-card primary">
+          <div class="export-icon-wrapper">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </div>
+          <div class="export-details">
+            <h3>Export HTML Diary</h3>
+            <p>Generate a fully styled, interactive offline feed viewer to browse your collected data.</p>
+            <button id="btn-export-html" class="btn-export-action">Generate HTML Diary</button>
+          </div>
+        </div>
+
+        <div class="export-sub-grid">
+          <button id="btn-export-json" class="btn-export-sub">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Download JSON</span>
+          </button>
+          <button id="btn-export-csv" class="btn-export-sub">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>Download CSV</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 3: Settings Panel -->
+    <section id="panel-settings" class="tab-panel">
+      <!-- Tag Configurator -->
+      <div class="settings-section">
+        <div class="settings-title">Tracked Categories</div>
+        <div id="tag-list" class="settings-list"></div>
+        <form id="add-tag-form" class="add-row">
+          <input type="text" id="new-tag-input" placeholder="Add custom tag…" maxlength="32" autocomplete="off">
+          <button type="submit" class="btn-add-action">+</button>
         </form>
       </div>
-    </section>
 
-    <!-- Sites Configurator -->
-    <section id="site-section" class="collapsible">
-      <button class="section-toggle" id="sites-toggle">
-        <span>Sites</span>
-        <svg class="chevron" width="12" height="12" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-      </button>
-      <div id="sites-content" class="section-body collapsed">
-        <div id="sites-list" class="tag-list"></div>
-        <form id="add-site-form" class="add-tag-row">
-          <input type="text" id="new-site-input" placeholder="New site domain (e.g. reddit.com)…" maxlength="64" autocomplete="off">
-          <button type="submit" class="btn-add">+</button>
+      <!-- Sites Configurator -->
+      <div class="settings-section">
+        <div class="settings-title">Enabled Websites</div>
+        <div id="sites-list" class="settings-list"></div>
+        <form id="add-site-form" class="add-row">
+          <input type="text" id="new-site-input" placeholder="Add site (e.g. reddit.com)…" maxlength="64" autocomplete="off">
+          <button type="submit" class="btn-add-action">+</button>
         </form>
+      </div>
+
+      <!-- Ignored Keywords Configurator -->
+      <div class="settings-section">
+        <div class="settings-title">Ignored Keywords</div>
+        <div id="keywords-list" class="settings-list"></div>
+        <form id="add-keyword-form" class="add-row">
+          <input type="text" id="new-keyword-input" placeholder="Ignore posts containing word…" maxlength="32" autocomplete="off">
+          <button type="submit" class="btn-add-action">+</button>
+        </form>
+      </div>
+
+      <!-- Keyboard Shortcuts Help -->
+      <div class="settings-section">
+        <div class="settings-title">Keyboard Shortcuts</div>
+        <div class="shortcuts-guide">
+          <div class="shortcut-row">
+            <span><kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>Tab</kbd></span>
+            <span class="shortcut-desc">Navigate cards</span>
+          </div>
+          <div class="shortcut-row">
+            <span><kbd>←</kbd> / <kbd>→</kbd></span>
+            <span class="shortcut-desc">Change tag of focused card</span>
+          </div>
+          <div class="shortcut-row">
+            <span><kbd>Space</kbd></span>
+            <span class="shortcut-desc">Favorite (<3) focused card</span>
+          </div>
+          <div class="shortcut-row">
+            <span><kbd>Enter</kbd></span>
+            <span class="shortcut-desc">Expand / Collapse text body</span>
+          </div>
+          <div class="shortcut-row">
+            <span><kbd>Shift/Ctrl + Enter</kbd></span>
+            <span class="shortcut-desc">Open source link</span>
+          </div>
+        </div>
       </div>
     </section>
 
-
-    <!-- Recent feed -->
-    <section id="stack-section">
-      <div class="section-label">Recent</div>
-      <div id="stack-list" class="item-list"></div>
-      <button id="clear-stack-btn" class="btn-clear">Clear all</button>
-    </section>
   </main>
 
   <script src="sidepanel.js"></script>

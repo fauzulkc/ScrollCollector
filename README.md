@@ -1,33 +1,47 @@
 # ScrollCollector 📜🤖
 
-ScrollCollector is a privacy-first, zero-latency Chromium browser extension that extracts, redacts, and classifies text content in real time as you scroll through social feeds and web pages. It runs entirely on your local machine, utilizing your browser's built-in on-device AI.
+ScrollCollector is a privacy-first, zero-latency Chromium browser extension that extracts, redacts, and classifies text content in real time as you scroll through social feeds and web pages. It runs entirely on your local machine, utilizing your browser's built-in on-device AI (Gemini Nano) or a lightweight local keyword engine.
+
+It is designed as a high-performance keyboard-driven curator to capture, filter, and compile web insights into interactive offline feed diaries.
 
 ---
 
 ## Key Features
 
 - **On-Device AI Engine**: Tier-1 classification using Chrome's native **Gemini Nano** model, with a Tier-2 offline **Keyword Fallback** engine.
-- **Interactive Retagging**: Every card features a minimal select dropdown, letting you manually override classification and shift category metrics atomically.
-- **Site configurations**: Enable/disable scanning on standard feeds (LinkedIn, YouTube, X, Facebook, Instagram) or register custom domains (e.g., `reddit.com`) to filter your tracking space.
-- **Structured Boundary Parsing**: Groups text blocks by card/post boundaries (tweets, LinkedIn updates, article sections) and strips noise elements (like buttons and comments) before processing.
-- **PII Sanitizer**: built-in regex scrubber for email, phone numbers, and Luhn-validated credit cards.
-- **Dynamic Tag Generation**: Auto-extracts topics (e.g. *Tesla*, *Space*) for unclassified content.
-- **Sticky Dynamic Tags**: Pin dynamic tags in configuration (`📌`/`📍`) to protect them from purging during stack clears.
-- **Ad Detection & Red Chips**: Highlights sponsored/promoted updates with a red badge and counts them under a dedicated **Ads** category.
-- **Language Detection**: Automatically identifies post languages (using `chrome.i18n`) and adds a flat badge (e.g. `🇬🇧 EN`, `🇯🇵 JA`) to the card.
-- **Link Collection**: Extracts the nearest post permalinks, letting you visit sources later.
+- **Dynamic Tag Generation**: Automatically extracts and suggests new category tags (e.g. *Cooking*, *Space*, *Tesla*) for items that do not match existing tags.
+- **Priority Routing**: Custom and default tags always take classification priority over dynamic tags.
+- **Segmented Workspace**: A clean, modern tabbed interface (**Stream**, **Export**, **Settings**) replacing vertical collapsible widgets to optimize narrow side panels.
+- **List Virtualization**: Built-in `IntersectionObserver`-based DOM windowing. Off-screen cards are cleared from the DOM and replaced with height-matched spacers to maintain smooth scrolling and ultra-low memory usage even with thousands of items.
+- **Double Filtering System**:
+  - **Category Tags Bar**: Horizontal scrollable pills showing category count badges. Enabled categories are **always visible** even with 0 counts.
+  - **Websites Bar**: A second horizontal scrollable pills row to filter items by source domain (LinkedIn, X/Twitter, YouTube, Medium, Facebook, Instagram, or custom sites).
+  - Supports click-and-drag horizontal mouse-scrolling on both scrollers.
+- **Native Favicon Collector**: Automatically resolves and displays the site's official favicon in each card header using Chrome's offline `_favicon` API.
+- **Keyboard-driven Curation (HUD)**:
+  - <kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>Tab</kbd> / <kbd>Shift+Tab</kbd> to focus cards (scrolls into view smoothly).
+  - <kbd>←</kbd> / <kbd>→</kbd> to cycle the category tag of the focused card in real time.
+  - <kbd>Space</kbd> to toggle Favorite (`<3`) status.
+  - <kbd>Enter</kbd> to expand or collapse card snippet body.
+  - <kbd>Shift+Enter</kbd> or <kbd>Ctrl+Enter</kbd> to open card link in a new tab.
+- **Favorites (`<3`)**: Mark items as favorites (❤️), which records a custom `favoritedAt` timestamp and preserves items during "Clear stream" triggers.
+- **Master Pause Switch**: Toggle button in the header that pauses scanning, showing a banner: **"Collection paused since HH:MM:SS"**.
+- **Ignored Keywords**: Settings form to add keyword filters. Incoming posts containing ignored words are skipped.
+- **Interactive HTML Diary Export**: One-click action to download your collected feed as a standalone, styled HTML file with a responsive card layout, theme toggles, search filtering, and category controls.
+- **Privacy First**: Built-in inline PII sanitizer scrubs emails, credit cards (Luhn-validated), and phone numbers before text is processed.
+- **Subtle Gradient Border Glow**: News-type cards automatically receive a premium multi-color gradient border glow that respects the card's rounded borders.
+- **No Overflow Cards**: Modern CSS styling ensures long continuous strings wrap gracefully and platform links display with clean ellipsis.
 
 ---
 
 ## How to Install (Local unpacked)
 
-Since ScrollCollector runs locally, you can load it directly into any Chromium-based browser (Chrome, Edge, Brave, Arc, Opera):
+ScrollCollector runs 100% locally. To load it into any Chromium-based browser (Chrome, Edge, Brave, Arc, Opera):
 
 1. **Download/Clone the Repository**:
    ```bash
    git clone git@github.com:fauzulkc/ScrollCollector.git
    ```
-   *(Or download and extract the ZIP file).*
 
 2. **Load into Chrome**:
    - Open your browser and navigate to `chrome://extensions/`.
@@ -65,36 +79,17 @@ To unlock Tier-1 classification powered by **Gemini Nano**, you must enable the 
 
 ## How to Use
 
-1. **Browse**: Navigate to any enabled feed (LinkedIn, X/Twitter, YouTube, Facebook, Medium, or custom added sites).
-2. **Track**: Scroll through posts. ScrollCollector extracts text dynamically, showing the language code (e.g., `🇬🇧 EN`) and an `Ad` badge if it is sponsored.
-3. **Pin Insights**: Click the **pin button (◇/◆)** on any feed item to save it in your persistent *Pinned Insights* stack.
-4. **Reclassify**: Choose a new tag from a card's footer select dropdown to override category classifications.
-5. **Manage Tags & Sites**: Open the configurator toggles in the sidepanel:
-   - Customize tracked categories or click **★** to promote dynamic tags.
-   - Toggle **pin (📌)** on dynamic tags to make them sticky.
-   - Enable or disable domains to configure where ScrollCollector tracks scrolling.
-6. **Clear**: Click **Clear all** at the bottom to empty the recent stack, reset counters, and purge unpromoted, non-sticky dynamic tags.
-
----
-
-## Running Automated Tests
-
-ScrollCollector comes with a zero-dependency test suite using Node's native `node:test` runner.
-
-To run tests:
-1. Ensure Node.js (v18 or higher) is installed on your machine.
-2. In the project directory, run:
-   ```bash
-   node test.mjs
-   ```
-   *or*
-   ```bash
-   npm test
-   ```
+1. **Browse**: Navigate to any enabled site (LinkedIn, YouTube, Twitter/X, Medium, etc.).
+2. **Curation**: 
+   - Hover/focus on cards in the side panel.
+   - Reclassify category tags inline using the **Override** popup, or use the **Left/Right arrow keys**.
+   - Favorite items with <kbd>Space</kbd> or remove individual items with the `×` button.
+3. **Ignored Keywords**: Add unwanted words in the settings panel to automatically skip them.
+4. **Export**: Open the Export tab and click **Generate HTML Diary** to save a local styled copy of your feed.
+5. **Clear**: Click **Clear stream** in the footer to purge all un-favorited items.
 
 ---
 
 ## License
 
 MIT License. Operates 100% locally with zero external network tracking.
-

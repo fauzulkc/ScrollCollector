@@ -1,34 +1,33 @@
 /* ==========================================================================
-   ScrollCollector — Side Panel Controller
-   Flat, monochromic, separator-based design
+   ScrollCollector — Side Panel Controller (Virtualized & Curated)
+   Ambient tabbed navigation, inline horizontal filters with drag-to-scroll,
+   favorites (<3), popover overrides, master paused status banner,
+   ignored keyword settings, keyboard hotkey HUD, and list virtualization.
    ========================================================================== */
 
-// ---------- Constants ----------
+// ---------- Constants & Assets ----------
 
 const BADGE_COLORS = [
   '#6366f1', '#a855f7', '#06b6d4', '#10b981', '#f59e0b',
   '#f43f5e', '#0ea5e9', '#84cc16', '#f97316', '#ec4899'
 ];
 const FALLBACK_COLOR = '#71717a';
-const MAX_STACK_DISPLAY = 15;
 
-const LANG_FLAGS = {
-  'EN': '🇬🇧', 'US': '🇺🇸', 'ES': '🇪🇸', 'FR': '🇫🇷', 'DE': '🇩🇪',
-  'IT': '🇮🇹', 'JA': '🇯🇵', 'ZH': '🇨🇳', 'RU': '🇷🇺', 'PT': '🇵🇹',
-  'KO': '🇰🇷', 'AR': '🇸🇦', 'HI': '🇮🇳', 'TR': '🇹🇷', 'NL': '🇳🇱',
-  'PL': '🇵🇱', 'VI': '🇻🇳', 'ID': '🇮🇩', 'SV': '🇸🇪', 'FI': '🇫🇮',
-  'DA': '🇩🇰', 'NO': '🇳🇴'
+const PLATFORM_ICONS = {
+  'linkedin.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/></svg>`,
+  'twitter.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`,
+  'x.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>`,
+  'youtube.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.11C19.518 3.545 12 3.545 12 3.545s-7.518 0-9.388.507a3.003 3.003 0 0 0-2.11 2.11C0 8.033 0 12 0 12s0 3.967.502 5.837a3.003 3.003 0 0 0 2.11 2.11c1.87.507 9.388.507 9.388.507s7.518 0 9.388-.507a3.003 3.003 0 0 0 2.11-2.11C24 15.967 24 12 24 12s0-3.967-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>`,
+  'facebook.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c4.56-.93 8-4.96 8-9.75z"/></svg>`,
+  'instagram.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>`,
+  'medium.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M13.54 12a6.8 6.8 0 0 1-6.77 6.82A6.8 6.8 0 0 1 0 12a6.8 6.8 0 0 1 6.77-6.82A6.8 6.8 0 0 1 13.54 12zm7.42 0c0 3.54-1.51 6.42-3.38 6.42s-3.38-2.88-3.38-6.42 1.51-6.42 3.38-6.42 3.38 2.88 3.38 6.42zm3.04 0c0 3.24-.43 5.86-.96 5.86s-.96-2.62-.96-5.86.43-5.86.96-5.86.96 2.62.96 5.86z"/></svg>`,
+  'fallback': `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`
 };
-
-function getLanguageSymbol(lang) {
-  const code = (lang || '').toUpperCase();
-  return LANG_FLAGS[code] || '🌐';
-}
 
 // ---------- State ----------
 
 let state = {
-  configuration: { trackedTags: [] },
+  configuration: { trackedTags: [], sites: [], ignoredKeywords: [], isTrackingPaused: false, trackingPausedAt: null },
   metrics: { counts: {} },
   stack: [],
   telemetry: {
@@ -40,19 +39,27 @@ let state = {
   },
   engineStatus: { tier: 2, name: 'Keyword Fallback', status: 'ready' }
 };
-let prevCounts = {};
-let renderedItemIds = new Set();
-let activeCategory = null; // Currently viewing category (null = main view)
+
+let activeFilterTag = 'All'; // Horizontal category tag filter
+let activeFilterSite = 'All'; // Horizontal website filter
+let openDropdownItemId = null; // Track currently open override dropdown item ID
+let expandedItemIds = new Set(); // Track expanded text snippet row IDs
+
+// Keyboard Navigation State
+let focusedItemIndex = -1; // Index in currently filtered stack
+let filteredStack = []; // Cache of currently rendered filtered items
+
+// Virtualizer Observer Instance
+let virtualizerObserver = null;
 
 // ---------- DOM References ----------
 
-const $  = (sel) => document.querySelector(sel);
+const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
-// Cached after DOMContentLoaded
 let dom = {};
 
-// ---------- Theme ----------
+// ---------- Initialization ----------
 
 function initTheme() {
   const saved = localStorage.getItem('scrollcollector-theme') || 'dark';
@@ -66,44 +73,56 @@ function toggleTheme() {
   localStorage.setItem('scrollcollector-theme', next);
 }
 
-// ---------- Utilities ----------
+function initTabs() {
+  const savedTab = localStorage.getItem('scrollcollector-active-tab') || 'stream';
+  switchTab(savedTab);
 
-/** Escape HTML to prevent XSS */
+  $$('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      switchTab(tab);
+    });
+  });
+}
+
+function switchTab(tabName) {
+  $$('.tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tabName);
+  });
+
+  $$('.tab-panel').forEach(panel => {
+    const isTarget = panel.id === `panel-${tabName}`;
+    panel.classList.toggle('active', isTarget);
+  });
+
+  localStorage.setItem('scrollcollector-active-tab', tabName);
+}
+
+// ---------- Helpers ----------
+
 function escapeHTML(str) {
   if (!str) return '';
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   return str.replace(/[&<>"']/g, (c) => map[c]);
 }
 
-/** Truncate text with ellipsis */
-function truncate(text, max) {
-  if (!text) return '';
-  return text.length > max ? text.slice(0, max) + '…' : text;
-}
-
-/** Relative time — compact format: "2m", "1h", "3d" */
 function relativeTime(ts) {
   if (!ts) return '';
   const diff = Math.max(0, Math.floor((Date.now() - ts) / 1000));
-  if (diff < 60)   return `${diff}s`;
+  if (diff < 60) return `${diff}s`;
   if (diff < 3600) return `${Math.floor(diff / 60)}m`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  if (diff < 2592000) return `${Math.floor(diff / 86400)}d`;
-  return `${Math.floor(diff / 2592000)}mo`;
+  return `${Math.floor(diff / 86400)}d`;
 }
 
-/** Get color for a tag based on its position in trackedTags */
 function getTagColor(tag) {
   if (tag === 'Ads') return '#ef4444';
   const tags = state.configuration.trackedTags || [];
-  const idx = tags.findIndex(
-    (t) => (typeof t === 'string' ? t : t.label) === tag
-  );
+  const idx = tags.findIndex(t => (typeof t === 'string' ? t : t.label) === tag);
   if (idx === -1) return FALLBACK_COLOR;
   return BADGE_COLORS[idx % BADGE_COLORS.length];
 }
 
-/** Extract domain from URL */
 function extractDomain(url) {
   try {
     return new URL(url).hostname.replace('www.', '');
@@ -112,7 +131,64 @@ function extractDomain(url) {
   }
 }
 
-// ---------- Rendering: Telemetry ----------
+/** 
+ * Local text parser:
+ * Splits text into a bold title (first sentence) and body.
+ */
+function parseCardText(text) {
+  if (!text) return { title: '', body: '' };
+  
+  const cleanText = text.replace(/\s+/g, ' ').trim();
+  
+  const boundaryMatch = cleanText.match(/^.*?[.!?](?:\s|$)/);
+  if (boundaryMatch) {
+    const title = boundaryMatch[0].trim();
+    const body = cleanText.slice(title.length).trim();
+    return { title, body };
+  }
+  
+  if (cleanText.length > 70) {
+    const title = cleanText.slice(0, 65) + '…';
+    const body = cleanText;
+    return { title, body };
+  }
+  
+  return { title: cleanText, body: '' };
+}
+
+/**
+ * Local entity extractor.
+ */
+function extractLocalEntities(text, assignedCategory) {
+  if (!text) return [];
+  const entities = new Set();
+
+  if (assignedCategory && assignedCategory !== 'Unclassified' && assignedCategory !== 'Ads') {
+    entities.add(assignedCategory);
+  }
+
+  const hashtags = text.match(/#\w+/g);
+  if (hashtags) {
+    hashtags.slice(0, 2).forEach(tag => entities.add(tag.replace('#', '')));
+  }
+
+  const words = text.replace(/[^\w\s]/g, '').split(/\s+/);
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    if (word.length >= 4 && /^[A-Z]/.test(word) && !/^[A-Z]+$/.test(word)) {
+      const lower = word.toLowerCase();
+      const ignoreList = ['with', 'this', 'that', 'from', 'they', 'your', 'about', 'their', 'there', 'when', 'more'];
+      if (!ignoreList.includes(lower)) {
+        entities.add(word);
+        if (entities.size >= 3) break;
+      }
+    }
+  }
+
+  return Array.from(entities).slice(0, 3);
+}
+
+// ---------- Telemetry & Engine ----------
 
 function renderTelemetry() {
   const tel = state.telemetry || {};
@@ -121,145 +197,648 @@ function renderTelemetry() {
   const rate = total > 0 ? Math.round((classified / total) * 100) : 0;
   const engineName = (state.engineStatus && state.engineStatus.name) || '—';
 
+  dom.tabCountStream.textContent = state.stack.length;
+
   dom.telTotal.textContent = total;
   dom.telRate.textContent = rate + '%';
   dom.telEngine.textContent = engineName;
 }
 
-// ---------- Rendering: Engine Status ----------
-
 function renderEngineStatus() {
   const es = state.engineStatus || {};
-  const dot = dom.engineDot;
-  const label = dom.engineLabel;
-
-  // Reset classes
-  dot.classList.remove('active', 'fallback', 'error');
+  dom.engineDot.classList.remove('active', 'fallback', 'error');
 
   if (es.tier === 1 || es.status === 'active') {
-    dot.classList.add('active');
+    dom.engineDot.classList.add('active');
   } else if (es.tier === 2 || es.status === 'ready') {
-    dot.classList.add('fallback');
+    dom.engineDot.classList.add('fallback');
   } else {
-    dot.classList.add('error');
+    dom.engineDot.classList.add('error');
   }
 
-  label.textContent = es.name || '—';
+  dom.engineLabel.textContent = es.name || '—';
 }
 
-// ---------- Rendering: Counter Grid ----------
+function renderPauseStatus() {
+  const config = state.configuration || {};
+  const isPaused = !!config.isTrackingPaused;
+  const pausedAt = config.trackingPausedAt;
 
-function renderCounterGrid() {
-  const counts = state.metrics.counts || {};
+  dom.pauseToggle.classList.toggle('paused', isPaused);
+  
+  if (isPaused) {
+    dom.pauseIcon.classList.add('hidden');
+    dom.playIcon.classList.remove('hidden');
+    dom.pauseToggle.title = 'Resume tracking';
+    
+    dom.pauseBanner.classList.remove('hidden');
+    if (pausedAt) {
+      const timeStr = new Date(pausedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      dom.pauseTime.textContent = timeStr;
+    } else {
+      dom.pauseTime.textContent = '—';
+    }
+  } else {
+    dom.pauseIcon.classList.remove('hidden');
+    dom.playIcon.classList.add('hidden');
+    dom.pauseToggle.title = 'Pause tracking';
+    
+    dom.pauseBanner.classList.add('hidden');
+  }
+}
+
+// ---------- Drag-to-Scroll pills containers ----------
+
+function initDragToScroll() {
+  [dom.filterPills, dom.filterSitePills].forEach(el => {
+    if (!el) return;
+    let isDragging = false;
+    let startX;
+    let scrollLeft;
+    
+    el.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      startX = e.pageX - el.offsetLeft;
+      scrollLeft = el.scrollLeft;
+    });
+
+    el.addEventListener('mouseleave', () => {
+      isDragging = false;
+    });
+
+    el.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+
+    el.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      e.preventDefault();
+      const x = e.pageX - el.offsetLeft;
+      const walk = (x - startX) * 1.5;
+      el.scrollLeft = scrollLeft - walk;
+    });
+  });
+}
+
+// ---------- Keyboard Curation HUD Engine ----------
+
+function focusCard(index) {
+  if (filteredStack.length === 0) {
+    focusedItemIndex = -1;
+    return;
+  }
+
+  if (index < 0) index = 0;
+  if (index >= filteredStack.length) index = filteredStack.length - 1;
+
+  focusedItemIndex = index;
+  const item = filteredStack[focusedItemIndex];
+
+  dom.streamList.querySelectorAll('.item-row').forEach(row => {
+    row.classList.remove('keyboard-focused');
+  });
+
+  const targetRow = dom.streamList.querySelector(`.item-row[data-id="${item.id}"]`);
+  if (targetRow) {
+    targetRow.classList.add('keyboard-focused');
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+}
+
+function rotateFocusedCardTag(direction) {
+  if (focusedItemIndex === -1 || filteredStack.length === 0) return;
+  
+  const item = filteredStack[focusedItemIndex];
   const tags = state.configuration.trackedTags || [];
-  const grid = dom.counterGrid;
+  const tagLabels = tags.map(t => typeof t === 'string' ? t : t.label).filter(l => l !== 'Ads').concat(['Unclassified']);
+  
+  const currentTag = item.assignedTag || 'Unclassified';
+  let idx = tagLabels.indexOf(currentTag);
+  if (idx === -1) idx = tagLabels.length - 1;
 
-  // Build ordered list of tag labels + Unclassified
-  const tagLabels = tags.map((t) => (typeof t === 'string' ? t : t.label));
-  tagLabels.push('Unclassified');
+  idx += direction;
+  if (idx < 0) idx = tagLabels.length - 1;
+  if (idx >= tagLabels.length) idx = 0;
 
-  // Only rebuild if tags changed (otherwise just update values)
-  const currentKeys = tagLabels.join(',');
-  if (grid.dataset.keys !== currentKeys) {
-    grid.innerHTML = '';
-    grid.dataset.keys = currentKeys;
+  const newTag = tagLabels[idx];
 
-    tagLabels.forEach((label, i) => {
-      const tagObj = tags.find(t => (typeof t === 'string' ? t : t.label) === label);
-      const isDynamic = tagObj && tagObj.isDynamic;
+  chrome.runtime.sendMessage({
+    type: 'ITEM_RETAGGED',
+    payload: { itemId: item.id, newTag }
+  });
 
-      const item = document.createElement('div');
-      item.className = isDynamic ? 'counter-item dynamic' : 'counter-item';
-      if (label === 'Ads') {
-        item.style.borderLeftColor = '#ef4444';
-      } else if (label === 'Unclassified') {
-        item.style.borderLeftColor = FALLBACK_COLOR;
+  item.assignedTag = newTag;
+  renderAll();
+  
+  focusCard(focusedItemIndex);
+}
+
+function initKeyboardNavigation() {
+  document.addEventListener('keydown', (e) => {
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+      return;
+    }
+
+    if (filteredStack.length === 0) return;
+
+    switch (e.key) {
+      case 'Tab':
+        if (!e.shiftKey) {
+          e.preventDefault();
+          focusCard(focusedItemIndex + 1);
+        }
+        break;
+
+      case 'ArrowDown':
+        e.preventDefault();
+        focusCard(focusedItemIndex + 1);
+        break;
+
+      case 'ArrowUp':
+        e.preventDefault();
+        focusCard(focusedItemIndex - 1);
+        break;
+
+      case ' ':
+        e.preventDefault();
+        if (focusedItemIndex !== -1) {
+          const item = filteredStack[focusedItemIndex];
+          const isFavorite = !item.isFavorite;
+          chrome.runtime.sendMessage({
+            type: 'FAVORITE_TOGGLED',
+            payload: { itemId: item.id, isFavorite }
+          });
+          item.isFavorite = isFavorite;
+          renderFilterPills();
+          renderFeed();
+          focusCard(focusedItemIndex);
+        }
+        break;
+
+      case 'Enter':
+        if (focusedItemIndex !== -1) {
+          const item = filteredStack[focusedItemIndex];
+          
+          if (e.shiftKey || e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            if (item.sourceUrl) {
+              window.open(item.sourceUrl, '_blank');
+            }
+          } else {
+            e.preventDefault();
+            const cardRow = dom.streamList.querySelector(`.item-row[data-id="${item.id}"]`);
+            if (cardRow) {
+              const expandBtn = cardRow.querySelector('.btn-body-expand');
+              if (expandBtn) expandBtn.click();
+            }
+          }
+        }
+        break;
+
+      case 'ArrowRight':
+        e.preventDefault();
+        rotateFocusedCardTag(1);
+        break;
+
+      case 'ArrowLeft':
+        e.preventDefault();
+        rotateFocusedCardTag(-1);
+        break;
+    }
+  });
+
+  dom.streamList.addEventListener('click', (e) => {
+    const cardEl = e.target.closest('.item-row');
+    if (!cardEl) return;
+    const itemId = cardEl.dataset.id;
+    const idx = filteredStack.findIndex(i => i.id === itemId);
+    if (idx !== -1) {
+      focusedItemIndex = idx;
+      dom.streamList.querySelectorAll('.item-row').forEach(row => {
+        row.classList.remove('keyboard-focused');
+      });
+      cardEl.classList.add('keyboard-focused');
+    }
+  });
+}
+
+// ---------- List Virtualization observer setup ----------
+
+function initVirtualizer() {
+  virtualizerObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      const cardEl = entry.target;
+      const itemId = cardEl.dataset.id;
+      const item = state.stack.find(i => i.id === itemId);
+      if (!item) return;
+
+      if (entry.isIntersecting) {
+        if (cardEl.classList.contains('is-virtualized')) {
+          cardEl.classList.remove('is-virtualized');
+          cardEl.style.minHeight = '';
+          populateCardInner(cardEl, item);
+        }
       } else {
-        item.style.borderLeftColor = BADGE_COLORS[i % BADGE_COLORS.length];
+        if (!cardEl.classList.contains('is-virtualized')) {
+          const height = cardEl.offsetHeight;
+          if (height > 0) {
+            cardEl.style.minHeight = `${height}px`;
+            cardEl.classList.add('is-virtualized');
+            cardEl.innerHTML = `<div class="virtual-placeholder" style="height: ${height - 24}px;"></div>`;
+          }
+        }
       }
-      item.dataset.tag = label;
+    });
+  }, {
+    root: dom.feedContainer,
+    rootMargin: '300px 0px'
+  });
+}
 
-      item.innerHTML = `
-        <div class="counter-label">${escapeHTML(label)}</div>
-        <div class="counter-value" id="count-${i}">0</div>
-      `;
+// ---------- Rendering: Tag Filters ----------
 
-      item.addEventListener('click', () => showCategoryView(label));
-      grid.appendChild(item);
+function renderFilterPills() {
+  const tags = state.configuration.trackedTags || [];
+  const list = state.stack || [];
+
+  const categories = ['All', 'Favorites'];
+  tags.forEach(t => {
+    const label = typeof t === 'string' ? t : t.label;
+    const enabled = typeof t === 'string' ? true : t.isEnabled !== false;
+    if (enabled && label !== 'Ads') {
+      categories.push(label);
+    }
+  });
+  categories.push('Ads');
+  categories.push('Unclassified');
+
+  const counts = { All: list.length, Favorites: list.filter(i => i.isFavorite).length };
+  list.forEach(item => {
+    const tag = item.assignedTag || 'Unclassified';
+    counts[tag] = (counts[tag] || 0) + 1;
+    if (item.isAd) {
+      counts['Ads'] = (counts['Ads'] || 0) + 1;
+    }
+  });
+
+  dom.filterPills.innerHTML = '';
+  categories.forEach(cat => {
+    const count = counts[cat] || 0;
+    const pill = document.createElement('button');
+    pill.className = `filter-pill ${activeFilterTag === cat ? 'active' : ''}`;
+    
+    let labelText = cat;
+    if (cat === 'Favorites') labelText = '❤️ Favorites';
+
+    pill.innerHTML = `<span>${escapeHTML(labelText)}</span> <span style="opacity: 0.6; font-size: 9px; margin-left: 2px;">${count}</span>`;
+    
+    pill.addEventListener('click', () => {
+      activeFilterTag = cat;
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderFeed();
+    });
+
+    dom.filterPills.appendChild(pill);
+  });
+}
+
+// ---------- Rendering: Site Filters ----------
+
+function renderSiteFilterPills() {
+  const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+  const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
+  const activeSitesList = ['All'];
+  
+  const configuredSites = state.configuration.sites || [];
+  
+  defaultSites.forEach(d => {
+    const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
+    if (!cfg || cfg.isEnabled !== false) {
+      if (!activeSitesList.includes(d)) activeSitesList.push(d);
+    }
+  });
+  
+  customSites.forEach(d => {
+    const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
+    if (!cfg || cfg.isEnabled !== false) {
+      if (!activeSitesList.includes(d)) activeSitesList.push(d);
+    }
+  });
+
+  const list = state.stack || [];
+  const counts = { All: list.length };
+  list.forEach(item => {
+    const rawPlatform = (item.sourcePlatform || '').toLowerCase();
+    let matched = 'Other';
+    for (const domain of activeSitesList) {
+      if (domain !== 'All' && (rawPlatform === domain || rawPlatform.endsWith('.' + domain))) {
+        matched = domain;
+        break;
+      }
+    }
+    if (matched !== 'Other') {
+      counts[matched] = (counts[matched] || 0) + 1;
+    } else {
+      counts['Other'] = (counts['Other'] || 0) + 1;
+    }
+  });
+  
+  if (counts['Other'] > 0 && !activeSitesList.includes('Other')) {
+    activeSitesList.push('Other');
+  }
+
+  dom.filterSitePills.innerHTML = '';
+  activeSitesList.forEach(site => {
+    const count = counts[site] || 0;
+    const pill = document.createElement('button');
+    pill.className = `filter-pill ${activeFilterSite === site ? 'active' : ''}`;
+    
+    let labelText = site;
+    if (site === 'All') labelText = 'All Sites';
+    
+    pill.innerHTML = `<span>${escapeHTML(labelText)}</span> <span style="opacity: 0.6; font-size: 9px; margin-left: 2px;">${count}</span>`;
+    
+    pill.addEventListener('click', () => {
+      activeFilterSite = site;
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderFeed();
+    });
+
+    dom.filterSitePills.appendChild(pill);
+  });
+}
+
+// ---------- Rendering: Feed Cards ----------
+
+function renderFeed() {
+  const stack = state.stack || [];
+  const list = dom.streamList;
+  
+  if (virtualizerObserver) {
+    virtualizerObserver.disconnect();
+  }
+
+  // Filter 1: Tag
+  filteredStack = stack;
+  if (activeFilterTag === 'Favorites') {
+    filteredStack = stack.filter(i => i.isFavorite);
+  } else if (activeFilterTag === 'Ads') {
+    filteredStack = stack.filter(i => i.isAd);
+  } else if (activeFilterTag !== 'All') {
+    filteredStack = stack.filter(i => i.assignedTag === activeFilterTag);
+  }
+
+  // Filter 2: Website
+  if (activeFilterSite !== 'All') {
+    filteredStack = filteredStack.filter(i => {
+      const rawPlatform = (i.sourcePlatform || '').toLowerCase();
+      if (activeFilterSite === 'Other') {
+        const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
+        const configuredSites = state.configuration.sites || [];
+        const enabledDomains = [...defaultSites, ...customSites].filter(d => {
+          const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
+          return !cfg || cfg.isEnabled !== false;
+        });
+        return !enabledDomains.some(domain => rawPlatform === domain || rawPlatform.endsWith('.' + domain));
+      }
+      return rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
     });
   }
-
-  // Update counts
-  tagLabels.forEach((label, i) => {
-    const valEl = grid.querySelector(`#count-${i}`);
-    if (!valEl) return;
-    const newCount = counts[label] || 0;
-    const oldCount = prevCounts[label] || 0;
-
-    valEl.textContent = newCount;
-
-    // Pop animation on increase
-    if (newCount > oldCount) {
-      valEl.classList.remove('pop');
-      // Force reflow for re-triggering animation
-      void valEl.offsetWidth;
-      valEl.classList.add('pop');
-    }
-  });
-
-  prevCounts = { ...counts };
-}
-
-// ---------- Rendering: Stack (Recent Items) ----------
-
-function renderStack() {
-  const stack = state.stack || [];
-  const list = dom.stackList;
-  const nonPinned = stack.filter((item) => !item.isPinned).slice(0, MAX_STACK_DISPLAY);
-
-  // Track which IDs are new for enter animation
-  const newIds = new Set();
-  nonPinned.forEach((item) => {
-    if (!renderedItemIds.has(item.id)) {
-      newIds.add(item.id);
-    }
-  });
 
   list.innerHTML = '';
-  nonPinned.forEach((item) => {
-    const row = createItemRow(item, true);
-    if (newIds.has(item.id)) {
-      row.classList.add('entering');
-    }
-    list.appendChild(row);
-  });
 
-  // Update rendered set
-  renderedItemIds = new Set(nonPinned.map((i) => i.id));
+  if (filteredStack.length === 0) {
+    dom.streamEmpty.classList.remove('hidden');
+    list.classList.add('hidden');
+    focusedItemIndex = -1;
+    return;
+  }
+
+  dom.streamEmpty.classList.add('hidden');
+  list.classList.remove('hidden');
+
+  filteredStack.forEach((item, index) => {
+    const shell = createItemCardShell(item, index);
+    list.appendChild(shell);
+    if (virtualizerObserver) {
+      virtualizerObserver.observe(shell);
+    }
+  });
 }
 
-// ---------- Rendering: Pinned Section ----------
+function createItemCardShell(item, index) {
+  const card = document.createElement('div');
+  card.className = 'item-row is-virtualized';
+  card.dataset.id = item.id;
+  card.style.minHeight = '90px';
+  card.innerHTML = `<div class="virtual-placeholder" style="height: 66px;"></div>`;
 
-function renderPinnedSection() {
-  const stack = state.stack || [];
-  const pinned = stack.filter((item) => item.isPinned);
+  const tag = item.assignedTag || 'Unclassified';
+  const isNewsType = ['politics & society', 'science', 'news'].some(t => tag.toLowerCase().includes(t));
+  if (isNewsType) {
+    card.classList.add('news-glow');
+  }
 
-  dom.pinnedCount.textContent = pinned.length;
-  dom.pinnedList.innerHTML = '';
+  if (index === focusedItemIndex) {
+    card.classList.add('keyboard-focused');
+  }
 
-  if (pinned.length === 0) {
-    dom.pinnedEmpty.classList.remove('hidden');
-    dom.pinnedList.classList.add('hidden');
-  } else {
-    dom.pinnedEmpty.classList.add('hidden');
-    dom.pinnedList.classList.remove('hidden');
-    pinned.forEach((item) => {
-      dom.pinnedList.appendChild(createItemRow(item, true));
+  return card;
+}
+
+function populateCardInner(card, item) {
+  const platform = item.sourcePlatform || 'unknown';
+  const timeStr = relativeTime(item.timestamp);
+  const tag = item.assignedTag || 'Unclassified';
+  const tagColor = getTagColor(tag);
+
+  const { title, body } = parseCardText(item.textSnippet);
+  const entities = extractLocalEntities(item.textSnippet, tag);
+  const isCollapsed = !expandedItemIds.has(item.id);
+
+  // Native Favicon integration
+  const faviconUrl = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(item.sourceUrl || 'https://' + platform)}&size=32`;
+  const faviconHtml = `<img src="${faviconUrl}" class="card-favicon" onerror="this.style.display='none';" />`;
+
+  let linkHtml = '';
+  if (item.sourceUrl) {
+    const domain = escapeHTML(extractDomain(item.sourceUrl));
+    linkHtml = `<a href="#" class="card-site-link" data-url="${escapeHTML(item.sourceUrl)}" title="${escapeHTML(item.sourceUrl)}">${domain} ↗</a>`;
+  }
+
+  const favClass = item.isFavorite ? 'favorited' : '';
+  const favIcon = item.isFavorite
+    ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
+    : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+
+  const adBadge = item.isAd ? `<span class="ad-badge">Ad</span>` : '';
+
+  let bodyHtml = '';
+  if (body) {
+    bodyHtml = `
+      <div class="card-body ${isCollapsed ? 'collapsed' : ''}">${escapeHTML(body)}</div>
+      <button class="btn-body-expand">${isCollapsed ? 'Show more' : 'Show less'}</button>
+    `;
+  }
+
+  let entityChips = '';
+  if (entities.length > 0) {
+    entityChips = `<div class="card-entities">` + 
+      entities.map(e => `<span class="entity-chip">#${escapeHTML(e)}</span>`).join('') + 
+      `</div>`;
+  }
+
+  const tagsList = state.configuration.trackedTags || [];
+  const tagOptions = tagsList
+    .map(t => typeof t === 'string' ? t : t.label)
+    .filter(label => label !== 'Ads')
+    .concat(['Unclassified'])
+    .map(label => `
+      <div class="override-popover-item ${label === tag ? 'selected' : ''}" data-tag="${escapeHTML(label)}">
+        <span>${escapeHTML(label)}</span>
+        ${label === tag ? '✓' : ''}
+      </div>
+    `).join('');
+
+  // Rebuild inside Shell
+  card.innerHTML = `
+    <div class="card-header">
+      <span class="platform-logo">${faviconHtml}</span>
+      <span class="platform-name">${escapeHTML(platform)}</span>
+      ${linkHtml}
+      <span class="card-time">${timeStr}</span>
+      ${adBadge}
+      <div class="card-header-actions">
+        <button class="btn-card-action btn-favorite ${favClass}" title="${item.isFavorite ? 'Remove from favorites' : 'Add to favorites'}">
+          ${favIcon}
+        </button>
+        <button class="btn-card-action btn-card-delete" title="Remove from list">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+    </div>
+    
+    <div class="card-summary">${escapeHTML(title)}</div>
+    ${bodyHtml}
+    ${entityChips}
+    
+    <div class="card-footer">
+      <span class="card-category-label" style="--tag-color: ${tagColor}">
+        <span class="cat-dot"></span>
+        <span>${escapeHTML(tag)}</span>
+      </span>
+      <div class="override-trigger-wrapper">
+        <button class="btn-override-trigger">
+          <span>Override</span>
+          <svg class="dropdown-arrow-icon" viewBox="0 0 24 24" width="8" height="8" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        <div class="override-popover">
+          ${tagOptions}
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Bind Event Listeners
+  const link = card.querySelector('.card-site-link');
+  if (link) {
+    link.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.open(link.dataset.url, '_blank');
     });
   }
+
+  const expandBtn = card.querySelector('.btn-body-expand');
+  if (expandBtn) {
+    expandBtn.addEventListener('click', () => {
+      const bodyEl = card.querySelector('.card-body');
+      const isCurrentlyCollapsed = bodyEl.classList.toggle('collapsed');
+      expandBtn.textContent = isCurrentlyCollapsed ? 'Show more' : 'Show less';
+      if (isCurrentlyCollapsed) {
+        expandedItemIds.delete(item.id);
+      } else {
+        expandedItemIds.add(item.id);
+      }
+      
+      if (virtualizerObserver) {
+        virtualizerObserver.unobserve(card);
+        virtualizerObserver.observe(card);
+      }
+    });
+  }
+
+  card.querySelector('.btn-favorite').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const isFavorite = !item.isFavorite;
+    chrome.runtime.sendMessage({
+      type: 'FAVORITE_TOGGLED',
+      payload: { itemId: item.id, isFavorite }
+    });
+    item.isFavorite = isFavorite;
+    renderFilterPills();
+    renderFeed();
+  });
+
+  card.querySelector('.btn-card-delete').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (virtualizerObserver) {
+      virtualizerObserver.unobserve(card);
+    }
+    chrome.runtime.sendMessage({
+      type: 'ITEM_DELETED',
+      payload: { itemId: item.id }
+    });
+    state.stack = state.stack.filter(i => i.id !== item.id);
+    renderAll();
+  });
+
+  const triggerBtn = card.querySelector('.btn-override-trigger');
+  const popover = card.querySelector('.override-popover');
+  triggerBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    
+    if (openDropdownItemId && openDropdownItemId !== item.id) {
+      const activeCard = dom.streamList.querySelector(`.item-row[data-id="${openDropdownItemId}"]`);
+      if (activeCard) {
+        activeCard.querySelector('.override-popover').classList.remove('show');
+        activeCard.querySelector('.btn-override-trigger').classList.remove('dropdown-active');
+      }
+    }
+
+    const isOpen = popover.classList.toggle('show');
+    triggerBtn.classList.toggle('dropdown-active', isOpen);
+    openDropdownItemId = isOpen ? item.id : null;
+  });
+
+  popover.querySelectorAll('.override-popover-item').forEach(opt => {
+    opt.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const newTag = opt.dataset.tag;
+      popover.classList.remove('show');
+      triggerBtn.classList.remove('dropdown-active');
+      openDropdownItemId = null;
+
+      chrome.runtime.sendMessage({
+        type: 'ITEM_RETAGGED',
+        payload: { itemId: item.id, newTag }
+      });
+
+      item.assignedTag = newTag;
+      renderAll();
+    });
+  });
 }
 
-// ---------- Rendering: Tag Configurator ----------
+// ---------- Configurator Rendering ----------
 
 function renderTagConfigurator() {
   const tags = state.configuration.trackedTags || [];
@@ -277,26 +856,25 @@ function renderTagConfigurator() {
     row.className = isDynamic ? 'tag-row dynamic' : 'tag-row';
 
     const promoteHtml = isDynamic
-      ? `<button class="btn-promote-tag" data-tag="${escapeHTML(label)}" title="Promote to custom tag">★</button>`
+      ? `<button class="btn-tag-action btn-promote-tag" data-tag="${escapeHTML(label)}" title="Promote to tracking tag">★</button>`
       : '';
 
     const stickyHtml = isDynamic
-      ? `<button class="btn-sticky-tag ${isSticky ? 'sticky' : ''}" data-tag="${escapeHTML(label)}" title="${isSticky ? 'Make tag temporary' : 'Make tag sticky'}">${isSticky ? '📌' : '📍'}</button>`
+      ? `<button class="btn-tag-action btn-sticky-tag ${isSticky ? 'sticky' : ''}" data-tag="${escapeHTML(label)}" title="${isSticky ? 'Make tag temporary' : 'Make tag sticky'}">${isSticky ? '📌' : '📍'}</button>`
       : '';
 
     row.innerHTML = `
       <span class="tag-dot-indicator" style="background: ${color}"></span>
-      <span class="tag-label">${escapeHTML(label)} ${isDynamic ? '<span style="font-size: 9px; opacity: 0.6; font-style: italic;">(dynamic)</span>' : ''}</span>
+      <span class="tag-label">${escapeHTML(label)} ${isDynamic ? '<span style="font-size: 9px; opacity: 0.5; font-style: italic;">(dynamic)</span>' : ''}</span>
       <label class="tag-toggle">
         <input type="checkbox" ${enabled ? 'checked' : ''} data-tag="${escapeHTML(label)}">
         <span class="toggle-track"></span>
       </label>
       ${stickyHtml}
       ${promoteHtml}
-      <button class="btn-delete-tag" data-tag="${escapeHTML(label)}" title="Remove tag">×</button>
+      <button class="btn-tag-action btn-delete-tag" data-tag="${escapeHTML(label)}" title="Remove tag">×</button>
     `;
 
-    // Toggle handler
     const checkbox = row.querySelector('input[type="checkbox"]');
     checkbox.addEventListener('change', () => {
       chrome.runtime.sendMessage({
@@ -305,10 +883,8 @@ function renderTagConfigurator() {
       });
     });
 
-    // Sticky handler
     if (isDynamic) {
-      const stickyBtn = row.querySelector('.btn-sticky-tag');
-      stickyBtn.addEventListener('click', () => {
+      row.querySelector('.btn-sticky-tag').addEventListener('click', () => {
         chrome.runtime.sendMessage({
           type: 'TAG_STICKY_TOGGLED',
           payload: { tag: label, isSticky: !isSticky }
@@ -316,10 +892,8 @@ function renderTagConfigurator() {
       });
     }
 
-    // Promote handler
     if (isDynamic) {
-      const promoteBtn = row.querySelector('.btn-promote-tag');
-      promoteBtn.addEventListener('click', () => {
+      row.querySelector('.btn-promote-tag').addEventListener('click', () => {
         chrome.runtime.sendMessage({
           type: 'TAG_PROMOTED',
           payload: { tag: label }
@@ -327,9 +901,7 @@ function renderTagConfigurator() {
       });
     }
 
-    // Delete handler
-    const deleteBtn = row.querySelector('.btn-delete-tag');
-    deleteBtn.addEventListener('click', () => {
+    row.querySelector('.btn-delete-tag').addEventListener('click', () => {
       chrome.runtime.sendMessage({
         type: 'TAG_REMOVED',
         payload: { tag: label }
@@ -340,223 +912,17 @@ function renderTagConfigurator() {
   });
 }
 
-// ---------- Category View ----------
-
-function showCategoryView(category) {
-  activeCategory = category;
-  dom.mainContent.classList.add('hidden');
-  dom.categoryView.classList.remove('hidden');
-
-  dom.categoryViewTitle.textContent = category;
-  const count = (state.metrics.counts || {})[category] || 0;
-  dom.categoryViewCount.textContent = count + ' items';
-
-  // Filter all items matching this category (optimistic rendering)
-  const items = (state.stack || []).filter(
-    (item) => item.assignedTag === category
-  );
-
-  dom.categoryItems.innerHTML = '';
-  items.forEach((item) => {
-    dom.categoryItems.appendChild(createItemRow(item, true));
-  });
-
-  if (items.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty-state';
-    empty.textContent = 'No items in this category';
-    dom.categoryItems.appendChild(empty);
-  }
-
-  // Fetch full/latest list from background
-  chrome.runtime.sendMessage({
-    type: 'GET_CATEGORY_ITEMS',
-    payload: { category }
-  }, (response) => {
-    if (response && response.items && activeCategory === category) {
-      const dbItems = response.items;
-      dom.categoryItems.innerHTML = '';
-      dom.categoryViewCount.textContent = dbItems.length + ' items';
-      dbItems.forEach((item) => {
-        dom.categoryItems.appendChild(createItemRow(item, true));
-      });
-      if (dbItems.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'empty-state';
-        empty.textContent = 'No items in this category';
-        dom.categoryItems.appendChild(empty);
-      }
-    }
-  });
-}
-
-function hideCategoryView() {
-  activeCategory = null;
-  dom.categoryView.classList.add('hidden');
-  dom.mainContent.classList.remove('hidden');
-}
-
-// ---------- Item Row Factory ----------
-
-function createItemRow(item, showPin = true) {
-  const div = document.createElement('div');
-  div.className = 'item-row';
-
-  const platform = item.sourcePlatform || 'unknown';
-  const time = relativeTime(item.timestamp);
-  const snippet = escapeHTML(truncate(item.textSnippet || '', 140));
-  const tag = item.assignedTag || 'Unclassified';
-  const tagColor = getTagColor(tag);
-  const pinClass = item.isPinned ? 'pinned' : '';
-  const pinIcon = item.isPinned ? '◆' : '◇';
-
-  // Link markup
-  let linkHtml = '';
-  if (item.sourceUrl) {
-    const domain = escapeHTML(extractDomain(item.sourceUrl));
-    linkHtml = `<a href="#" class="item-link" data-url="${escapeHTML(item.sourceUrl)}" title="${escapeHTML(item.sourceUrl)}">${domain} ↗</a>`;
-  }
-
-  // Pin button
-  const pinHtml = showPin
-    ? `<button class="btn-pin ${pinClass}" data-id="${item.id}" title="${item.isPinned ? 'Unpin' : 'Pin'}">${pinIcon}</button>`
-    : '';
-
-  // Ad chip markup
-  const adChipHtml = item.isAd ? `<span class="ad-chip">Ad</span>` : '';
-
-  // Language badge markup
-  const flag = getLanguageSymbol(item.language);
-  const langHtml = item.language && item.language !== 'UN'
-    ? `<span class="lang-badge" title="Language: ${item.language}">${flag} ${escapeHTML(item.language)}</span>`
-    : '';
-
-  // Dropdown options for retagging
-  const tagsList = state.configuration.trackedTags || [];
-  const tagOptions = tagsList
-    .map(t => typeof t === 'string' ? t : t.label)
-    .filter(label => label !== 'Ads') // Don't retag main category to Ads
-    .concat(['Unclassified'])
-    .map(label => `<option value="${escapeHTML(label)}" ${label === tag ? 'selected' : ''}>${escapeHTML(label)}</option>`)
-    .join('');
-
-  const selectHtml = `
-    <div class="retag-container">
-      <select class="select-retag" data-id="${item.id}" title="Reclassify this item">
-        ${tagOptions}
-      </select>
-    </div>
-  `;
-
-  div.innerHTML = `
-    <div class="item-meta">
-      <span class="item-platform">${escapeHTML(platform)}</span>
-      ${adChipHtml}
-      ${langHtml}
-      <span class="meta-sep">·</span>
-      <span class="item-time">${time}</span>
-      ${linkHtml}
-      ${pinHtml}
-    </div>
-    <div class="item-text">${snippet}</div>
-    <div class="item-footer">
-      <span class="item-tag" style="--tag-color: ${tagColor}"><span class="tag-dot"></span>${escapeHTML(tag)}</span>
-      ${selectHtml}
-    </div>
-  `;
-
-  // Link click handler
-  const link = div.querySelector('.item-link');
-  if (link) {
-    link.addEventListener('click', (e) => {
-      e.preventDefault();
-      window.open(link.dataset.url, '_blank');
-    });
-  }
-
-  // Retag selector handler
-  const select = div.querySelector('.select-retag');
-  if (select) {
-    select.addEventListener('change', (e) => {
-      const newTag = e.target.value;
-      chrome.runtime.sendMessage({
-        type: 'ITEM_RETAGGED',
-        payload: { itemId: item.id, newTag }
-      });
-      // Optimistic update
-      item.assignedTag = newTag;
-      renderAll();
-    });
-  }
-
-  // Pin handler
-  if (showPin) {
-    const pinBtn = div.querySelector('.btn-pin');
-    if (pinBtn) {
-      pinBtn.addEventListener('click', () => {
-        chrome.runtime.sendMessage({
-          type: 'PIN_TOGGLED',
-          payload: { itemId: item.id, isPinned: !item.isPinned }
-        });
-        // Optimistic update
-        item.isPinned = !item.isPinned;
-        renderStack();
-        renderPinnedSection();
-      });
-    }
-  }
-
-  return div;
-}
-
-// ---------- Collapsible Sections ----------
-
-function initCollapsibles() {
-  // Pinned section — open by default
-  const pinnedToggle = dom.pinnedToggle;
-  const pinnedContent = dom.pinnedContent;
-  const pinnedChevron = pinnedToggle.querySelector('.chevron');
-  pinnedChevron.classList.add('rotated'); // starts open
-
-  pinnedToggle.addEventListener('click', () => {
-    const isCollapsed = pinnedContent.classList.toggle('collapsed');
-    pinnedChevron.classList.toggle('rotated', !isCollapsed);
-  });
-
-  // Config section — collapsed by default
-  const configToggle = dom.configToggle;
-  const configContent = dom.configContent;
-  const configChevron = configToggle.querySelector('.chevron');
-
-  configToggle.addEventListener('click', () => {
-    const isCollapsed = configContent.classList.toggle('collapsed');
-    configChevron.classList.toggle('rotated', !isCollapsed);
-  });
-
-  // Sites section — collapsed by default
-  const sitesToggle = dom.sitesToggle;
-  const sitesContent = dom.sitesContent;
-  const sitesChevron = sitesToggle.querySelector('.chevron');
-
-  sitesToggle.addEventListener('click', () => {
-    const isCollapsed = sitesContent.classList.toggle('collapsed');
-    sitesChevron.classList.toggle('rotated', !isCollapsed);
-  });
-}
-
-// ---------- Rendering: Sites Configurator ----------
-
 function renderSitesConfigurator() {
   const sites = state.configuration.sites || [];
   const list = dom.sitesList;
   list.innerHTML = '';
 
-  sites.forEach((site) => {
+  sites.forEach(site => {
     const row = document.createElement('div');
     row.className = site.isCustom ? 'tag-row custom-site' : 'tag-row';
-    
+
     const deleteBtnHtml = site.isCustom
-      ? `<button class="btn-delete-tag btn-delete-site" data-id="${site.id}" title="Remove site">×</button>`
+      ? `<button class="btn-tag-action btn-delete-tag btn-delete-site" data-id="${site.id}" title="Remove site">×</button>`
       : '';
 
     row.innerHTML = `
@@ -569,7 +935,6 @@ function renderSitesConfigurator() {
       ${deleteBtnHtml}
     `;
 
-    // Toggle handler
     const checkbox = row.querySelector('input[type="checkbox"]');
     checkbox.addEventListener('change', () => {
       chrome.runtime.sendMessage({
@@ -578,10 +943,8 @@ function renderSitesConfigurator() {
       });
     });
 
-    // Delete handler
     if (site.isCustom) {
-      const deleteBtn = row.querySelector('.btn-delete-site');
-      deleteBtn.addEventListener('click', () => {
+      row.querySelector('.btn-delete-site').addEventListener('click', () => {
         chrome.runtime.sendMessage({
           type: 'SITE_REMOVED',
           payload: { siteId: site.id }
@@ -593,21 +956,497 @@ function renderSitesConfigurator() {
   });
 }
 
-// ---------- Render All ----------
+function renderIgnoredKeywords() {
+  const keywords = state.configuration.ignoredKeywords || [];
+  const list = dom.keywordsList;
+  list.innerHTML = '';
+
+  if (keywords.length === 0) {
+    list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0;">No ignored keywords.</div>`;
+    return;
+  }
+
+  keywords.forEach(kw => {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+    row.innerHTML = `
+      <span class="tag-dot-indicator" style="background: var(--danger); opacity: 0.5;"></span>
+      <span class="tag-label">${escapeHTML(kw)}</span>
+      <button class="btn-tag-action btn-delete-tag btn-delete-kw" data-kw="${escapeHTML(kw)}" title="Remove filter">×</button>
+    `;
+
+    row.querySelector('.btn-delete-kw').addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'KEYWORD_REMOVED',
+        payload: { keyword: kw }
+      });
+    });
+
+    list.appendChild(row);
+  });
+}
 
 function renderAll() {
   renderTelemetry();
   renderEngineStatus();
-  renderCounterGrid();
-  renderStack();
-  renderPinnedSection();
+  renderPauseStatus();
+  renderFilterPills();
+  renderSiteFilterPills();
+  renderFeed();
   renderTagConfigurator();
   renderSitesConfigurator();
+  renderIgnoredKeywords();
+}
 
-  // If category view is active, refresh it
-  if (activeCategory) {
-    showCategoryView(activeCategory);
+// ---------- HTML Feed Diary Export Builder ----------
+
+function triggerHtmlExport() {
+  const stack = state.stack || [];
+  if (stack.length === 0) {
+    alert('No items collected to export. Start scrolling feeds first!');
+    return;
   }
+
+  const itemsHtml = stack.map(item => {
+    const { title, body } = parseCardText(item.textSnippet);
+    const tag = item.assignedTag || 'Unclassified';
+    const tagColor = getTagColor(tag);
+    const platform = item.sourcePlatform || 'unknown';
+    const timestampStr = new Date(item.timestamp).toLocaleString();
+    const linkStr = item.sourceUrl 
+      ? `<a href="${escapeHTML(item.sourceUrl)}" target="_blank" class="card-link">${escapeHTML(extractDomain(item.sourceUrl))} ↗</a>` 
+      : '';
+    const adBadge = item.isAd ? `<span class="ad-badge">Ad</span>` : '';
+    const bodyStr = body ? `<div class="card-body">${escapeHTML(body)}</div>` : '';
+    const favIndicator = item.isFavorite ? '<span class="fav-indicator">❤️ Favorite</span>' : '';
+
+    return `
+      <div class="card" data-category="${escapeHTML(tag)}" data-favorite="${item.isFavorite}" data-ad="${item.isAd}">
+        <div class="card-header">
+          <span class="platform">${escapeHTML(platform)}</span>
+          ${linkStr}
+          <span class="time">${timestampStr}</span>
+          ${adBadge}
+          ${favIndicator}
+        </div>
+        <div class="card-title">${escapeHTML(title)}</div>
+        ${bodyStr}
+        <div class="card-footer">
+          <span class="card-category" style="--tag-color: ${tagColor}">
+            <span class="cat-dot"></span>${escapeHTML(tag)}
+          </span>
+        </div>
+      </div>
+    `;
+  }).join('\n');
+
+  const htmlTemplate = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScrollCollector — Personal Feed Diary</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --bg-elevated: #131316;
+      --bg-hover: #1e1e22;
+      --text-primary: #f4f4f5;
+      --text-secondary: #a1a1aa;
+      --text-muted: #52525b;
+      --border: #202024;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+    }
+
+    body.light-theme {
+      --bg: #fafafa;
+      --bg-elevated: #ffffff;
+      --bg-hover: #f4f4f5;
+      --text-primary: #09090b;
+      --text-secondary: #71717a;
+      --text-muted: #a1a1aa;
+      --border: #e4e4e7;
+      --accent: #4f46e5;
+      --accent-hover: #3730a3;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text-primary);
+      padding: 40px 24px;
+      line-height: 1.5;
+      transition: background 0.3s ease, color 0.3s ease;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .theme-toggle {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .theme-toggle:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .search-input {
+      width: 100%;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-input:focus {
+      border-color: var(--accent);
+    }
+
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .filter-btn {
+      background: var(--bg-elevated);
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .filter-btn.active {
+      background: var(--accent);
+      color: #ffffff;
+      border-color: var(--accent);
+    }
+
+    /* Cards Grid */
+    .cards-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s, border-color 0.2s;
+    }
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: var(--text-muted);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+
+    .platform {
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .card-link {
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .card-link:hover { text-decoration: underline; }
+
+    .time {
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+
+    .fav-indicator {
+      background: rgba(236, 72, 153, 0.12);
+      color: #ec4899;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .ad-badge {
+      background: rgba(239, 68, 68, 0.15);
+      color: #ef4444;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.4;
+      margin-bottom: 8px;
+      word-break: break-all;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+    }
+
+    .card-body {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+    }
+
+    .card-footer {
+      display: flex;
+      align-items: center;
+      border-top: 1px solid var(--border);
+      padding-top: 12px;
+    }
+
+    .card-category {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .cat-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--tag-color, var(--text-muted));
+    }
+
+    .no-results {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+      font-style: italic;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>ScrollCollector Diary</h1>
+      <button class="theme-toggle" id="theme-btn">Light Theme</button>
+    </header>
+
+    <div class="controls">
+      <input type="text" id="search" class="search-input" placeholder="Search insights by keywords, domains, or body text...">
+      <div class="filters" id="filters-container">
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="favorites">❤️ Favorites</button>
+        <button class="filter-btn" data-filter="ads">Ads</button>
+      </div>
+    </div>
+
+    <div class="cards-list" id="cards-wrapper">
+      ${itemsHtml}
+      <div class="no-results" id="no-results-msg">No matching insights found.</div>
+    </div>
+  </div>
+
+  <script>
+    const searchInput = document.getElementById('search');
+    const cards = Array.from(document.querySelectorAll('.card'));
+    const filtersContainer = document.getElementById('filters-container');
+    const noResults = document.getElementById('no-results-msg');
+    
+    // Theme Toggle
+    const themeBtn = document.getElementById('theme-btn');
+    themeBtn.addEventListener('click', () => {
+      const isLight = document.body.classList.toggle('light-theme');
+      themeBtn.textContent = isLight ? 'Dark Theme' : 'Light Theme';
+    });
+
+    // Populate Dynamic Filters
+    const categories = new Set();
+    cards.forEach(card => {
+      const cat = card.dataset.category;
+      if (cat && cat !== 'Ads' && cat !== 'Unclassified') {
+        categories.add(cat);
+      }
+    });
+    
+    categories.forEach(cat => {
+      const btn = document.createElement('button');
+      btn.className = 'filter-btn';
+      btn.dataset.filter = cat.toLowerCase();
+      btn.textContent = cat;
+      filtersContainer.appendChild(btn);
+    });
+
+    const allFilters = Array.from(document.querySelectorAll('.filter-btn'));
+    let activeFilter = 'all';
+
+    allFilters.forEach(btn => {
+      btn.addEventListener('click', () => {
+        allFilters.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeFilter = btn.dataset.filter;
+        filterAndSearch();
+      });
+    });
+
+    searchInput.addEventListener('input', filterAndSearch);
+
+    function filterAndSearch() {
+      const query = searchInput.value.toLowerCase().trim();
+      let matchCount = 0;
+
+      cards.forEach(card => {
+        const text = card.textContent.toLowerCase();
+        const category = card.dataset.category.toLowerCase();
+        const isFavorite = card.dataset.favorite === 'true';
+        const isAd = card.dataset.ad === 'true';
+
+        let matchesFilter = false;
+        if (activeFilter === 'all') {
+          matchesFilter = true;
+        } else if (activeFilter === 'favorites') {
+          matchesFilter = isFavorite;
+        } else if (activeFilter === 'ads') {
+          matchesFilter = isAd;
+        } else {
+          matchesFilter = category === activeFilter;
+        }
+
+        const matchesQuery = !query || text.includes(query);
+
+        if (matchesFilter && matchesQuery) {
+          card.style.display = 'block';
+          matchCount++;
+        } else {
+          card.style.display = 'none';
+        }
+      });
+
+      noResults.style.display = matchCount === 0 ? 'block' : 'none';
+    }
+  </script>
+</body>
+</html>`;
+
+  const blob = new Blob([htmlTemplate], { type: 'text/html;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `scrollcollector_diary_${Date.now()}.html`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------- Standard Data Downloaders ----------
+
+function triggerJsonExport() {
+  const stack = state.stack || [];
+  if (stack.length === 0) {
+    alert('No items collected to export.');
+    return;
+  }
+
+  const jsonString = JSON.stringify(stack, null, 2);
+  const blob = new Blob([jsonString], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `scrollcollector_export_${Date.now()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function triggerCsvExport() {
+  const stack = state.stack || [];
+  if (stack.length === 0) {
+    alert('No items collected to export.');
+    return;
+  }
+
+  const headers = ['ID', 'Timestamp', 'Platform', 'Source URL', 'Category', 'Is Ad', 'Is Favorite', 'Favorited At', 'Text Snippet'];
+  
+  const rows = stack.map(item => [
+    item.id,
+    new Date(item.timestamp).toISOString(),
+    item.sourcePlatform || 'unknown',
+    item.sourceUrl || '',
+    item.assignedTag || 'Unclassified',
+    item.isAd ? 'TRUE' : 'FALSE',
+    item.isFavorite ? 'TRUE' : 'FALSE',
+    item.favoritedAt ? new Date(item.favoritedAt).toISOString() : '',
+    `"${(item.textSnippet || '').replace(/"/g, '""')}"`
+  ]);
+
+  const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `scrollcollector_export_${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ---------- Message Listener ----------
@@ -631,55 +1470,66 @@ function initMessageListener() {
   });
 }
 
-// ---------- Init ----------
+// ---------- DOMContentLoaded Bootstrap ----------
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Cache DOM references
   dom = {
     telTotal: $('#tel-total'),
     telRate: $('#tel-rate'),
     telEngine: $('#tel-engine'),
     engineDot: $('#engine-dot'),
     engineLabel: $('#engine-label'),
-    counterGrid: $('#counter-grid'),
-    stackList: $('#stack-list'),
-    pinnedList: $('#pinned-list'),
-    pinnedEmpty: $('#pinned-empty'),
-    pinnedCount: $('#pinned-count'),
-    pinnedToggle: $('#pinned-toggle'),
-    pinnedContent: $('#pinned-content'),
-    configToggle: $('#config-toggle'),
-    configContent: $('#config-content'),
+    streamList: $('#stream-list'),
+    streamEmpty: $('#stream-empty'),
+    filterPills: $('#filter-pills'),
+    filterSitePills: $('#filter-site-pills'), // Site filter scroller
+    tabCountStream: $('#tab-count-stream'),
+    feedContainer: $('#feed-container'),
+
+    // Pause elements
+    pauseToggle: $('#pause-toggle'),
+    pauseIcon: $('#pause-icon'),
+    playIcon: $('#play-icon'),
+    pauseBanner: $('#pause-banner'),
+    pauseTime: $('#pause-time'),
+
+    // Export Buttons
+    btnExportHtml: $('#btn-export-html'),
+    btnExportJson: $('#btn-export-json'),
+    btnExportCsv: $('#btn-export-csv'),
+
+    // Settings config
     tagList: $('#tag-list'),
-    mainContent: $('#main-content'),
-    categoryView: $('#category-view'),
-    categoryViewTitle: $('#category-view-title'),
-    categoryViewCount: $('#category-view-count'),
-    categoryItems: $('#category-items'),
-    categoryBack: $('#category-back'),
+    sitesList: $('#sites-list'),
+    keywordsList: $('#keywords-list'),
     addTagForm: $('#add-tag-form'),
+    addSiteForm: $('#add-site-form'),
+    addKeywordForm: $('#add-keyword-form'),
     newTagInput: $('#new-tag-input'),
+    newSiteInput: $('#new-site-input'),
+    newKeywordInput: $('#new-keyword-input'),
+
     clearStackBtn: $('#clear-stack-btn'),
     themeToggle: $('#theme-toggle'),
-    // Sites references
-    sitesToggle: $('#sites-toggle'),
-    sitesContent: $('#sites-content'),
-    sitesList: $('#sites-list'),
-    addSiteForm: $('#add-site-form'),
-    newSiteInput: $('#new-site-input'),
   };
 
-  // Theme
+  // Init Theme
   initTheme();
   dom.themeToggle.addEventListener('click', toggleTheme);
 
-  // Collapsibles
-  initCollapsibles();
+  // Init segmented tab panels switching
+  initTabs();
 
-  // Category back button
-  dom.categoryBack.addEventListener('click', hideCategoryView);
+  // Drag to scroll pills
+  initDragToScroll();
 
-  // Add tag form
+  // Initialize virtualization observer
+  initVirtualizer();
+
+  // Keyboard navigation shortcuts
+  initKeyboardNavigation();
+
+  // Add tag form handler
   dom.addTagForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const value = dom.newTagInput.value.trim();
@@ -691,7 +1541,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.newTagInput.value = '';
   });
 
-  // Add site form
+  // Add site form handler
   dom.addSiteForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const value = dom.newSiteInput.value.trim();
@@ -707,15 +1557,60 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.newSiteInput.value = '';
   });
 
-  // Clear stack
-  dom.clearStackBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ type: 'CLEAR_STACK' });
+  // Add keyword form handler
+  dom.addKeywordForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const value = dom.newKeywordInput.value.trim();
+    if (!value) return;
+    chrome.runtime.sendMessage({
+      type: 'KEYWORD_ADDED',
+      payload: { keyword: value }
+    });
+    dom.newKeywordInput.value = '';
   });
 
-  // Message listener
+  // Pause button clicker
+  dom.pauseToggle.addEventListener('click', () => {
+    const nextPausedState = !state.configuration.isTrackingPaused;
+    
+    state.configuration.isTrackingPaused = nextPausedState;
+    state.configuration.trackingPausedAt = nextPausedState ? Date.now() : null;
+    renderPauseStatus();
+
+    chrome.runtime.sendMessage({
+      type: 'IS_TRACKING_PAUSED_TOGGLED',
+      payload: { isPaused: nextPausedState }
+    });
+  });
+
+  // Export action triggers
+  dom.btnExportHtml.addEventListener('click', triggerHtmlExport);
+  dom.btnExportJson.addEventListener('click', triggerJsonExport);
+  dom.btnExportCsv.addEventListener('click', triggerCsvExport);
+
+  // Clear stream
+  dom.clearStackBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to clear your current stream? Favorited items (<3) will be preserved, but un-favorited items will be cleared.')) {
+      chrome.runtime.sendMessage({ type: 'CLEAR_STACK' });
+    }
+  });
+
+  // Global click event to dismiss custom popover overrides dropdown
+  document.addEventListener('click', () => {
+    if (openDropdownItemId) {
+      const activeCard = dom.streamList.querySelector(`.item-row[data-id="${openDropdownItemId}"]`);
+      if (activeCard) {
+        activeCard.querySelector('.override-popover').classList.remove('show');
+        activeCard.querySelector('.btn-override-trigger').classList.remove('dropdown-active');
+      }
+      openDropdownItemId = null;
+    }
+  });
+
+  // Message listeners
   initMessageListener();
 
-  // Request initial state from background
+  // Request initial state payload
   chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
     if (response) {
       state = { ...state, ...response };

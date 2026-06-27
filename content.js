@@ -468,36 +468,69 @@ const observer = new MutationObserver(onMutations);
 // §7  BOOTSTRAP
 // ════════════════════════════════════════════════════════════════════════
 
-function bootstrap() {
-  scanSubtree(document.body);
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+let isObserverActive = false;
+let isSiteEnabled = true;
+
+function startObserver() {
+  if (isObserverActive) return;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      if (isObserverActive) return;
+      scanSubtree(document.body);
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true
+      });
+      isObserverActive = true;
+      console.info('[ScrollCollector] Tracking observer started.');
+    });
+  } else {
+    scanSubtree(document.body);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    isObserverActive = true;
+    console.info('[ScrollCollector] Tracking observer started.');
+  }
+}
+
+function stopObserver() {
+  if (!isObserverActive) return;
+  observer.disconnect();
+  isObserverActive = false;
+  console.info('[ScrollCollector] Tracking observer stopped (paused).');
+}
+
+function handleStateChange(config) {
+  const sites = config ? (config.sites || []) : [];
+  const isPaused = config ? !!config.isTrackingPaused : false;
+  
+  isSiteEnabled = checkIfSiteEnabled(SOURCE_PLATFORM, sites);
+  
+  if (isSiteEnabled && !isPaused) {
+    startObserver();
+  } else {
+    stopObserver();
+  }
 }
 
 // Check configuration to guard domain scanning on start
 if (chrome?.storage?.local) {
   chrome.storage.local.get('configuration', (data) => {
     const config = data ? data.configuration : null;
-    const sites = config ? config.sites : [];
-    
-    if (sites && sites.length > 0) {
-      if (!checkIfSiteEnabled(SOURCE_PLATFORM, sites)) {
-        console.info('[ScrollCollector] Extension is disabled on this site:', SOURCE_PLATFORM);
-        return;
-      }
-    }
-    
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', bootstrap);
-    } else {
-      bootstrap();
+    handleStateChange(config);
+  });
+  
+  // Listen for configuration updates dynamically
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes.configuration) {
+      handleStateChange(changes.configuration.newValue);
     }
   });
 } else {
-  // If storage not loaded, default scan
-  bootstrap();
+  startObserver();
 }
 
 })();

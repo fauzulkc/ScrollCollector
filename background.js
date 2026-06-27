@@ -5,7 +5,7 @@
  *
  * Responsibilities:
  *  1. Side Panel lifecycle management
- *  2. Default state initialization on extension install
+ *  2. Default state initialization on extension install / migration
  *  3. Message routing for classification, config, and UI state
  *  4. Atomic state mutations (read → modify → write)
  *  5. Broadcasting state updates to all extension contexts
@@ -20,7 +20,7 @@ import { classify, checkEngineStatus } from './lib/inference-engine.js';
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
 // ---------------------------------------------------------------------------
-// Default state — seed storage on first install
+// Default state — seed storage on first install / upgrade
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -50,7 +50,9 @@ chrome.runtime.onInstalled.addListener(async () => {
           { id: 's5', domain: 'instagram.com', isEnabled: true, isCustom: false },
           { id: 's6', domain: 'youtube.com', isEnabled: true, isCustom: false },
           { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false }
-        ]
+        ],
+        ignoredKeywords: [],
+        isTrackingPaused: false
       },
       metrics: { counts: {} },
       stack: [],
@@ -61,6 +63,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   } else {
     // Upgrade existing state to include sites & Ads tag if missing
     let updated = false;
+    
     if (!existing.configuration.sites) {
       existing.configuration.sites = [
         { id: 's1', domain: 'facebook.com', isEnabled: true, isCustom: false },
@@ -73,14 +76,44 @@ chrome.runtime.onInstalled.addListener(async () => {
       ];
       updated = true;
     }
+    
     const hasAds = existing.configuration.trackedTags.some(t => t.label === 'Ads');
     if (!hasAds) {
       existing.configuration.trackedTags.push({ id: 't_ads', label: 'Ads', isEnabled: true });
       updated = true;
     }
-    if (updated) {
-      await chrome.storage.local.set({ configuration: existing.configuration });
-      console.info('[background] Upgraded existing configuration.');
+
+    if (!existing.configuration.ignoredKeywords) {
+      existing.configuration.ignoredKeywords = [];
+      updated = true;
+    }
+
+    if (existing.configuration.isTrackingPaused === undefined) {
+      existing.configuration.isTrackingPaused = false;
+      updated = true;
+    }
+
+    // Migrate stack pinned state to favorites state
+    let stackUpdated = false;
+    const upgradedStack = (existing.stack || []).map(item => {
+      let itemChanged = false;
+      if (item.isPinned !== undefined) {
+        item.isFavorite = item.isPinned;
+        item.favoritedAt = item.isPinned ? (item.favoritedAt || item.timestamp) : null;
+        delete item.isPinned;
+        itemChanged = true;
+        stackUpdated = true;
+      }
+      return item;
+    });
+
+    if (updated || stackUpdated) {
+      const payload = {};
+      if (updated) payload.configuration = existing.configuration;
+      if (stackUpdated) payload.stack = upgradedStack;
+      
+      await chrome.storage.local.set(payload);
+      console.info('[background] Upgraded existing configuration and stack.');
     }
   }
 });
@@ -92,8 +125,6 @@ chrome.runtime.onInstalled.addListener(async () => {
 /**
  * Broadcasts a message to every extension context (side panel, popups, etc.).
  * Swallows errors from contexts that have already been destroyed.
- *
- * @param {object} message - The message payload to broadcast.
  */
 async function broadcastStateUpdate() {
   try {
@@ -112,22 +143,10 @@ async function broadcastStateUpdate() {
   }
 }
 
-/**
- * Extracts the labels of enabled custom/default tags.
- *
- * @param {Array<{id: string, label: string, isEnabled: boolean, isDynamic?: boolean}>} trackedTags
- * @returns {string[]}
- */
 function getEnabledCustomLabels(trackedTags) {
   return trackedTags.filter(t => t.isEnabled && !t.isDynamic).map(t => t.label);
 }
 
-/**
- * Extracts the labels of enabled dynamic tags.
- *
- * @param {Array<{id: string, label: string, isEnabled: boolean, isDynamic?: boolean}>} trackedTags
- * @returns {string[]}
- */
 function getEnabledDynamicLabels(trackedTags) {
   return trackedTags.filter(t => t.isEnabled && t.isDynamic).map(t => t.label);
 }
@@ -137,7 +156,6 @@ function getEnabledDynamicLabels(trackedTags) {
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  // Wrap in an async IIFE so we can `await` inside the listener
   (async () => {
     try {
       switch (message.type) {
@@ -150,8 +168,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
           // Read current state atomically
           const state = await chrome.storage.local.get(['configuration', 'metrics', 'stack', 'telemetry']);
-          const trackedTags = state.configuration.trackedTags || [];
-          
+          const config = state.configuration || {};
+
+          // Guard 1: Ignore if tracking is paused
+          if (config.isTrackingPaused) {
+            sendResponse({ success: false, reason: 'paused' });
+            break;
+          }
+
+          // Guard 2: Ignore if contains ignored keywords
+          const ignoredKeywords = config.ignoredKeywords || [];
+          const lowerText = text.toLowerCase();
+          const shouldIgnore = ignoredKeywords.some(kw => lowerText.includes(kw.toLowerCase()));
+          if (shouldIgnore) {
+            sendResponse({ success: false, reason: 'ignored' });
+            break;
+          }
+
+          const trackedTags = config.trackedTags || [];
           const enabledCustom = getEnabledCustomLabels(trackedTags);
           const enabledDynamic = getEnabledDynamicLabels(trackedTags);
 
@@ -193,7 +227,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const counts = { ...state.metrics.counts };
           counts[finalCategory] = (counts[finalCategory] || 0) + 1;
           
-          // Increment Ads counter if this item is flagged as an ad
           if (isAd) {
             counts['Ads'] = (counts['Ads'] || 0) + 1;
           }
@@ -208,33 +241,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           }
           telemetry.lastProcessed = Date.now();
 
-          // Detect language (built-in Chrome Language Detection API)
-          let langCode = 'UN';
-          try {
-            langCode = await new Promise((resolve) => {
-              chrome.i18n.detectLanguage(text, (result) => {
-                if (result && result.languages && result.languages.length > 0) {
-                  resolve(result.languages[0].language.toUpperCase());
-                } else {
-                  resolve('UN');
-                }
-              });
-            });
-          } catch {
-            langCode = 'UN';
-          }
-
           // 3. Prepend new item to the stack
           const newItem = {
             id:             `item_${Date.now()}`,
             timestamp:      Date.now(),
             sourcePlatform,
             sourceUrl:      sourceUrl || '',
-            textSnippet:    text.substring(0, 200),
+            textSnippet:    text, // Store full body so cards can expand properly
             assignedTag:    finalCategory,
-            isPinned:       false,
-            isAd:           !!isAd,
-            language:       langCode
+            isFavorite:     false,
+            favoritedAt:    null,
+            isAd:           !!isAd
           };
 
           const updatedStack = [newItem, ...state.stack];
@@ -247,7 +264,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             telemetry
           });
 
-          // Notify all contexts
           await broadcastStateUpdate();
 
           sendResponse({ success: true, category: finalCategory });
@@ -259,9 +275,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'CONFIG_CHANGED': {
           const { trackedTags } = message.payload;
+          const { configuration } = await chrome.storage.local.get('configuration');
 
           await chrome.storage.local.set({
-            configuration: { trackedTags }
+            configuration: { ...configuration, trackedTags }
           });
 
           await broadcastStateUpdate();
@@ -281,7 +298,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           );
 
           await chrome.storage.local.set({
-            configuration: { trackedTags: updatedTags }
+            configuration: { ...configuration, trackedTags: updatedTags }
           });
 
           await broadcastStateUpdate();
@@ -301,7 +318,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           );
 
           await chrome.storage.local.set({
-            configuration: { trackedTags: filteredTags }
+            configuration: { ...configuration, trackedTags: filteredTags }
           });
 
           await broadcastStateUpdate();
@@ -316,7 +333,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const { tag: newTagLabel } = message.payload;
           const { configuration } = await chrome.storage.local.get('configuration');
 
-          // Duplicate check (case-insensitive)
           const exists = configuration.trackedTags.some(
             t => t.label.toLowerCase() === newTagLabel.toLowerCase()
           );
@@ -488,7 +504,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
 
         // -----------------------------------------------------------------
-        // GET_STATE — return full state snapshot (cold-start for side panel)
+        // GET_STATE — return full state snapshot
         // -----------------------------------------------------------------
         case 'GET_STATE': {
           const state = await chrome.storage.local.get(null);
@@ -497,15 +513,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
 
         // -----------------------------------------------------------------
-        // PIN_TOGGLED — flip the isPinned flag on a stack item
+        // FAVORITE_TOGGLED — flip the isFavorite flag on a stack item
         // -----------------------------------------------------------------
-        case 'PIN_TOGGLED': {
-          const { itemId, isPinned } = message.payload;
-
+        case 'FAVORITE_TOGGLED': {
+          const { itemId, isFavorite } = message.payload;
           const { stack } = await chrome.storage.local.get('stack');
 
           const updatedStack = stack.map(item =>
-            item.id === itemId ? { ...item, isPinned } : item
+            item.id === itemId ? { ...item, isFavorite, favoritedAt: isFavorite ? Date.now() : null } : item
           );
 
           await chrome.storage.local.set({ stack: updatedStack });
@@ -516,20 +531,55 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
 
         // -----------------------------------------------------------------
-        // CLEAR_STACK — remove unpinned items, reset metrics, and clear dynamic tags
+        // ITEM_DELETED — remove a single item from the feed list
+        // -----------------------------------------------------------------
+        case 'ITEM_DELETED': {
+          const { itemId } = message.payload;
+          const state = await chrome.storage.local.get(['metrics', 'stack']);
+          const stack = state.stack || [];
+
+          const itemToDelete = stack.find(i => i.id === itemId);
+          if (!itemToDelete) {
+            sendResponse({ success: false, error: 'Item not found' });
+            break;
+          }
+
+          const updatedStack = stack.filter(i => i.id !== itemId);
+          
+          const counts = { ...state.metrics.counts };
+          const tag = itemToDelete.assignedTag || 'Unclassified';
+          if (counts[tag] > 0) {
+            counts[tag]--;
+          }
+          if (itemToDelete.isAd && counts['Ads'] > 0) {
+            counts['Ads']--;
+          }
+
+          await chrome.storage.local.set({
+            stack: updatedStack,
+            metrics: { counts }
+          });
+
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // CLEAR_STACK — remove un-favorited items, reset metrics
         // -----------------------------------------------------------------
         case 'CLEAR_STACK': {
           const { stack, configuration } = await chrome.storage.local.get(['stack', 'configuration']);
 
-          // Retain only pinned items
-          const pinnedItems = stack.filter(item => item.isPinned);
+          // Retain only favorited items
+          const favoritedItems = stack.filter(item => item.isFavorite);
 
-          // Clear any dynamic tags unless they are sticky
+          // Clear dynamic tags unless sticky
           const preservedTags = (configuration.trackedTags || []).filter(t => !t.isDynamic || t.isSticky);
 
-          // Rebuild counts based on pinned items
+          // Rebuild counts
           const counts = {};
-          pinnedItems.forEach(item => {
+          favoritedItems.forEach(item => {
             counts[item.assignedTag] = (counts[item.assignedTag] || 0) + 1;
             if (item.isAd) {
               counts['Ads'] = (counts['Ads'] || 0) + 1;
@@ -538,13 +588,67 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
           await chrome.storage.local.set({
             configuration: { ...configuration, trackedTags: preservedTags },
-            stack:   pinnedItems,
+            stack:   favoritedItems,
             metrics: { counts },
             telemetry: { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now(), lastProcessed: null }
           });
 
           await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
 
+        // -----------------------------------------------------------------
+        // KEYWORD_ADDED — add an ignored keyword filter
+        // -----------------------------------------------------------------
+        case 'KEYWORD_ADDED': {
+          const { keyword } = message.payload;
+          const { configuration } = await chrome.storage.local.get('configuration');
+          const keywords = configuration.ignoredKeywords || [];
+
+          const exists = keywords.some(k => k.toLowerCase() === keyword.toLowerCase());
+          if (exists) {
+            sendResponse({ success: false, error: 'Keyword already exists' });
+            break;
+          }
+
+          keywords.push(keyword);
+          configuration.ignoredKeywords = keywords;
+
+          await chrome.storage.local.set({ configuration });
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // KEYWORD_REMOVED — remove an ignored keyword filter
+        // -----------------------------------------------------------------
+        case 'KEYWORD_REMOVED': {
+          const { keyword } = message.payload;
+          const { configuration } = await chrome.storage.local.get('configuration');
+          const keywords = configuration.ignoredKeywords || [];
+
+          const filtered = keywords.filter(k => k !== keyword);
+          configuration.ignoredKeywords = filtered;
+
+          await chrome.storage.local.set({ configuration });
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // IS_TRACKING_PAUSED_TOGGLED — pause or resume scanning
+        // -----------------------------------------------------------------
+        case 'IS_TRACKING_PAUSED_TOGGLED': {
+          const { isPaused } = message.payload;
+          const { configuration } = await chrome.storage.local.get('configuration');
+
+          configuration.isTrackingPaused = !!isPaused;
+
+          await chrome.storage.local.set({ configuration });
+          await broadcastStateUpdate();
           sendResponse({ success: true });
           break;
         }
@@ -578,6 +682,5 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     }
   })();
 
-  // Return true to signal that sendResponse will be called asynchronously
   return true;
 });

@@ -6,7 +6,8 @@
   "permissions": [
     "storage",
     "activeTab",
-    "sidePanel"
+    "sidePanel",
+    "favicon"
   ],
   "action": {
     "default_title": "Open Mindstream Panel",
