@@ -14,6 +14,107 @@
 import { classify, checkEngineStatus } from './lib/inference-engine.js';
 
 // ---------------------------------------------------------------------------
+// Companion App Sync & Fallback Storage
+// ---------------------------------------------------------------------------
+const COMPANION_URL = 'http://127.0.0.1:18181';
+let lastCheck = 0;
+let isOnline = false;
+
+async function checkCompanionOnline() {
+  const now = Date.now();
+  if (now - lastCheck < 5000) {
+    return isOnline;
+  }
+  lastCheck = now;
+  try {
+    const res = await fetch(`${COMPANION_URL}/api/status`, { signal: AbortSignal.timeout(150) });
+    isOnline = res.ok;
+  } catch (err) {
+    isOnline = false;
+  }
+  return isOnline;
+}
+
+const storage = {
+  async get(keys) {
+    if (await checkCompanionOnline()) {
+      try {
+        const res = await fetch(`${COMPANION_URL}/api/state`, { signal: AbortSignal.timeout(200) });
+        if (res.ok) {
+          const fullState = await res.json();
+          if (keys === null || keys === undefined) {
+            return fullState;
+          }
+          if (typeof keys === 'string') {
+            return { [keys]: fullState[keys] };
+          }
+          if (Array.isArray(keys)) {
+            const result = {};
+            for (const k of keys) {
+              result[k] = fullState[k];
+            }
+            return result;
+          }
+        }
+      } catch (err) {
+        console.warn("[storage] Fetch from companion failed:", err);
+      }
+    }
+    return await chrome.storage.local.get(keys);
+  },
+
+  async set(items) {
+    // Mirror to local storage first
+    await chrome.storage.local.set(items);
+    
+    if (await checkCompanionOnline()) {
+      try {
+        const res = await fetch(`${COMPANION_URL}/api/state`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(items),
+          signal: AbortSignal.timeout(200)
+        });
+        if (res.ok) {
+          return;
+        }
+      } catch (err) {
+        console.warn("[storage] Post to companion failed:", err);
+      }
+    }
+  }
+};
+
+// Sync loop to fetch updates from companion app
+let lastCompanionUpdate = 0;
+async function syncWithCompanion() {
+  if (await checkCompanionOnline()) {
+    try {
+      const res = await fetch(`${COMPANION_URL}/api/status`, { signal: AbortSignal.timeout(150) });
+      if (res.ok) {
+        const status = await res.json();
+        if (status.lastUpdated > lastCompanionUpdate) {
+          // Fetch full state from companion
+          const stateRes = await fetch(`${COMPANION_URL}/api/state`, { signal: AbortSignal.timeout(200) });
+          if (stateRes.ok) {
+            const remoteState = await stateRes.json();
+            // Mirror to chrome.storage.local
+            await chrome.storage.local.set(remoteState);
+            lastCompanionUpdate = status.lastUpdated;
+            await broadcastStateUpdate();
+          }
+        }
+      }
+    } catch (err) {
+      // Ignore
+    }
+  }
+  setTimeout(syncWithCompanion, 3000);
+}
+// Start sync loop
+syncWithCompanion();
+
+// ---------------------------------------------------------------------------
 // Side Panel — open on toolbar icon click
 // ---------------------------------------------------------------------------
 
@@ -24,10 +125,10 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 // ---------------------------------------------------------------------------
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const existing = await chrome.storage.local.get(null);
+  const existing = await storage.get(null);
 
   if (!existing.configuration) {
-    await chrome.storage.local.set({
+    await storage.set({
       configuration: {
         trackedTags: [
           { id: 't1',  label: 'Tech',                 isEnabled: true },
@@ -63,7 +164,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   } else {
     if (existing.inFlightCount === undefined) {
       existing.inFlightCount = 0;
-      await chrome.storage.local.set({ inFlightCount: 0 });
+      await storage.set({ inFlightCount: 0 });
     }
     // Upgrade existing state to include sites & Ads tag if missing
     let updated = false;
@@ -127,7 +228,7 @@ chrome.runtime.onInstalled.addListener(async () => {
       if (updated) payload.configuration = existing.configuration;
       if (stackUpdated) payload.stack = upgradedStack;
       
-      await chrome.storage.local.set(payload);
+      await storage.set(payload);
       console.info('[background] Upgraded existing configuration and stack.');
     }
   }
@@ -136,7 +237,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   // on installation/update to avoid requiring tab refresh.
   if (chrome.scripting && chrome.tabs) {
     try {
-      const state = await chrome.storage.local.get('configuration');
+      const state = await storage.get('configuration');
       const customSites = state.configuration?.sites?.filter(s => s.isCustom).map(s => s.domain) || [];
       const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
       const uniqueDomains = Array.from(new Set([...defaultSites, ...customSites]));
@@ -201,7 +302,7 @@ async function ensureContentScriptInjected(tabId, url) {
 
   try {
     const hostname = new URL(url).hostname.replace('www.', '').toLowerCase();
-    const state = await chrome.storage.local.get('configuration');
+    const state = await storage.get('configuration');
     const config = state.configuration || {};
     
     const defaultSites = ['facebook.com', 'linkedin.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
@@ -267,7 +368,7 @@ function updateInFlightCount(delta) {
  */
 async function broadcastStateUpdate() {
   try {
-    const fullState = await chrome.storage.local.get(null);
+    const fullState = await storage.get(null);
     await chrome.runtime.sendMessage({
       type: 'STATE_UPDATED',
       payload: {
@@ -315,7 +416,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             }
 
             // Read current state atomically
-            const state = await chrome.storage.local.get(['configuration', 'metrics', 'stack', 'telemetry']);
+            const state = await storage.get(['configuration', 'metrics', 'stack', 'telemetry']);
             const config = state.configuration || {};
 
             // Guard 1: Ignore if tracking is paused
@@ -405,7 +506,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             const updatedStack = [newItem, ...state.stack];
 
             // 4. Persist
-            await chrome.storage.local.set({
+            await storage.set({
               configuration: { ...state.configuration, trackedTags: updatedTags },
               metrics:   { counts },
               stack:     updatedStack,
@@ -429,9 +530,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'CONFIG_CHANGED': {
           const { trackedTags } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, trackedTags }
           });
 
@@ -445,13 +546,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'TAG_TOGGLED': {
           const { tag, enabled } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
 
           const updatedTags = configuration.trackedTags.map(t =>
             t.label === tag ? { ...t, isEnabled: enabled } : t
           );
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, trackedTags: updatedTags }
           });
 
@@ -465,13 +566,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'TAG_REMOVED': {
           const { tag: tagToRemove } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
 
           const filteredTags = configuration.trackedTags.filter(
             t => t.label !== tagToRemove
           );
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, trackedTags: filteredTags }
           });
 
@@ -485,7 +586,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'TAG_ADDED': {
           const { tag: newTagLabel } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
 
           const exists = configuration.trackedTags.some(
             t => t.label.toLowerCase() === newTagLabel.toLowerCase()
@@ -502,7 +603,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             isEnabled: true
           });
 
-          await chrome.storage.local.set({ configuration });
+          await storage.set({ configuration });
 
           await broadcastStateUpdate();
           sendResponse({ success: true });
@@ -514,7 +615,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'TAG_PROMOTED': {
           const { tag: tagLabel } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
 
           let exists = false;
           const updatedTags = configuration.trackedTags.map(t => {
@@ -534,7 +635,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             });
           }
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, trackedTags: updatedTags }
           });
 
@@ -548,13 +649,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'TAG_STICKY_TOGGLED': {
           const { tag: tagLabel, isSticky } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
 
           const updatedTags = configuration.trackedTags.map(t =>
             t.label === tagLabel ? { ...t, isSticky: !!isSticky } : t
           );
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, trackedTags: updatedTags }
           });
 
@@ -568,7 +669,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'ITEM_RETAGGED': {
           const { itemId, newTag } = message.payload;
-          const state = await chrome.storage.local.get(['metrics', 'stack', 'configuration']);
+          const state = await storage.get(['metrics', 'stack', 'configuration']);
           const stack = state.stack || [];
 
           let oldTag = null;
@@ -587,12 +688,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             }
             counts[newTag] = (counts[newTag] || 0) + 1;
 
-            await chrome.storage.local.set({
+            await storage.set({
               stack: updatedStack,
               metrics: { counts }
             });
           } else {
-            await chrome.storage.local.set({
+            await storage.set({
               stack: updatedStack
             });
           }
@@ -607,13 +708,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'SITE_TOGGLED': {
           const { siteId, enabled } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
 
           const updatedSites = (configuration.sites || []).map(s =>
             s.id === siteId ? { ...s, isEnabled: enabled } : s
           );
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, sites: updatedSites }
           });
 
@@ -627,7 +728,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'SITE_ADDED': {
           const { domain } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
           const sites = configuration.sites || [];
 
           const exists = sites.some(s => s.domain.toLowerCase() === domain.toLowerCase());
@@ -643,7 +744,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             isCustom: true
           });
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, sites }
           });
 
@@ -657,12 +758,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'SITE_REMOVED': {
           const { siteId } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
           const sites = configuration.sites || [];
 
           const filteredSites = sites.filter(s => s.id !== siteId);
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, sites: filteredSites }
           });
 
@@ -675,7 +776,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // GET_STATE — return full state snapshot
         // -----------------------------------------------------------------
         case 'GET_STATE': {
-          const state = await chrome.storage.local.get(null);
+          const state = await storage.get(null);
           state.inFlightCount = inFlightCount;
           sendResponse(state);
           break;
@@ -686,13 +787,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'FAVORITE_TOGGLED': {
           const { itemId, isFavorite } = message.payload;
-          const { stack } = await chrome.storage.local.get('stack');
+          const { stack } = await storage.get('stack');
 
           const updatedStack = stack.map(item =>
             item.id === itemId ? { ...item, isFavorite, favoritedAt: isFavorite ? Date.now() : null } : item
           );
 
-          await chrome.storage.local.set({ stack: updatedStack });
+          await storage.set({ stack: updatedStack });
           await broadcastStateUpdate();
 
           sendResponse({ success: true });
@@ -704,7 +805,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'ITEM_DELETED': {
           const { itemId } = message.payload;
-          const state = await chrome.storage.local.get(['metrics', 'stack']);
+          const state = await storage.get(['metrics', 'stack']);
           const stack = state.stack || [];
 
           const itemToDelete = stack.find(i => i.id === itemId);
@@ -724,7 +825,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             counts['Ads']--;
           }
 
-          await chrome.storage.local.set({
+          await storage.set({
             stack: updatedStack,
             metrics: { counts }
           });
@@ -734,32 +835,63 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           break;
         }
 
-        // -----------------------------------------------------------------
-        // CLEAR_STACK — remove un-favorited items, reset metrics
-        // -----------------------------------------------------------------
         case 'CLEAR_STACK': {
-          const { stack, configuration } = await chrome.storage.local.get(['stack', 'configuration']);
+          const { stack, configuration, telemetry } = await storage.get(['stack', 'configuration', 'telemetry']);
+          const targetTag = request.payload && request.payload.tag;
 
-          // Retain only favorited items
-          const favoritedItems = stack.filter(item => item.isFavorite);
+          let updatedStack;
+          let preservedTags = configuration.trackedTags || [];
+          let updatedTelemetry;
 
-          // Clear dynamic tags unless sticky
-          const preservedTags = (configuration.trackedTags || []).filter(t => !t.isDynamic || t.isSticky);
+          if (targetTag && targetTag !== 'All') {
+            // Retain items: keep if not target tag or if favorited
+            if (targetTag === 'Ads') {
+              updatedStack = stack.filter(item => !item.isAd || item.isFavorite);
+            } else {
+              updatedStack = stack.filter(item => item.assignedTag !== targetTag || item.isFavorite);
+            }
+
+            // Remove tag if dynamic, not sticky, and no items left
+            if (targetTag !== 'Favorites' && targetTag !== 'Ads') {
+              const hasItems = updatedStack.some(item => item.assignedTag === targetTag);
+              if (!hasItems) {
+                preservedTags = preservedTags.filter(t => {
+                  const label = typeof t === 'string' ? t : t.label;
+                  if (label === targetTag) {
+                    return !t.isDynamic || t.isSticky;
+                  }
+                  return true;
+                });
+              }
+            }
+
+            // Keep telemetry as is
+            updatedTelemetry = telemetry || { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now(), lastProcessed: null };
+          } else {
+            // Clear all: retain only favorited items
+            updatedStack = stack.filter(item => item.isFavorite);
+
+            // Clear all dynamic tags unless sticky
+            preservedTags = preservedTags.filter(t => !t.isDynamic || t.isSticky);
+
+            // Reset telemetry completely
+            updatedTelemetry = { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now(), lastProcessed: null };
+          }
 
           // Rebuild counts
           const counts = {};
-          favoritedItems.forEach(item => {
+          updatedStack.forEach(item => {
             counts[item.assignedTag] = (counts[item.assignedTag] || 0) + 1;
             if (item.isAd) {
               counts['Ads'] = (counts['Ads'] || 0) + 1;
             }
           });
 
-          await chrome.storage.local.set({
+          await storage.set({
             configuration: { ...configuration, trackedTags: preservedTags },
-            stack:   favoritedItems,
+            stack:   updatedStack,
             metrics: { counts },
-            telemetry: { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now(), lastProcessed: null }
+            telemetry: updatedTelemetry
           });
 
           await broadcastStateUpdate();
@@ -772,7 +904,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'KEYWORD_ADDED': {
           const { keyword } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
           const keywords = configuration.ignoredKeywords || [];
 
           const exists = keywords.some(k => k.toLowerCase() === keyword.toLowerCase());
@@ -784,7 +916,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           keywords.push(keyword);
           configuration.ignoredKeywords = keywords;
 
-          await chrome.storage.local.set({ configuration });
+          await storage.set({ configuration });
           await broadcastStateUpdate();
           sendResponse({ success: true });
           break;
@@ -795,13 +927,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'KEYWORD_REMOVED': {
           const { keyword } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
           const keywords = configuration.ignoredKeywords || [];
 
           const filtered = keywords.filter(k => k !== keyword);
           configuration.ignoredKeywords = filtered;
 
-          await chrome.storage.local.set({ configuration });
+          await storage.set({ configuration });
           await broadcastStateUpdate();
           sendResponse({ success: true });
           break;
@@ -812,11 +944,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'IS_TRACKING_PAUSED_TOGGLED': {
           const { isPaused } = message.payload;
-          const { configuration } = await chrome.storage.local.get('configuration');
+          const { configuration } = await storage.get('configuration');
 
           configuration.isTrackingPaused = !!isPaused;
 
-          await chrome.storage.local.set({ configuration });
+          await storage.set({ configuration });
           await broadcastStateUpdate();
           sendResponse({ success: true });
           break;
@@ -836,7 +968,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'GET_CATEGORY_ITEMS': {
           const { category } = message.payload;
-          const { stack } = await chrome.storage.local.get('stack');
+          const { stack } = await storage.get('stack');
           const items = stack.filter(item => item.assignedTag === category);
           sendResponse({ items });
           break;

@@ -42,13 +42,42 @@ It is designed as a high-performance keyboard-driven curator to capture, filter,
 
 ScrollCollector runs 100% locally. To load it into any Chromium-based browser (Chrome, Edge, Brave, Arc, Opera):
 
+### Standalone Installer (1-Click Setup)
+ScrollCollector features a unified standalone setup installer built in Go.
+1. **Windows:** Double-click `ScrollCollectorInstaller.exe` in the root folder.
+2. **macOS:** Compile and run `ScrollCollectorInstaller` (see building instructions below).
+3. The installer runs a temporary local server and opens your browser to an interactive setup wizard:
+   - It auto-detects browser installations (Chrome, Edge, Brave).
+   - If multiple browsers are found, it presents a checkbox list to choose your targets.
+   - It extracts extension files to `%USERPROFILE%\ScrollCollector` (Windows) or `/Applications/ScrollCollector` (macOS).
+   - It extracts and launches the **ScrollCollector Companion App** in your system tray and copies the installation path to your clipboard.
+4. Follow the interactive guide in your browser to load the unpacked extension.
+
+### Companion Desktop App (System Tray Value-Add)
+The installer deploys a background companion app that sits in your system tray (`ScrollCollector.exe` or `ScrollCollector`):
+*   **System Tray Options (Right-click):**
+    - **Open Dashboard:** Opens a premium full-screen web dashboard in your browser to inspect collected streams, view telemetry analytics, and edit configurations.
+    - **Pause / Resume:** Instantly toggles post collection across all running browsers.
+    - **Export HTML Diary:** Generates a compiled styled HTML feed log and saves it in your Downloads folder.
+    - **Quit:** Closes the sync server.
+*   **Real-time Cross-Browser Sync:** Any items collected in Chrome, Edge, or Brave are immediately synchronized via the companion server and stored in a unified database.
+*   **Graceful Offline Fallback:** If the companion app is closed, the browser extensions automatically detect it and fall back to local browser storage (`chrome.storage.local`). Sync resumes when the companion app is launched.
+
+### Building from Source (Developers)
+Run the compilation script in your shell to build the companion app and standalone installers:
+```bash
+./build-installer.sh
+```
+*Note: macOS systray compilation requires CGO/Xcode clang compiler.*
+
+### Manual Installation (All Platforms)
 1. **Download/Clone the Repository**:
    ```bash
    git clone git@github.com:fauzulkc/ScrollCollector.git
    ```
 
-2. **Load into Chrome**:
-   - Open your browser and navigate to `chrome://extensions/`.
+2. **Load into Browser**:
+   - Open your browser and navigate to `chrome://extensions/` (or `edge://extensions/` / `brave://extensions/`).
    - Enable **Developer Mode** (toggle in the top-right corner).
    - Click the **Load unpacked** button in the top-left.
    - Select the `ScrollCollector` folder containing `manifest.json`.

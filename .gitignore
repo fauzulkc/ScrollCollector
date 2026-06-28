@@ -3,3 +3,8 @@ Thumbs.db
 *.log
 node_modules/
 scratch/
+dist/
+releases/
+ScrollCollector.zip
+*.exe
+*.lnk

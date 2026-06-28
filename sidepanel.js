@@ -115,6 +115,36 @@ function relativeTime(ts) {
   return `${Math.floor(diff / 86400)}d`;
 }
 
+function getDaySeparatorLabel(ts) {
+  if (!ts) return '';
+  const date = new Date(ts);
+  const now = new Date();
+  
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  const targetDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  
+  if (targetDate.getTime() === today.getTime()) {
+    return 'Today';
+  } else if (targetDate.getTime() === yesterday.getTime()) {
+    return 'Yesterday';
+  } else {
+    const options = { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' };
+    return date.toLocaleDateString(undefined, options);
+  }
+}
+
+function resetClearConfirmation() {
+  if (dom.clearConfirmContainer) {
+    dom.clearConfirmContainer.classList.add('hidden');
+  }
+  if (dom.clearStackBtn) {
+    dom.clearStackBtn.classList.remove('hidden');
+  }
+}
+
 function getTagColor(tag) {
   if (tag === 'All') return '#8b5cf6'; // Indigo/Purple
   if (tag === 'Favorites') return '#f43f5e'; // Rose Red
@@ -932,6 +962,8 @@ function renderFeed() {
     virtualizerObserver.disconnect();
   }
 
+  resetClearConfirmation();
+
   const oldFilteredStack = [...filteredStack];
 
   // Filter 1: Tag
@@ -973,6 +1005,27 @@ function renderFeed() {
   dom.streamEmpty.classList.add('hidden');
   list.classList.remove('hidden');
 
+  // Construct renderable items: blending separators and cards
+  const renderableItems = [];
+  let lastDayLabel = '';
+  filteredStack.forEach((item, idx) => {
+    const dayLabel = getDaySeparatorLabel(item.timestamp);
+    if (dayLabel !== lastDayLabel) {
+      renderableItems.push({
+        type: 'separator',
+        id: `day_${dayLabel.replace(/[\s,]+/g, '_')}`,
+        label: dayLabel
+      });
+      lastDayLabel = dayLabel;
+    }
+    renderableItems.push({
+      type: 'item',
+      id: item.id,
+      item: item,
+      index: idx
+    });
+  });
+
   // Perform smart DOM reconciliation to allow slide-down animation for new items
   const currentCards = Array.from(list.children);
   const currentCardMap = new Map();
@@ -982,46 +1035,53 @@ function renderFeed() {
     }
   });
 
-  const newIds = new Set(filteredStack.map(i => i.id));
+  const newIds = new Set(renderableItems.map(i => i.id));
   const oldIds = new Set(oldFilteredStack.map(i => i.id));
 
-  // Remove cards that are no longer present
-  currentCardMap.forEach((card, id) => {
+  // Remove elements that are no longer present
+  currentCardMap.forEach((element, id) => {
     if (!newIds.has(id)) {
-      card.remove();
+      element.remove();
     }
   });
 
-  // Render and position cards
-  filteredStack.forEach((item, index) => {
-    let card = currentCardMap.get(item.id);
-    const isNew = oldIds.size > 0 && !oldIds.has(item.id);
+  // Render and position items/separators
+  renderableItems.forEach((entry, index) => {
+    let element = currentCardMap.get(entry.id);
 
-    if (!card) {
-      card = createItemCardShell(item, index);
-      if (isNew) {
-        card.classList.add('slide-down-new');
-        setTimeout(() => {
-          card.classList.remove('slide-down-new');
-        }, 500);
-      }
-    } else {
-      card.dataset.index = index;
-      if (index === focusedItemIndex) {
-        card.classList.add('keyboard-focused');
+    if (!element) {
+      if (entry.type === 'separator') {
+        element = createDaySeparator(entry.label, entry.id);
       } else {
-        card.classList.remove('keyboard-focused');
+        const isNew = oldIds.size > 0 && !oldIds.has(entry.item.id);
+        element = createItemCardShell(entry.item, entry.index);
+        if (isNew) {
+          element.classList.add('slide-down-new');
+          setTimeout(() => {
+            element.classList.remove('slide-down-new');
+          }, 500);
+        }
+      }
+      currentCardMap.set(entry.id, element);
+    } else {
+      if (entry.type === 'item') {
+        element.dataset.index = entry.index;
+        if (entry.index === focusedItemIndex) {
+          element.classList.add('keyboard-focused');
+        } else {
+          element.classList.remove('keyboard-focused');
+        }
       }
     }
 
-    // Insert card at correct position relative to live children
+    // Insert element at correct position relative to live children
     const expectedNextSibling = list.children[index];
-    if (expectedNextSibling !== card) {
-      list.insertBefore(card, expectedNextSibling || null);
+    if (expectedNextSibling !== element) {
+      list.insertBefore(element, expectedNextSibling || null);
     }
 
-    if (virtualizerObserver) {
-      virtualizerObserver.observe(card);
+    if (entry.type === 'item' && virtualizerObserver) {
+      virtualizerObserver.observe(element);
     }
   });
 }
@@ -1038,6 +1098,14 @@ function createItemCardShell(item, index) {
   }
 
   return card;
+}
+
+function createDaySeparator(label, id) {
+  const div = document.createElement('div');
+  div.className = 'day-separator';
+  div.dataset.id = id;
+  div.textContent = label;
+  return div;
 }
 
 function populateCardInner(card, item) {
@@ -1982,6 +2050,10 @@ document.addEventListener('DOMContentLoaded', () => {
     newKeywordInput: $('#new-keyword-input'),
 
     clearStackBtn: $('#clear-stack-btn'),
+    clearConfirmContainer: $('#clear-confirm-container'),
+    btnConfirmClearTag: $('#btn-confirm-clear-tag'),
+    btnConfirmClearAll: $('#btn-confirm-clear-all'),
+    btnClearCancel: $('#btn-clear-cancel'),
     themeToggle: $('#theme-toggle'),
   };
 
@@ -2062,9 +2134,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Clear stream
   dom.clearStackBtn.addEventListener('click', () => {
-    if (confirm('Are you sure you want to clear your current stream? Favorited items (<3) will be preserved, but un-favorited items will be cleared.')) {
-      chrome.runtime.sendMessage({ type: 'CLEAR_STACK' });
+    dom.clearStackBtn.classList.add('hidden');
+    dom.clearConfirmContainer.classList.remove('hidden');
+
+    if (activeFilterTag && activeFilterTag !== 'All') {
+      dom.btnConfirmClearTag.classList.remove('hidden');
+      dom.btnConfirmClearTag.textContent = `Clear "${activeFilterTag}"`;
+    } else {
+      dom.btnConfirmClearTag.classList.add('hidden');
     }
+  });
+
+  dom.btnClearCancel.addEventListener('click', () => {
+    resetClearConfirmation();
+  });
+
+  dom.btnConfirmClearTag.addEventListener('click', () => {
+    chrome.runtime.sendMessage({
+      type: 'CLEAR_STACK',
+      payload: { tag: activeFilterTag }
+    });
+    resetClearConfirmation();
+  });
+
+  dom.btnConfirmClearAll.addEventListener('click', () => {
+    chrome.runtime.sendMessage({
+      type: 'CLEAR_STACK',
+      payload: { tag: 'All' }
+    });
+    resetClearConfirmation();
   });
 
   // Global click event to dismiss custom popover overrides dropdown

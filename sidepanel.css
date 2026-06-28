@@ -818,6 +818,83 @@ body {
   background: rgba(239, 68, 68, 0.04);
 }
 
+.clear-confirm-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+  animation: fadeIn 0.2s ease;
+}
+
+.confirm-prompt {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.confirm-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-confirm-clear-tag,
+.btn-confirm-clear-all {
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-confirm-clear-tag {
+  background: var(--bg-hover);
+  border-color: var(--border-light);
+  color: var(--text-primary);
+}
+
+.btn-confirm-clear-tag:hover {
+  background: var(--border-light);
+  border-color: var(--text-secondary);
+}
+
+.btn-confirm-clear-all {
+  background: var(--danger);
+  color: #ffffff;
+}
+
+.btn-confirm-clear-all:hover {
+  opacity: 0.9;
+  transform: translateY(-0.5px);
+}
+
+.btn-clear-cancel {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-clear-cancel:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ---------- Export Tab Panel ---------- */
 
 .telemetry-card {
@@ -1176,6 +1253,39 @@ kbd {
   color: var(--text-muted);
   font-size: 11px;
   font-style: italic;
+}
+
+/* Day Separators */
+.day-separator {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  margin: 18px 0 10px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  user-select: none;
+}
+
+.day-separator:first-child {
+  margin-top: 8px;
+}
+
+.day-separator::before,
+.day-separator::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border);
+}
+
+.day-separator::before {
+  margin-right: 12px;
+}
+
+.day-separator::after {
+  margin-left: 12px;
 }
 
 /* ---------- Virtualized List Placeholder ---------- */
