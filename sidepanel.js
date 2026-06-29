@@ -1173,6 +1173,20 @@ function populateCardInner(card, item) {
       </div>
     `).join('');
 
+  let secondaryTagsHtml = '';
+  if (item.tags && item.tags.length > 1) {
+    const secondaryTags = item.tags.slice(1, 3); // Up to 2 secondary tags
+    secondaryTagsHtml = secondaryTags.map(t => {
+      const sTag = t.name;
+      const sTagColor = getTagColor(sTag);
+      return `
+        <span class="card-category-label secondary ${isTagDynamic(sTag) ? 'is-dynamic' : ''}" style="--tag-color: ${sTagColor}" title="Confidence: ${Math.round(t.score * 100)}%">
+          <span>${escapeHTML(sTag)}</span>
+        </span>
+      `;
+    }).join('');
+  }
+
   // Rebuild inside Shell
   card.innerHTML = `
     <div class="card-header">
@@ -1199,10 +1213,13 @@ function populateCardInner(card, item) {
     ${entityChips}
     
     <div class="card-footer">
-      <span class="card-category-label ${isTagDynamic(tag) ? 'is-dynamic' : ''}" style="--tag-color: ${tagColor}">
-        <span class="cat-dot"></span>
-        <span>${escapeHTML(tag)}</span>
-      </span>
+      <div class="tags-container">
+        <span class="card-category-label ${isTagDynamic(tag) ? 'is-dynamic' : ''}" style="--tag-color: ${tagColor}">
+          <span class="cat-dot"></span>
+          <span>${escapeHTML(tag)}</span>
+        </span>
+        ${secondaryTagsHtml}
+      </div>
       <div class="override-trigger-wrapper">
         <button class="btn-override-trigger">
           <span>Override</span>
@@ -1402,9 +1419,15 @@ function renderSitesConfigurator() {
       ? `<button class="btn-tag-action btn-delete-tag btn-delete-site" data-id="${site.id}" title="Remove site">×</button>`
       : '';
 
+    const domainLabel = site.domain === '*' ? 'Any Site (*)' : escapeHTML(site.domain);
+    const cautionWarning = site.domain === '*' ? '<div style="font-size: 9px; color: var(--danger); margin-left: 8px;">(Enable with caution)</div>' : '';
+
     row.innerHTML = `
-      <span class="tag-dot-indicator" style="background: var(--text-muted); opacity: 0.5;"></span>
-      <span class="tag-label" style="font-family: monospace;">${escapeHTML(site.domain)}</span>
+      <div style="display: flex; align-items: center; flex: 1;">
+        <span class="tag-dot-indicator" style="background: var(--text-muted); opacity: 0.5;"></span>
+        <span class="tag-label" style="font-family: monospace;">${domainLabel}</span>
+        ${cautionWarning}
+      </div>
       <label class="tag-toggle">
         <input type="checkbox" ${site.isEnabled ? 'checked' : ''} data-id="${site.id}">
         <span class="toggle-track"></span>
@@ -2187,7 +2210,11 @@ document.addEventListener('DOMContentLoaded', () => {
   chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
     if (response) {
       state = { ...state, ...response };
-      renderAll();
+      try {
+        renderAll();
+      } catch (e) {
+        document.body.innerHTML = `<div style="color:red; padding:20px; font-family: monospace; white-space: pre-wrap;">${e.stack}</div>`;
+      }
     }
   });
 

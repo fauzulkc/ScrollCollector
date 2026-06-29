@@ -85,6 +85,7 @@ const CONTENT_TAGS = new Set([
 const BOUNDARY_SELECTORS = [
   'div.feed-shared-update-v2', 'div.occludable-update', // LinkedIn legacy
   '[data-urn*="urn:li:activity:"]', '[data-urn*="urn:li:share:"]', '[data-urn*="urn:li:ugcPost:"]', // LinkedIn modern
+  '.job-card-container', '.jobs-search-results__list-item', '.job-card-list', // LinkedIn Jobs
   'article[data-testid="tweet"]',                      // Twitter/X
   '[role="article"]', 'div[data-pagelet^="FeedUnit_"]', 'div[data-pagelet^="ReelsConsumerVideoSheet"]', 'div[data-pagelet^="ReelsUnit"]', 'div[data-pagelet^="Reel_"]', '[data-testid="key__feed_story"]', 'div[data-testid="fbfeed_story"]', // Facebook modern & Reels
   'ytd-rich-item-renderer', 'ytd-video-renderer', 'ytd-compact-video-renderer', 'ytd-grid-video-renderer', 'ytd-reel-video-renderer', // YouTube videos
@@ -155,7 +156,13 @@ function checkIfSiteEnabled(hostname, sites) {
   const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
   
   if (sites && sites.length > 0) {
+    const anySite = sites.find(s => s.domain === '*');
+    if (anySite && anySite.isEnabled) {
+      return true;
+    }
+    
     const match = sites.find(s => {
+      if (s.domain === '*') return false;
       const domain = s.domain.toLowerCase();
       return lowerHost === domain || lowerHost.endsWith('.' + domain);
     });

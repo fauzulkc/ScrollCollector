@@ -14,105 +14,18 @@
 import { classify, checkEngineStatus } from './lib/inference-engine.js';
 
 // ---------------------------------------------------------------------------
-// Companion App Sync & Fallback Storage
+// Storage Wrapper
 // ---------------------------------------------------------------------------
-const COMPANION_URL = 'http://127.0.0.1:18181';
-let lastCheck = 0;
-let isOnline = false;
-
-async function checkCompanionOnline() {
-  const now = Date.now();
-  if (now - lastCheck < 5000) {
-    return isOnline;
-  }
-  lastCheck = now;
-  try {
-    const res = await fetch(`${COMPANION_URL}/api/status`, { signal: AbortSignal.timeout(150) });
-    isOnline = res.ok;
-  } catch (err) {
-    isOnline = false;
-  }
-  return isOnline;
-}
 
 const storage = {
   async get(keys) {
-    if (await checkCompanionOnline()) {
-      try {
-        const res = await fetch(`${COMPANION_URL}/api/state`, { signal: AbortSignal.timeout(200) });
-        if (res.ok) {
-          const fullState = await res.json();
-          if (keys === null || keys === undefined) {
-            return fullState;
-          }
-          if (typeof keys === 'string') {
-            return { [keys]: fullState[keys] };
-          }
-          if (Array.isArray(keys)) {
-            const result = {};
-            for (const k of keys) {
-              result[k] = fullState[k];
-            }
-            return result;
-          }
-        }
-      } catch (err) {
-        console.warn("[storage] Fetch from companion failed:", err);
-      }
-    }
     return await chrome.storage.local.get(keys);
   },
 
   async set(items) {
-    // Mirror to local storage first
     await chrome.storage.local.set(items);
-    
-    if (await checkCompanionOnline()) {
-      try {
-        const res = await fetch(`${COMPANION_URL}/api/state`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(items),
-          signal: AbortSignal.timeout(200)
-        });
-        if (res.ok) {
-          return;
-        }
-      } catch (err) {
-        console.warn("[storage] Post to companion failed:", err);
-      }
-    }
   }
 };
-
-// Sync loop to fetch updates from companion app
-let lastCompanionUpdate = 0;
-async function syncWithCompanion() {
-  if (await checkCompanionOnline()) {
-    try {
-      const res = await fetch(`${COMPANION_URL}/api/status`, { signal: AbortSignal.timeout(150) });
-      if (res.ok) {
-        const status = await res.json();
-        if (status.lastUpdated > lastCompanionUpdate) {
-          // Fetch full state from companion
-          const stateRes = await fetch(`${COMPANION_URL}/api/state`, { signal: AbortSignal.timeout(200) });
-          if (stateRes.ok) {
-            const remoteState = await stateRes.json();
-            // Mirror to chrome.storage.local
-            await chrome.storage.local.set(remoteState);
-            lastCompanionUpdate = status.lastUpdated;
-            await broadcastStateUpdate();
-          }
-        }
-      }
-    } catch (err) {
-      // Ignore
-    }
-  }
-  setTimeout(syncWithCompanion, 3000);
-}
-// Start sync loop
-syncWithCompanion();
 
 // ---------------------------------------------------------------------------
 // Side Panel — open on toolbar icon click
@@ -124,26 +37,40 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 // Default state — seed storage on first install / upgrade
 // ---------------------------------------------------------------------------
 
-chrome.runtime.onInstalled.addListener(async () => {
+async function ensureInitialized() {
   const existing = await storage.get(null);
-
-  if (!existing.configuration) {
-    await storage.set({
+  if (!existing.configuration || !existing.configuration.trackedTags || existing.configuration.trackedTags.length === 0) {
+    const defaultState = {
       configuration: {
         trackedTags: [
-          { id: 't1',  label: 'Tech',                 isEnabled: true },
-          { id: 't2',  label: 'Finance',               isEnabled: true },
-          { id: 't3',  label: 'AI & Machine Learning',  isEnabled: true },
-          { id: 't4',  label: 'Health & Wellness',      isEnabled: true },
-          { id: 't5',  label: 'Politics & Society',     isEnabled: true },
-          { id: 't6',  label: 'Entertainment',          isEnabled: true },
-          { id: 't7',  label: 'Sports',                 isEnabled: true },
-          { id: 't8',  label: 'Science',                isEnabled: true },
-          { id: 't9',  label: 'Education',              isEnabled: true },
-          { id: 't10', label: 'Business & Startups',    isEnabled: true },
-          { id: 't_ads', label: 'Ads',                  isEnabled: true }
+          { id: 't1',  label: 'Health',             isEnabled: true },
+          { id: 't2',  label: 'Jobs',               isEnabled: true },
+          { id: 't3',  label: 'Politics',           isEnabled: true },
+          { id: 't4',  label: 'Tech/AI',            isEnabled: true },
+          { id: 't5',  label: 'Weather',            isEnabled: true },
+          { id: 't6',  label: 'Ad',                 isEnabled: true },
+          { id: 't7',  label: 'News',               isEnabled: true },
+          { id: 't8',  label: 'Entertainment',      isEnabled: true },
+          { id: 't9',  label: 'Promotion',          isEnabled: true },
+          { id: 't10', label: 'Personal Opinion',   isEnabled: true },
+          { id: 't11', label: 'Portfolio',          isEnabled: true },
+          { id: 't12', label: 'Product Showcase',   isEnabled: true },
+          { id: 't13', label: 'Immigration',        isEnabled: true },
+          { id: 't14', label: 'Migration',          isEnabled: true },
+          { id: 't15', label: 'Study',              isEnabled: true },
+          { id: 't16', label: 'International News', isEnabled: true },
+          { id: 't17', label: 'Sports',             isEnabled: true },
+          { id: 't18', label: 'Events',             isEnabled: true },
+          { id: 't19', label: 'Blog',               isEnabled: true },
+          { id: 't20', label: 'Vlog',               isEnabled: true },
+          { id: 't21', label: 'Culture',            isEnabled: true },
+          { id: 't22', label: 'NGO',                isEnabled: true },
+          { id: 't23', label: 'Policy',             isEnabled: true },
+          { id: 't24', label: 'Release',            isEnabled: true },
+          { id: 't25', label: 'History',            isEnabled: true }
         ],
         sites: [
+          { id: 's_all', domain: '*', isEnabled: false, isCustom: false },
           { id: 's1', domain: 'facebook.com', isEnabled: true, isCustom: false },
           { id: 's2', domain: 'linkedin.com', isEnabled: true, isCustom: false },
           { id: 's4', domain: 'x.com', isEnabled: true, isCustom: false },
@@ -158,10 +85,18 @@ chrome.runtime.onInstalled.addListener(async () => {
       stack: [],
       telemetry: { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now(), lastProcessed: null },
       inFlightCount: 0
-    });
-
+    };
+    await storage.set(defaultState);
     console.info('[background] Default state initialized.');
-  } else {
+    return defaultState;
+  }
+  return existing;
+}
+
+chrome.runtime.onInstalled.addListener(async () => {
+  const existing = await ensureInitialized();
+  
+  if (existing.configuration) {
     if (existing.inFlightCount === undefined) {
       existing.inFlightCount = 0;
       await storage.set({ inFlightCount: 0 });
@@ -171,6 +106,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     
     if (!existing.configuration.sites) {
       existing.configuration.sites = [
+        { id: 's_all', domain: '*', isEnabled: false, isCustom: false },
         { id: 's1', domain: 'facebook.com', isEnabled: true, isCustom: false },
         { id: 's2', domain: 'linkedin.com', isEnabled: true, isCustom: false },
         { id: 's4', domain: 'x.com', isEnabled: true, isCustom: false },
@@ -180,6 +116,12 @@ chrome.runtime.onInstalled.addListener(async () => {
       ];
       updated = true;
     } else {
+      const hasAnySite = existing.configuration.sites.some(s => s.domain === '*');
+      if (!hasAnySite) {
+        existing.configuration.sites.unshift({ id: 's_all', domain: '*', isEnabled: false, isCustom: false });
+        updated = true;
+      }
+
       const hasTwitter = existing.configuration.sites.some(s => s.domain === 'twitter.com');
       if (hasTwitter) {
         // Remove twitter.com
@@ -283,7 +225,13 @@ function checkIfSiteEnabled(hostname, sites) {
   const defaultSites = ['facebook.com', 'linkedin.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
   
   if (sites && sites.length > 0) {
+    const anySite = sites.find(s => s.domain === '*');
+    if (anySite && anySite.isEnabled) {
+      return true;
+    }
+    
     const match = sites.find(s => {
+      if (s.domain === '*') return false;
       const domain = s.domain.toLowerCase();
       return lowerHost === domain || lowerHost.endsWith('.' + domain);
     });
@@ -415,9 +363,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               normalizedPlatform = 'x.com';
             }
 
-            // Read current state atomically
             const state = await storage.get(['configuration', 'metrics', 'stack', 'telemetry']);
             const config = state.configuration || {};
+            let stack = state.stack || [];
 
             // Guard 1: Ignore if tracking is paused
             if (config.isTrackingPaused) {
@@ -434,19 +382,39 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               break;
             }
 
+            // Deduplication logic: Check if we already have this sourceUrl in the stack
+            let existingItemIndex = -1;
+            let textToClassify = text;
+            
+            if (sourceUrl && sourceUrl.startsWith('http')) {
+              existingItemIndex = stack.findIndex(item => item.sourceUrl === sourceUrl);
+            }
+            
+            if (existingItemIndex !== -1) {
+              const existingItem = stack[existingItemIndex];
+              // Avoid duplicating text if it's already a substring
+              if (!existingItem.textSnippet.includes(text)) {
+                textToClassify = existingItem.textSnippet + '\n\n' + text;
+              } else {
+                // Exactly the same or subset, no need to reclassify or duplicate
+                sendResponse({ success: true, reason: 'duplicate_text' });
+                break;
+              }
+            }
+
             const trackedTags = config.trackedTags || [];
             const enabledCustom = getEnabledCustomLabels(trackedTags);
             const enabledDynamic = getEnabledDynamicLabels(trackedTags);
 
             // Run the inference pipeline (Tier 1 → Tier 2)
-            const { category, dynamicTag } = await classify(text, normalizedPlatform, enabledCustom, enabledDynamic);
+            const { tags: classifiedTags, dynamicTag } = await classify(textToClassify, normalizedPlatform, enabledCustom, enabledDynamic);
 
             // --- Atomic state mutation ---
-            let finalCategory = category;
+            let finalCategory = classifiedTags && classifiedTags.length > 0 ? classifiedTags[0].name : 'Unclassified';
             const updatedTags = [...trackedTags];
 
             // Register new dynamic tag if matched
-            if (category === 'Unclassified' && dynamicTag) {
+            if (finalCategory === 'Unclassified' && dynamicTag) {
               const exists = updatedTags.some(t => t.label.toLowerCase() === dynamicTag.toLowerCase());
               if (!exists) {
                 const dynamicTagsCount = updatedTags.filter(t => t.isDynamic).length;
@@ -471,17 +439,70 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 }
               }
             }
+            
+            // Ensure the dynamic tag is in the tags array if it became the final category
+            let storedTags = classifiedTags || [];
+            if (finalCategory !== 'Unclassified' && storedTags.length === 0) {
+              storedTags = [{ name: finalCategory, score: 1.0 }];
+            }
+
+            let updatedStack = [...stack];
+            const counts = { ...state.metrics.counts };
+            const telemetry = state.telemetry || { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now() };
+
+            if (existingItemIndex !== -1) {
+              const existingItem = updatedStack[existingItemIndex];
+              
+              // Remove old category from counts
+              if (counts[existingItem.assignedTag] > 0) {
+                counts[existingItem.assignedTag]--;
+              }
+              if (existingItem.isAd && counts['Ads'] > 0) {
+                counts['Ads']--;
+              }
+              if (existingItem.assignedTag === 'Unclassified') {
+                telemetry.unclassifiedCount--;
+              } else {
+                telemetry.classifiedCount--;
+              }
+              telemetry.totalProcessed--;
+
+              // Create updated item
+              const updatedItem = {
+                ...existingItem,
+                textSnippet: textToClassify,
+                assignedTag: finalCategory,
+                tags: storedTags,
+                isAd: existingItem.isAd || !!isAd
+              };
+              
+              // Move it to the top
+              updatedStack.splice(existingItemIndex, 1);
+              updatedStack.unshift(updatedItem);
+            } else {
+              // Create new item
+              const newItem = {
+                id:             `item_${Date.now()}`,
+                timestamp:      Date.now(),
+                sourcePlatform: normalizedPlatform,
+                sourceUrl:      sourceUrl || '',
+                textSnippet:    textToClassify, // Store full body so cards can expand properly
+                assignedTag:    finalCategory,
+                tags:           storedTags,
+                isFavorite:     false,
+                favoritedAt:    null,
+                isAd:           !!isAd
+              };
+              updatedStack.unshift(newItem);
+            }
 
             // 1. Increment metrics counter
-            const counts = { ...state.metrics.counts };
             counts[finalCategory] = (counts[finalCategory] || 0) + 1;
-            
-            if (isAd) {
+            if (isAd || (existingItemIndex !== -1 && updatedStack[0].isAd)) {
               counts['Ads'] = (counts['Ads'] || 0) + 1;
             }
 
             // 2. Update telemetry
-            const telemetry = state.telemetry || { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now() };
             telemetry.totalProcessed++;
             if (finalCategory === 'Unclassified') {
               telemetry.unclassifiedCount++;
@@ -489,21 +510,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               telemetry.classifiedCount++;
             }
             telemetry.lastProcessed = Date.now();
-
-            // 3. Prepend new item to the stack
-            const newItem = {
-              id:             `item_${Date.now()}`,
-              timestamp:      Date.now(),
-              sourcePlatform: normalizedPlatform,
-              sourceUrl:      sourceUrl || '',
-              textSnippet:    text, // Store full body so cards can expand properly
-              assignedTag:    finalCategory,
-              isFavorite:     false,
-              favoritedAt:    null,
-              isAd:           !!isAd
-            };
-
-            const updatedStack = [newItem, ...state.stack];
 
             // 4. Persist
             await storage.set({
@@ -776,7 +782,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // GET_STATE — return full state snapshot
         // -----------------------------------------------------------------
         case 'GET_STATE': {
-          const state = await storage.get(null);
+          let state = await storage.get(null);
+          if (!state.configuration || !state.configuration.trackedTags || state.configuration.trackedTags.length === 0) {
+            state = await ensureInitialized();
+          }
           state.inFlightCount = inFlightCount;
           sendResponse(state);
           break;
@@ -837,7 +846,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
         case 'CLEAR_STACK': {
           const { stack, configuration, telemetry } = await storage.get(['stack', 'configuration', 'telemetry']);
-          const targetTag = request.payload && request.payload.tag;
+          const targetTag = message.payload && message.payload.tag;
 
           let updatedStack;
           let preservedTags = configuration.trackedTags || [];
@@ -985,3 +994,114 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   return true;
 });
+
+// ---------------------------------------------------------------------------
+// 2nd Pass Evaluation (Idle Retry)
+// ---------------------------------------------------------------------------
+if (chrome.alarms) {
+  chrome.alarms.create('idleRetry', { periodInMinutes: 1 });
+
+  chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name === 'idleRetry') {
+    // Only proceed if there's no active parsing queue
+    if (inFlightCount > 0) return;
+
+    const state = await storage.get(['configuration', 'metrics', 'stack', 'telemetry']);
+    if (!state.stack || state.stack.length === 0) return;
+
+    // Find Unclassified items
+    const unclassifiedItems = state.stack.filter(item => item.assignedTag === 'Unclassified');
+    if (unclassifiedItems.length === 0) return;
+
+    // Take a small batch to not overwhelm the system
+    const batch = unclassifiedItems.slice(0, 5);
+    
+    if (batch.length > 0) {
+      console.info(`[background] 2nd pass evaluation: processing ${batch.length} items`);
+    }
+
+    const trackedTags = state.configuration?.trackedTags || [];
+    const enabledCustom = getEnabledCustomLabels(trackedTags);
+    const enabledDynamic = getEnabledDynamicLabels(trackedTags);
+
+    let stackChanged = false;
+    let tagsChanged = false;
+    const updatedTags = [...trackedTags];
+    const counts = { ...(state.metrics?.counts || {}) };
+
+    for (const item of batch) {
+      // In flight
+      updateInFlightCount(1);
+      
+      try {
+        const { tags: classifiedTags, dynamicTag } = await classify(
+          item.textSnippet, 
+          item.sourcePlatform, 
+          enabledCustom, 
+          enabledDynamic
+        );
+        
+        let finalCategory = classifiedTags && classifiedTags.length > 0 ? classifiedTags[0].name : 'Unclassified';
+        
+        if (finalCategory === 'Unclassified' && dynamicTag) {
+          const exists = updatedTags.some(t => t.label.toLowerCase() === dynamicTag.toLowerCase());
+          if (!exists) {
+            const dynamicTagsCount = updatedTags.filter(t => t.isDynamic).length;
+            if (dynamicTagsCount < 10) {
+              updatedTags.push({
+                id: 'dt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                label: dynamicTag,
+                isEnabled: true,
+                isDynamic: true,
+                isSticky: false
+              });
+              finalCategory = dynamicTag;
+              tagsChanged = true;
+            } else {
+              finalCategory = 'Unclassified';
+            }
+          } else {
+            const existingTag = updatedTags.find(t => t.label.toLowerCase() === dynamicTag.toLowerCase());
+            if (existingTag && existingTag.isEnabled) {
+              finalCategory = existingTag.label;
+            } else {
+              finalCategory = 'Unclassified';
+            }
+          }
+        }
+
+        if (finalCategory !== 'Unclassified') {
+          // It successfully re-classified!
+          let storedTags = classifiedTags || [];
+          if (storedTags.length === 0) {
+            storedTags = [{ name: finalCategory, score: 1.0 }];
+          }
+          
+          item.assignedTag = finalCategory;
+          item.tags = storedTags;
+          stackChanged = true;
+          
+          counts['Unclassified'] = Math.max(0, (counts['Unclassified'] || 0) - 1);
+          counts[finalCategory] = (counts[finalCategory] || 0) + 1;
+        }
+      } catch (err) {
+        console.warn(`[background] Retry classification failed for item ${item.id}:`, err);
+      } finally {
+        updateInFlightCount(-1);
+      }
+    }
+
+    if (stackChanged || tagsChanged) {
+      const payload = {
+        stack: state.stack,
+        metrics: { counts }
+      };
+      if (tagsChanged) {
+        payload.configuration = { ...state.configuration, trackedTags: updatedTags };
+      }
+      await storage.set(payload);
+      await broadcastStateUpdate();
+    }
+  }
+});
+}

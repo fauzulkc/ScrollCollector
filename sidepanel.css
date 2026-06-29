@@ -1350,6 +1350,24 @@ kbd {
   border-color: var(--text-muted);
 }
 
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.card-category-label.secondary {
+  opacity: 0.7;
+  transform: scale(0.9);
+  transform-origin: left center;
+  border-style: dashed;
+}
+
+.card-category-label.secondary:hover {
+  opacity: 1;
+}
+
 /* Dynamic chips dotted border styling */
 .filter-pill.is-dynamic,
 .card-category-label.is-dynamic {
