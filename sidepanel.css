@@ -1375,6 +1375,36 @@ kbd {
   border-width: 1px !important;
 }
 
+/* Author Pill styling */
+.card-author-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  padding: 2px 8px;
+  border-radius: 12px;
+  user-select: none;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+a.card-author-link {
+  text-decoration: none;
+  cursor: pointer;
+}
+
+a.card-author-link:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+  color: var(--accent);
+}
+
 /* Confirm untracking modal dialog overlay style */
 .confirm-overlay {
   position: fixed;

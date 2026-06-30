@@ -1139,6 +1139,16 @@ function populateCardInner(card, item) {
     linkHtml = `<a href="#" class="card-site-link" data-url="${escapeHTML(item.sourceUrl)}" title="${escapeHTML(item.sourceUrl)}">${domain} ↗</a>`;
   }
 
+  let authorHtml = '';
+  if (item.authorName) {
+    let authorNameSafe = escapeHTML(item.authorName);
+    if (item.authorUrl) {
+      authorHtml = `<a href="#" class="card-author-link card-author-pill" data-url="${escapeHTML(item.authorUrl)}" title="Visit ${authorNameSafe}'s profile">@${authorNameSafe}</a>`;
+    } else {
+      authorHtml = `<span class="card-author-pill">@${authorNameSafe}</span>`;
+    }
+  }
+
   const favClass = item.isFavorite ? 'favorited' : '';
   const favIcon = item.isFavorite
     ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
@@ -1180,7 +1190,7 @@ function populateCardInner(card, item) {
       const sTag = t.name;
       const sTagColor = getTagColor(sTag);
       return `
-        <span class="card-category-label secondary ${isTagDynamic(sTag) ? 'is-dynamic' : ''}" style="--tag-color: ${sTagColor}" title="Confidence: ${Math.round(t.score * 100)}%">
+        <span class="card-category-label secondary ${isTagDynamic(sTag) ? 'is-dynamic' : ''}" style="--tag-color: ${sTagColor}" title="Confidence: ${Math.round(t.score * 100)}%" data-filter-tag="${escapeHTML(sTag)}">
           <span>${escapeHTML(sTag)}</span>
         </span>
       `;
@@ -1214,11 +1224,12 @@ function populateCardInner(card, item) {
     
     <div class="card-footer">
       <div class="tags-container">
-        <span class="card-category-label ${isTagDynamic(tag) ? 'is-dynamic' : ''}" style="--tag-color: ${tagColor}">
+        <span class="card-category-label ${isTagDynamic(tag) ? 'is-dynamic' : ''}" style="--tag-color: ${tagColor}" data-filter-tag="${escapeHTML(tag)}">
           <span class="cat-dot"></span>
           <span>${escapeHTML(tag)}</span>
         </span>
         ${secondaryTagsHtml}
+        ${authorHtml}
       </div>
       <div class="override-trigger-wrapper">
         <button class="btn-override-trigger">
@@ -1234,12 +1245,11 @@ function populateCardInner(card, item) {
     </div>
   `;
 
-  // Bind Event Listeners
-  const catLabel = card.querySelector('.card-category-label');
-  if (catLabel) {
-    catLabel.addEventListener('dblclick', (e) => {
-      e.stopPropagation();
-      handleTagTrackToggle(tag);
+  const authorLink = card.querySelector('.card-author-link');
+  if (authorLink) {
+    authorLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.open(authorLink.dataset.url, '_blank');
     });
   }
 
@@ -1250,6 +1260,29 @@ function populateCardInner(card, item) {
       window.open(link.dataset.url, '_blank');
     });
   }
+
+  const categoryLabels = card.querySelectorAll('.card-category-label');
+  categoryLabels.forEach(label => {
+    label.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const filterTag = label.dataset.filterTag;
+      if (filterTag) {
+        if (activeFilterTag === filterTag) {
+          activeFilterTag = null;
+        } else {
+          activeFilterTag = filterTag;
+        }
+        document.getElementById('panel-stream').scrollTop = 0;
+        renderAll();
+      }
+    });
+    // Preserve existing double-click logic for sticky toggle
+    label.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      const filterTag = label.dataset.filterTag;
+      if (filterTag) handleTagTrackToggle(filterTag);
+    });
+  });
 
   const expandBtn = card.querySelector('.btn-body-expand');
   if (expandBtn) {

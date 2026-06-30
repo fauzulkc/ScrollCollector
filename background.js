@@ -355,7 +355,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case 'TEXT_EXTRACTED': {
           await updateInFlightCount(1);
           try {
-            const { text, sourcePlatform, sourceUrl, isAd } = message.payload;
+            const { text, sourcePlatform, sourceUrl, authorName, authorUrl, isAd } = message.payload;
 
             let normalizedPlatform = sourcePlatform || '';
             const lowerPlatform = normalizedPlatform.toLowerCase();
@@ -473,6 +473,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 textSnippet: textToClassify,
                 assignedTag: finalCategory,
                 tags: storedTags,
+                authorName: authorName || existingItem.authorName || '',
+                authorUrl: authorUrl || existingItem.authorUrl || '',
                 isAd: existingItem.isAd || !!isAd
               };
               
@@ -486,6 +488,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 timestamp:      Date.now(),
                 sourcePlatform: normalizedPlatform,
                 sourceUrl:      sourceUrl || '',
+                authorName:     authorName || '',
+                authorUrl:      authorUrl || '',
                 textSnippet:    textToClassify, // Store full body so cards can expand properly
                 assignedTag:    finalCategory,
                 tags:           storedTags,

@@ -253,14 +253,18 @@ function findNearestLink(element) {
  * @param {Element} element – the source DOM element
  * @param {boolean} isAd – whether this card was flagged as sponsored/promoted
  */
-function dispatch(sanitizedText, element, isAd = false) {
+function dispatch(sanitizedText, element, isAd = false, metadata = {}) {
   try {
+    let finalSourceUrl = metadata.postUrl || findNearestLink(element);
+    
     chrome.runtime.sendMessage({
       type: 'TEXT_EXTRACTED',
       payload: {
         text: sanitizedText,
         sourcePlatform: SOURCE_PLATFORM,
-        sourceUrl: findNearestLink(element),
+        sourceUrl: finalSourceUrl,
+        authorName: metadata.authorName || '',
+        authorUrl: metadata.authorUrl || '',
         timestamp: Date.now(),
         isAd
       }
@@ -734,12 +738,84 @@ function detectAd(container) {
 }
 
 /**
+ * Extracts structured text and metadata (author, post link) from container.
+ */
+function extractContentInfo(container) {
+  const text = extractTextFromContainer(container);
+  
+  let postUrl = '';
+  let authorUrl = '';
+  let authorName = '';
+
+  const hostname = window.location.hostname.toLowerCase();
+  
+  if (hostname.includes('linkedin.com')) {
+    const actorLink = container.querySelector('a.update-components-actor__meta-link, a.app-aware-link[href*="/in/"], a.app-aware-link[href*="/company/"]');
+    if (actorLink) {
+      authorUrl = actorLink.getAttribute('href');
+      authorName = actorLink.innerText.trim().split('\n')[0];
+    }
+    const permalinkLink = container.querySelector('.update-components-actor__container a[href*="/posts/"], a[href*="/activity/"]');
+    if (permalinkLink) postUrl = permalinkLink.getAttribute('href');
+  } else if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
+    const userEl = container.querySelector('[data-testid="User-Name"]');
+    if (userEl) {
+      const authorLinks = Array.from(userEl.querySelectorAll('a[href]'));
+      if (authorLinks.length > 0) {
+        authorUrl = authorLinks[0].getAttribute('href');
+        authorName = userEl.innerText.trim().split('\n')[0];
+      }
+      const postLinks = Array.from(userEl.querySelectorAll('a[href*="/status/"]'));
+      if (postLinks.length > 0) postUrl = postLinks[0].getAttribute('href');
+    }
+    if (!postUrl) {
+      const allLinks = Array.from(container.querySelectorAll('a[href*="/status/"]'));
+      if (allLinks.length > 0) postUrl = allLinks[0].getAttribute('href');
+    }
+  } else if (hostname.includes('youtube.com')) {
+    const channelLinks = Array.from(container.querySelectorAll('a[href*="/@"], a[href*="/user/"], a[href*="/channel/"]'));
+    if (channelLinks.length > 0) {
+      authorUrl = channelLinks[0].getAttribute('href');
+      authorName = channelLinks[0].innerText.trim();
+    }
+    const watchLinks = Array.from(container.querySelectorAll('a[href*="watch?v="]'));
+    const titleLink = watchLinks.find(a => a.innerText.trim().length > 0 && !a.querySelector('img'));
+    if (titleLink) postUrl = titleLink.getAttribute('href');
+    if (!postUrl && watchLinks.length > 0) postUrl = watchLinks[0].getAttribute('href');
+  } else if (hostname.includes('facebook.com')) {
+    const authorEl = container.querySelector('h2 strong, h3 strong, h4 strong, span strong, a strong, h2 a[role="link"], h3 a[role="link"], h4 a[role="link"]');
+    if (authorEl) {
+      authorName = authorEl.innerText.trim();
+      const a = authorEl.closest('a');
+      if (a && a.hasAttribute('href')) authorUrl = a.getAttribute('href');
+    }
+    const postLinks = Array.from(container.querySelectorAll('a[href*="/posts/"], a[href*="/videos/"], a[href*="/reel/"]'));
+    if (postLinks.length > 0) postUrl = postLinks[0].getAttribute('href');
+  }
+
+  function toAbsolute(href) {
+    if (!href || href === '#' || href.startsWith('javascript:')) return '';
+    try {
+      return new URL(href, window.location.href).href;
+    } catch {
+      return href;
+    }
+  }
+
+  postUrl = toAbsolute(postUrl);
+  authorUrl = toAbsolute(authorUrl);
+
+  return { text, metadata: { authorName, authorUrl, postUrl } };
+}
+
+/**
  * Evaluates a boundary container.
  */
 function processBoundaryContainer(el) {
   if (el.hasAttribute(PROCESSED_ATTR)) return;
 
-  const text = extractTextFromContainer(el);
+  const contentInfo = extractContentInfo(el);
+  const text = contentInfo.text;
   const hostname = window.location.hostname.toLowerCase();
   const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com'].some(d => hostname === d || hostname.endsWith('.' + d));
   const minLen = isPredefinedSite ? 20 : MIN_TEXT_LEN;
@@ -754,7 +830,7 @@ function processBoundaryContainer(el) {
 
   const isAd = detectAd(el);
   const clean = sanitize(text);
-  dispatch(clean, el, isAd);
+  dispatch(clean, el, isAd, contentInfo.metadata);
 }
 
 /**
