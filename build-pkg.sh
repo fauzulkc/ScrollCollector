@@ -51,16 +51,8 @@ cat << 'EOF' > "$SCRIPTS_DIR/postinstall"
 console_user=$(stat -f '%Su' /dev/console)
 
 if [ -n "$console_user" ] && [ "$console_user" != "root" ]; then
-    # Copy path to user clipboard
-    sudo -u "$console_user" pbcopy <<< "/Applications/ScrollCollector"
-    
     # Open setup guide
     sudo -u "$console_user" open "/Applications/ScrollCollector/install-guide.html"
-    
-    # Open extension manager in Chrome, Edge, and Brave
-    sudo -u "$console_user" open -a "Google Chrome" "chrome://extensions/" 2>/dev/null
-    sudo -u "$console_user" open -a "Microsoft Edge" "edge://extensions/" 2>/dev/null
-    sudo -u "$console_user" open -a "Brave Browser" "brave://extensions/" 2>/dev/null
 fi
 
 exit 0
