@@ -101,21 +101,40 @@
       </div>
 
       <!-- Horizontal Filter Pills (Tags & Sites & Authors) -->
-      <div class="filter-wrapper">
+      <div class="filter-wrapper" id="wrapper-tags">
         <div id="filter-pills" class="filter-pills">
           <!-- Dynamically populated: e.g. All, Favorites (<3), Tech, Finance... -->
         </div>
+        <div class="filter-dropdown-container">
+          <button class="filter-dropdown-trigger" id="btn-tags-dropdown" title="Show all tags">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="filter-dropdown-menu" id="menu-tags-dropdown"></div>
+        </div>
       </div>
-      <div class="filter-wrapper" style="padding-top: 0; margin-top: -4px;">
+      <div class="filter-wrapper" id="wrapper-sites" style="padding-top: 0; margin-top: -4px;">
         <div id="filter-site-pills" class="filter-pills">
           <!-- Dynamically populated: e.g. All Sites, linkedin.com, youtube.com... -->
         </div>
+        <div class="filter-dropdown-container">
+          <button class="filter-dropdown-trigger" id="btn-sites-dropdown" title="Show all sites">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="filter-dropdown-menu" id="menu-sites-dropdown"></div>
+        </div>
       </div>
-      <div class="filter-wrapper" style="padding-top: 0; margin-top: -4px;">
+      <div class="filter-wrapper" id="wrapper-authors" style="padding-top: 0; margin-top: -4px;">
         <div id="filter-author-pills" class="filter-pills">
           <!-- Dynamically populated: e.g. All Authors, John Doe, Jane Smith... -->
         </div>
+        <div class="filter-dropdown-container">
+          <button class="filter-dropdown-trigger" id="btn-authors-dropdown" title="Show all authors">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="filter-dropdown-menu" id="menu-authors-dropdown"></div>
+        </div>
       </div>
+
 
       
       <!-- Feed Container -->

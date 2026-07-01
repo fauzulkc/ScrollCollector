@@ -541,6 +541,44 @@ function initDragToScroll() {
   });
 }
 
+function initFilterDropdowns() {
+  const dropdownPairs = [
+    { btn: dom.btnTagsDropdown, menu: dom.menuTagsDropdown },
+    { btn: dom.btnSitesDropdown, menu: dom.menuSitesDropdown },
+    { btn: dom.btnAuthorsDropdown, menu: dom.menuAuthorsDropdown }
+  ];
+
+  dropdownPairs.forEach(({ btn, menu }) => {
+    if (!btn || !menu) return;
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const isShown = menu.classList.contains('show');
+
+      // Close all first
+      dropdownPairs.forEach(p => {
+        if (p.menu) p.menu.classList.remove('show');
+        if (p.btn) p.btn.classList.remove('active');
+      });
+
+      if (!isShown) {
+        menu.classList.add('show');
+        btn.classList.add('active');
+      }
+    });
+  });
+
+  // Global click event to close dropdowns when clicking outside
+  document.addEventListener('click', () => {
+    dropdownPairs.forEach(p => {
+      if (p.menu) p.menu.classList.remove('show');
+      if (p.btn) p.btn.classList.remove('active');
+    });
+  });
+}
+
 // ---------- Keyboard Curation HUD Engine ----------
 
 function focusCard(index) {
@@ -909,6 +947,42 @@ function renderFilterPills() {
       }
     }
   });
+
+  // Populate Tags Dropdown
+  if (dom.menuTagsDropdown) {
+    dom.menuTagsDropdown.innerHTML = '';
+    displayCategories.forEach(cat => {
+      const count = counts[cat] || 0;
+      const color = getTagColor(cat);
+
+      const btn = document.createElement('button');
+      btn.className = `filter-dropdown-item ${activeFilterTag === cat ? 'active' : ''}`;
+      btn.style.setProperty('--pill-color', color);
+      btn.style.setProperty('--pill-color-rgb', hexToRgb(color));
+      
+      let labelText = cat;
+      if (cat === 'Favorites') labelText = 'Favorites ❤️';
+      else if (cat === 'All') labelText = 'All Categories';
+
+      btn.innerHTML = `
+        <span>${escapeHTML(labelText)}</span>
+        <span class="filter-dropdown-item-count">${count}</span>
+      `;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        activeFilterTag = cat;
+        activeFilterAuthor = 'All'; // Reset author filter on category change
+        dom.menuTagsDropdown.classList.remove('show');
+        dom.btnTagsDropdown.classList.remove('active');
+        renderFilterPills();
+        renderSiteFilterPills();
+        renderAuthorPills();
+        renderFeed();
+      });
+      dom.menuTagsDropdown.appendChild(btn);
+    });
+  }
 }
 
 // ---------- Rendering: Site Filters ----------
@@ -1113,6 +1187,32 @@ function renderSiteFilterPills() {
       }
     }
   });
+
+  // Populate Sites Dropdown
+  if (dom.menuSitesDropdown) {
+    dom.menuSitesDropdown.innerHTML = '';
+    displaySites.forEach(site => {
+      const count = counts[site] || 0;
+      const btn = document.createElement('button');
+      btn.className = `filter-dropdown-item ${activeFilterSite === site ? 'active' : ''}`;
+      
+      let labelText = site;
+      if (site === 'All') labelText = 'All Sites';
+
+      btn.innerHTML = `
+        <span>${escapeHTML(labelText)}</span>
+        <span class="filter-dropdown-item-count">${count}</span>
+      `;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dom.menuSitesDropdown.classList.remove('show');
+        dom.btnSitesDropdown.classList.remove('active');
+        setFilterSite(site);
+      });
+      dom.menuSitesDropdown.appendChild(btn);
+    });
+  }
 }
 
 // ---------- Rendering: Author Filters ----------
@@ -1231,6 +1331,45 @@ function renderAuthorPills() {
 
     dom.filterAuthorPills.appendChild(pill);
   });
+
+  // Populate Authors Dropdown
+  if (dom.menuAuthorsDropdown) {
+    dom.menuAuthorsDropdown.innerHTML = '';
+    
+    // Hide dropdown trigger if there are no authors or only 'All' with 0 posts
+    if (authors.length <= 1) {
+      dom.btnAuthorsDropdown.parentElement.classList.add('hidden');
+    } else {
+      dom.btnAuthorsDropdown.parentElement.classList.remove('hidden');
+    }
+
+    authors.forEach(auth => {
+      const count = counts[auth] || 0;
+      if (auth !== 'All' && count === 0) return;
+
+      const btn = document.createElement('button');
+      btn.className = `filter-dropdown-item ${activeFilterAuthor === auth ? 'active' : ''}`;
+      
+      let labelText = auth === 'All' ? 'All Authors' : auth;
+
+      btn.innerHTML = `
+        <span>${escapeHTML(labelText)}</span>
+        <span class="filter-dropdown-item-count">${count}</span>
+      `;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        activeFilterAuthor = auth;
+        dom.menuAuthorsDropdown.classList.remove('show');
+        dom.btnAuthorsDropdown.classList.remove('active');
+        renderFilterPills();
+        renderSiteFilterPills();
+        renderAuthorPills();
+        renderFeed();
+      });
+      dom.menuAuthorsDropdown.appendChild(btn);
+    });
+  }
 }
 
 // ---------- Rendering: Feed Cards ----------
@@ -2772,6 +2911,12 @@ document.addEventListener('DOMContentLoaded', () => {
     filterAuthorPills: $('#filter-author-pills'), // Author filter scroller
     globalSearch: $('#global-search'), // Search input element
     searchClearBtn: $('#search-clear-btn'), // Search clear button
+    btnTagsDropdown: $('#btn-tags-dropdown'),
+    menuTagsDropdown: $('#menu-tags-dropdown'),
+    btnSitesDropdown: $('#btn-sites-dropdown'),
+    menuSitesDropdown: $('#menu-sites-dropdown'),
+    btnAuthorsDropdown: $('#btn-authors-dropdown'),
+    menuAuthorsDropdown: $('#menu-authors-dropdown'),
     tabCountStream: $('#tab-count-stream'),
     feedContainer: $('#feed-container'),
 
@@ -2829,6 +2974,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Drag to scroll pills
   initDragToScroll();
+
+  // Initialize filter dropdown menus
+  initFilterDropdowns();
 
   // Initialize virtualization observer
   initVirtualizer();
