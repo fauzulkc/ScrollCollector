@@ -78,17 +78,17 @@ func seedDefaultDatabase() {
 	defaultState := `{
 		"configuration": {
 			"trackedTags": [
-				{"id": "t1",  "label": "Tech",                 "isEnabled": true},
-				{"id": "t2",  "label": "Finance",               "isEnabled": true},
-				{"id": "t3",  "label": "AI & Machine Learning",  "isEnabled": true},
-				{"id": "t4",  "label": "Health & Wellness",      "isEnabled": true},
-				{"id": "t5",  "label": "Politics & Society",     "isEnabled": true},
-				{"id": "t6",  "label": "Entertainment",          "isEnabled": true},
-				{"id": "t7",  "label": "Sports",                 "isEnabled": true},
-				{"id": "t8",  "label": "Science",                "isEnabled": true},
-				{"id": "t9",  "label": "Education",              "isEnabled": true},
-				{"id": "t10", "label": "Business & Startups",    "isEnabled": true},
-				{"id": "t_ads", "label": "Ads",                  "isEnabled": true}
+				{"id": "t1",  "label": "Tech",                 "isEnabled": true, "prompt": "Identify posts related to software, technology, programming, developer tools, hardware, or computing."},
+				{"id": "t2",  "label": "Finance",               "isEnabled": true, "prompt": "Identify posts related to finance, economy, markets, stocks, cryptocurrencies, investing, or banking."},
+				{"id": "t3",  "label": "AI & Machine Learning",  "isEnabled": true, "prompt": "Identify posts related to artificial intelligence, machine learning, LLMs, deep learning, or neural networks."},
+				{"id": "t4",  "label": "Health & Wellness",      "isEnabled": true, "prompt": "Identify posts related to health, fitness, nutrition, medicine, wellness, or healthy living."},
+				{"id": "t5",  "label": "Politics & Society",     "isEnabled": true, "prompt": "Identify posts related to elections, government policy, politics, laws, or societal issues."},
+				{"id": "t6",  "label": "Entertainment",          "isEnabled": true, "prompt": "Identify posts related to movies, television, music, gaming, celebrity culture, or comedy."},
+				{"id": "t7",  "label": "Sports",                 "isEnabled": true, "prompt": "Identify posts related to sports, games, leagues, players, tournaments, or championships."},
+				{"id": "t8",  "label": "Science",                "isEnabled": true, "prompt": "Identify posts related to physics, chemistry, biology, astronomy, research, or scientific discoveries."},
+				{"id": "t9",  "label": "Education",              "isEnabled": true, "prompt": "Identify posts related to universities, schools, courses, study tips, tutorials, or academic learning."},
+				{"id": "t10", "label": "Business & Startups",    "isEnabled": true, "prompt": "Identify posts related to businesses, startup companies, entrepreneurship, VC funding, or marketing."},
+				{"id": "t_ads", "label": "Ads",                  "isEnabled": true, "prompt": "Identify advertising, sponsored posts, product sales, or promotional offers."}
 			],
 			"sites": [
 				{"id": "s1", "domain": "facebook.com", "isEnabled": true, "isCustom": false},

@@ -11,7 +11,7 @@
  *  5. Broadcasting state updates to all extension contexts
  */
 
-import { classify, checkEngineStatus } from './lib/inference-engine.js';
+import { classify, checkEngineStatus, evaluateMatch, evaluateMatchWithReason, extractTagsFromPrompt } from './lib/inference-engine.js';
 
 // ---------------------------------------------------------------------------
 // Storage Wrapper
@@ -39,35 +39,64 @@ chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
 
 async function ensureInitialized() {
   const existing = await storage.get(null);
+
+  const defaultPrompts = {
+    'Health': 'Identify posts related to health, medicine, doctors, hospitals, fitness, wellness, or nutrition.',
+    'Jobs': 'Identify posts related to job postings, career opportunities, hiring, recruitment, resumes, or interviews.',
+    'Politics': 'Identify posts related to government, elections, political parties, public policy, or legislation.',
+    'Tech/AI': 'Identify posts related to software, technology, programming, developer tools, artificial intelligence, or machine learning.',
+    'Weather': 'Identify posts related to weather forecasts, storms, climate, temperatures, sunny, rain, or snow.',
+    'Ad': 'Identify advertisements, sponsored content, products for sale, or promotional codes.',
+    'News': 'Identify breaking news updates, media reports, journalism, headlines, or press coverage.',
+    'Entertainment': 'Identify posts related to movies, television, music, concerts, gaming, or celebrity culture.',
+    'Promotion': 'Identify giveaways, special offers, discounts, brand campaigns, or sales promotions.',
+    'Personal Opinion': 'Identify personal viewpoints, personal updates, opinions, thoughts, or editorial reflections.',
+    'Portfolio': 'Identify project showcases, personal portfolios, designs, case studies, or displays of professional work.',
+    'Product Showcase': 'Identify product launches, demonstrations, features, release highlights, or new tools.',
+    'Immigration': 'Identify posts related to immigration processes, visas, passports, citizenship, or green cards.',
+    'Migration': 'Identify posts related to relocation, moving to another region or country, expats, or emigration.',
+    'Study': 'Identify posts related to academic studies, university, learning resources, college courses, or scholarships.',
+    'International News': 'Identify news about international events, global affairs, foreign relations, or world news.',
+    'Sports': 'Identify posts related to athletic sports, games, leagues, matches, players, championships, or coaches.',
+    'Events': 'Identify posts related to upcoming events, conferences, webinars, meetups, festivals, or workshops.',
+    'Blog': 'Identify references to blog articles, long-form posts, reading materials, or updates for written sites.',
+    'Vlog': 'Identify video logs, YouTube clips, vlog updates, or video content updates.',
+    'Culture': 'Identify posts related to cultural heritage, traditions, societal customs, art, or historical celebrations.',
+    'NGO': 'Identify posts related to non-governmental organizations, charities, volunteering, non-profits, or donations.',
+    'Policy': 'Identify posts related to policy changes, company guidelines, compliance rules, or regulatory frameworks.',
+    'Release': 'Identify software releases, product versions, changelogs, updates, or patch notes.',
+    'History': 'Identify posts related to historical events, ancient civilizations, timelines, archives, or heritage.'
+  };
+
   if (!existing.configuration || !existing.configuration.trackedTags || existing.configuration.trackedTags.length === 0) {
     const defaultState = {
       configuration: {
         trackedTags: [
-          { id: 't1',  label: 'Health',             isEnabled: true },
-          { id: 't2',  label: 'Jobs',               isEnabled: true },
-          { id: 't3',  label: 'Politics',           isEnabled: true },
-          { id: 't4',  label: 'Tech/AI',            isEnabled: true },
-          { id: 't5',  label: 'Weather',            isEnabled: true },
-          { id: 't6',  label: 'Ad',                 isEnabled: true },
-          { id: 't7',  label: 'News',               isEnabled: true },
-          { id: 't8',  label: 'Entertainment',      isEnabled: true },
-          { id: 't9',  label: 'Promotion',          isEnabled: true },
-          { id: 't10', label: 'Personal Opinion',   isEnabled: true },
-          { id: 't11', label: 'Portfolio',          isEnabled: true },
-          { id: 't12', label: 'Product Showcase',   isEnabled: true },
-          { id: 't13', label: 'Immigration',        isEnabled: true },
-          { id: 't14', label: 'Migration',          isEnabled: true },
-          { id: 't15', label: 'Study',              isEnabled: true },
-          { id: 't16', label: 'International News', isEnabled: true },
-          { id: 't17', label: 'Sports',             isEnabled: true },
-          { id: 't18', label: 'Events',             isEnabled: true },
-          { id: 't19', label: 'Blog',               isEnabled: true },
-          { id: 't20', label: 'Vlog',               isEnabled: true },
-          { id: 't21', label: 'Culture',            isEnabled: true },
-          { id: 't22', label: 'NGO',                isEnabled: true },
-          { id: 't23', label: 'Policy',             isEnabled: true },
-          { id: 't24', label: 'Release',            isEnabled: true },
-          { id: 't25', label: 'History',            isEnabled: true }
+          { id: 't1',  label: 'Health',             isEnabled: true, prompt: defaultPrompts['Health'] },
+          { id: 't2',  label: 'Jobs',               isEnabled: true, prompt: defaultPrompts['Jobs'] },
+          { id: 't3',  label: 'Politics',           isEnabled: true, prompt: defaultPrompts['Politics'] },
+          { id: 't4',  label: 'Tech/AI',            isEnabled: true, prompt: defaultPrompts['Tech/AI'] },
+          { id: 't5',  label: 'Weather',            isEnabled: true, prompt: defaultPrompts['Weather'] },
+          { id: 't6',  label: 'Ad',                 isEnabled: true, prompt: defaultPrompts['Ad'] },
+          { id: 't7',  label: 'News',               isEnabled: true, prompt: defaultPrompts['News'] },
+          { id: 't8',  label: 'Entertainment',      isEnabled: true, prompt: defaultPrompts['Entertainment'] },
+          { id: 't9',  label: 'Promotion',          isEnabled: true, prompt: defaultPrompts['Promotion'] },
+          { id: 't10', label: 'Personal Opinion',   isEnabled: true, prompt: defaultPrompts['Personal Opinion'] },
+          { id: 't11', label: 'Portfolio',          isEnabled: true, prompt: defaultPrompts['Portfolio'] },
+          { id: 't12', label: 'Product Showcase',   isEnabled: true, prompt: defaultPrompts['Product Showcase'] },
+          { id: 't13', label: 'Immigration',        isEnabled: true, prompt: defaultPrompts['Immigration'] },
+          { id: 't14', label: 'Migration',          isEnabled: true, prompt: defaultPrompts['Migration'] },
+          { id: 't15', label: 'Study',              isEnabled: true, prompt: defaultPrompts['Study'] },
+          { id: 't16', label: 'International News', isEnabled: true, prompt: defaultPrompts['International News'] },
+          { id: 't17', label: 'Sports',             isEnabled: true, prompt: defaultPrompts['Sports'] },
+          { id: 't18', label: 'Events',             isEnabled: true, prompt: defaultPrompts['Events'] },
+          { id: 't19', label: 'Blog',               isEnabled: true, prompt: defaultPrompts['Blog'] },
+          { id: 't20', label: 'Vlog',               isEnabled: true, prompt: defaultPrompts['Vlog'] },
+          { id: 't21', label: 'Culture',            isEnabled: true, prompt: defaultPrompts['Culture'] },
+          { id: 't22', label: 'NGO',                isEnabled: true, prompt: defaultPrompts['NGO'] },
+          { id: 't23', label: 'Policy',             isEnabled: true, prompt: defaultPrompts['Policy'] },
+          { id: 't24', label: 'Release',            isEnabled: true, prompt: defaultPrompts['Release'] },
+          { id: 't25', label: 'History',            isEnabled: true, prompt: defaultPrompts['History'] }
         ],
         sites: [
           { id: 's_all', domain: '*', isEnabled: false, isCustom: false },
@@ -79,7 +108,9 @@ async function ensureInitialized() {
           { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false }
         ],
         ignoredKeywords: [],
-        isTrackingPaused: false
+        isTrackingPaused: false,
+        matchPrompt: '',
+        isMatchPromptEnabled: false
       },
       metrics: { counts: {} },
       stack: [],
@@ -90,6 +121,22 @@ async function ensureInitialized() {
     console.info('[background] Default state initialized.');
     return defaultState;
   }
+
+  // Migration: ensure all existing tags have a prompt property
+  let mutated = false;
+  if (existing.configuration && existing.configuration.trackedTags) {
+    for (const tag of existing.configuration.trackedTags) {
+      if (tag.prompt === undefined || tag.prompt === null) {
+        tag.prompt = defaultPrompts[tag.label] || `Identify posts related to ${tag.label}.`;
+        mutated = true;
+      }
+    }
+  }
+  if (mutated) {
+    await storage.set(existing);
+    console.info('[background] Migration: Populated missing prompts for trackedTags.');
+  }
+
   return existing;
 }
 
@@ -148,6 +195,13 @@ chrome.runtime.onInstalled.addListener(async () => {
 
     if (existing.configuration.isTrackingPaused === undefined) {
       existing.configuration.isTrackingPaused = false;
+      updated = true;
+    }
+
+    if (existing.configuration.isMatchPromptEnabled === undefined) {
+      existing.configuration.isMatchPromptEnabled = false;
+      existing.configuration.matchPrompt = '';
+      existing.configuration.matchPromptTags = [];
       updated = true;
     }
 
@@ -332,12 +386,115 @@ async function broadcastStateUpdate() {
   }
 }
 
-function getEnabledCustomLabels(trackedTags) {
-  return trackedTags.filter(t => t.isEnabled && !t.isDynamic).map(t => t.label);
+function getEnabledCustomTags(trackedTags) {
+  return trackedTags.filter(t => t.isEnabled && !t.isDynamic).map(t => ({ label: t.label, prompt: t.prompt }));
 }
 
 function getEnabledDynamicLabels(trackedTags) {
   return trackedTags.filter(t => t.isEnabled && t.isDynamic).map(t => t.label);
+}
+
+async function refreshStackInference() {
+  console.info('[background] Refreshing stack inference after prompt change...');
+  const state = await storage.get(null);
+  const config = state.configuration;
+  const stack = state.stack || [];
+  const trackedTags = config.trackedTags || [];
+  
+  const enabledCustom = getEnabledCustomTags(trackedTags);
+  const enabledDynamic = getEnabledDynamicLabels(trackedTags);
+  
+  const newStack = [];
+  const counts = {};
+  let classifiedCount = 0;
+  let unclassifiedCount = 0;
+
+  for (const item of stack) {
+    let matchInfo = {
+      engine: 'Rule-based Classifier',
+      globalMatchedPhrases: [],
+      globalMatchedKeywords: []
+    };
+
+    if (config.isMatchPromptEnabled && config.matchPrompt && config.matchPrompt.trim().length > 0) {
+      const evalResult = await evaluateMatchWithReason(item.textSnippet, item.sourcePlatform, config.matchPrompt);
+      if (!evalResult.doesMatch) {
+        // Drop items that don't match the new global eval prompt
+        continue;
+      }
+      matchInfo.globalMatchPrompt = config.matchPrompt;
+      matchInfo.globalMatchedPhrases = evalResult.matchedPhrases || [];
+      matchInfo.globalMatchedKeywords = evalResult.matchedKeywords || [];
+      matchInfo.globalEngine = evalResult.engine || 'Rule-based Classifier';
+    }
+
+    let finalCategory = item.assignedTag;
+    let storedTags = item.tags || [];
+    
+    if (item.matchInfo?.manual) {
+      // Keep manual override
+      matchInfo = item.matchInfo;
+    } else {
+      const classifyResult = await classify(item.textSnippet, item.sourcePlatform, enabledCustom, enabledDynamic);
+      storedTags = classifyResult.tags || [];
+      finalCategory = storedTags.length > 0 ? storedTags[0].name : 'Unclassified';
+      
+      matchInfo.engine = classifyResult.engine || 'Rule-based Classifier';
+      const primaryTagMatch = storedTags.length > 0 ? storedTags[0] : null;
+      if (primaryTagMatch && primaryTagMatch.hitKeywords) {
+        matchInfo.matchedKeywords = primaryTagMatch.hitKeywords;
+      }
+    }
+
+    const updatedItem = {
+      ...item,
+      assignedTag: finalCategory,
+      tags: storedTags,
+      matchInfo: matchInfo
+    };
+    newStack.push(updatedItem);
+
+    // Update counts
+    counts[finalCategory] = (counts[finalCategory] || 0) + 1;
+    if (updatedItem.isAd) {
+      counts['Ads'] = (counts['Ads'] || 0) + 1;
+    }
+    if (finalCategory === 'Unclassified') {
+      unclassifiedCount++;
+    } else {
+      classifiedCount++;
+    }
+  }
+
+  // Update state
+  const updatedTelemetry = {
+    ...state.telemetry,
+    totalProcessed: newStack.length,
+    classifiedCount,
+    unclassifiedCount,
+    lastProcessed: Date.now()
+  };
+
+  await storage.set({
+    stack: newStack,
+    metrics: { counts },
+    telemetry: updatedTelemetry
+  });
+
+  await broadcastStateUpdate();
+  console.info(`[background] Refresh complete. Updated stack size: ${newStack.length}`);
+}
+
+let refreshDebounceTimeout = null;
+function triggerRefreshStackInference() {
+  if (refreshDebounceTimeout) {
+    clearTimeout(refreshDebounceTimeout);
+  }
+  refreshDebounceTimeout = setTimeout(() => {
+    refreshStackInference().catch(err => {
+      console.error('[background] Error refreshing stack inference:', err);
+    });
+  }, 1000); // 1s debounce
 }
 
 // ---------------------------------------------------------------------------
@@ -403,11 +560,38 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             }
 
             const trackedTags = config.trackedTags || [];
-            const enabledCustom = getEnabledCustomLabels(trackedTags);
+            const enabledCustom = getEnabledCustomTags(trackedTags);
             const enabledDynamic = getEnabledDynamicLabels(trackedTags);
 
+            let matchInfo = {
+              engine: 'Rule-based Classifier',
+              globalMatchedPhrases: [],
+              globalMatchedKeywords: []
+            };
+
+            // If Match Prompt mode is enabled, evaluate it first
+            if (config.isMatchPromptEnabled && config.matchPrompt && config.matchPrompt.trim().length > 0) {
+              const evalResult = await evaluateMatchWithReason(textToClassify, normalizedPlatform, config.matchPrompt);
+              if (!evalResult.doesMatch) {
+                // Drop the item silently
+                sendResponse({ success: false, reason: 'eval_match_failed' });
+                break;
+              }
+              matchInfo.globalMatchPrompt = config.matchPrompt;
+              matchInfo.globalMatchedPhrases = evalResult.matchedPhrases || [];
+              matchInfo.globalMatchedKeywords = evalResult.matchedKeywords || [];
+              matchInfo.globalEngine = evalResult.engine || 'Rule-based Classifier';
+            }
+
             // Run the inference pipeline (Tier 1 → Tier 2)
-            const { tags: classifiedTags, dynamicTag } = await classify(textToClassify, normalizedPlatform, enabledCustom, enabledDynamic);
+            const classifyResult = await classify(textToClassify, normalizedPlatform, enabledCustom, enabledDynamic);
+            const { tags: classifiedTags, dynamicTag } = classifyResult;
+
+            matchInfo.engine = classifyResult.engine || 'Rule-based Classifier';
+            const primaryTagMatch = classifiedTags && classifiedTags.length > 0 ? classifiedTags[0] : null;
+            if (primaryTagMatch && primaryTagMatch.hitKeywords) {
+              matchInfo.matchedKeywords = primaryTagMatch.hitKeywords;
+            }
 
             // --- Atomic state mutation ---
             let finalCategory = classifiedTags && classifiedTags.length > 0 ? classifiedTags[0].name : 'Unclassified';
@@ -475,7 +659,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 tags: storedTags,
                 authorName: authorName || existingItem.authorName || '',
                 authorUrl: authorUrl || existingItem.authorUrl || '',
-                isAd: existingItem.isAd || !!isAd
+                isAd: existingItem.isAd || !!isAd,
+                matchInfo
               };
               
               // Move it to the top
@@ -495,7 +680,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 tags:           storedTags,
                 isFavorite:     false,
                 favoritedAt:    null,
-                isAd:           !!isAd
+                isAd:           !!isAd,
+                matchInfo
               };
               updatedStack.unshift(newItem);
             }
@@ -557,7 +743,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case 'TAG_TOGGLED': {
           const { tag, enabled } = message.payload;
           const { configuration } = await storage.get('configuration');
-
+          
           const updatedTags = configuration.trackedTags.map(t =>
             t.label === tag ? { ...t, isEnabled: enabled } : t
           );
@@ -569,6 +755,58 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           await broadcastStateUpdate();
           sendResponse({ success: true });
           break;
+        }
+
+        // -----------------------------------------------------------------
+        // TOGGLE_MATCH_PROMPT — enable/disable the eval match prompt feature
+        // -----------------------------------------------------------------
+        case 'TOGGLE_MATCH_PROMPT': {
+          const { isEnabled } = message.payload;
+          const { configuration } = await storage.get('configuration');
+          
+          await storage.set({
+            configuration: { ...configuration, isMatchPromptEnabled: isEnabled }
+          });
+
+          await broadcastStateUpdate();
+          triggerRefreshStackInference();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // UPDATE_MATCH_PROMPT — save the text for the eval match prompt
+        // -----------------------------------------------------------------
+        case 'UPDATE_MATCH_PROMPT': {
+          const { prompt } = message.payload;
+          const { configuration } = await storage.get('configuration');
+
+          await storage.set({
+            configuration: { ...configuration, matchPrompt: prompt }
+          });
+
+          await broadcastStateUpdate();
+          triggerRefreshStackInference();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // GENERATE_PROMPT_TAGS — generate AI tags for the prompt
+        // -----------------------------------------------------------------
+        case 'GENERATE_PROMPT_TAGS': {
+          const { prompt } = message.payload;
+          extractTagsFromPrompt(prompt).then(async tags => {
+            const { configuration } = await storage.get('configuration');
+            configuration.matchPromptTags = tags;
+            await storage.set({ configuration });
+            await broadcastStateUpdate();
+            sendResponse({ success: true, tags });
+          }).catch(err => {
+            console.error('Error in GENERATE_PROMPT_TAGS', err);
+            sendResponse({ success: false, tags: [] });
+          });
+          return true; // Keep channel open for async response
         }
 
         // -----------------------------------------------------------------
@@ -595,7 +833,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // TAG_ADDED — add a new custom tag
         // -----------------------------------------------------------------
         case 'TAG_ADDED': {
-          const { tag: newTagLabel } = message.payload;
+          const { tag: newTagLabel, prompt: newTagPrompt } = message.payload;
           const { configuration } = await storage.get('configuration');
 
           const exists = configuration.trackedTags.some(
@@ -610,14 +848,58 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           configuration.trackedTags.push({
             id: 't' + Date.now(),
             label: newTagLabel,
+            prompt: newTagPrompt || `Find posts related to ${newTagLabel}.`,
             isEnabled: true
           });
 
           await storage.set({ configuration });
 
           await broadcastStateUpdate();
+          triggerRefreshStackInference();
           sendResponse({ success: true });
           break;
+        }
+
+        // -----------------------------------------------------------------
+        // TAG_PROMPT_UPDATED — update the eval prompt for an existing tag
+        // -----------------------------------------------------------------
+        case 'TAG_PROMPT_UPDATED': {
+          const { tag: tagLabel, prompt: tagPrompt } = message.payload;
+          const { configuration } = await storage.get('configuration');
+
+          const updatedTags = configuration.trackedTags.map(t => {
+            if (t.label.toLowerCase() === tagLabel.toLowerCase()) {
+              return { ...t, prompt: tagPrompt };
+            }
+            return t;
+          });
+
+          await storage.set({
+            configuration: { ...configuration, trackedTags: updatedTags }
+          });
+
+          await broadcastStateUpdate();
+          triggerRefreshStackInference();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // GENERATE_TAG_EVAL_PROMPT — magic wand for a single tag
+        // -----------------------------------------------------------------
+        case 'GENERATE_TAG_EVAL_PROMPT': {
+          const { tag: tagName, currentPrompt } = message.payload;
+          // We will implement `autoSuggestTagPrompt` in inference-engine.js and call it here.
+          // Need to dynamically import or just assume it is exported
+          import('./lib/inference-engine.js').then(({ autoSuggestTagPrompt }) => {
+            return autoSuggestTagPrompt(tagName, currentPrompt);
+          }).then(suggestedPrompt => {
+            sendResponse({ success: true, prompt: suggestedPrompt });
+          }).catch(err => {
+            console.error('Error generating tag eval prompt:', err);
+            sendResponse({ success: false, error: err.message });
+          });
+          return true; // async
         }
 
         // -----------------------------------------------------------------
@@ -686,7 +968,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           const updatedStack = stack.map(item => {
             if (item.id === itemId) {
               oldTag = item.assignedTag;
-              return { ...item, assignedTag: newTag };
+              return { 
+                ...item, 
+                assignedTag: newTag,
+                matchInfo: {
+                  engine: 'Manual Override',
+                  manual: true
+                }
+              };
             }
             return item;
           });
@@ -1025,7 +1314,7 @@ if (chrome.alarms) {
     }
 
     const trackedTags = state.configuration?.trackedTags || [];
-    const enabledCustom = getEnabledCustomLabels(trackedTags);
+    const enabledCustom = getEnabledCustomTags(trackedTags);
     const enabledDynamic = getEnabledDynamicLabels(trackedTags);
 
     let stackChanged = false;

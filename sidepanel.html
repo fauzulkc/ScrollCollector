@@ -181,13 +181,35 @@
 
     <!-- Tab 3: Settings Panel -->
     <section id="panel-settings" class="tab-panel">
+      <!-- Eval Match Prompt Configurator -->
+      <div class="settings-section">
+        <div class="settings-title" style="display: flex; justify-content: space-between; align-items: center;">
+          <span>Eval Match Mode</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="match-prompt-toggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
+          If enabled, only posts matching this prompt will be collected.
+        </p>
+        <textarea id="match-prompt-input" class="match-prompt-textarea" placeholder="e.g. Find posts about AI tools that help with coding..." rows="3"></textarea>
+        <div id="match-prompt-tags-container" style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;"></div>
+      </div>
+
       <!-- Tag Configurator -->
       <div class="settings-section">
         <div class="settings-title">Tracked Categories</div>
         <div id="tag-list" class="settings-list"></div>
-        <form id="add-tag-form" class="add-row">
-          <input type="text" id="new-tag-input" placeholder="Add custom tag…" maxlength="32" autocomplete="off">
-          <button type="submit" class="btn-add-action">+</button>
+        <form id="add-tag-form" class="add-row" style="flex-direction: column; align-items: stretch; gap: 8px;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="new-tag-input" placeholder="Add custom tag…" maxlength="32" autocomplete="off" style="flex: 1;">
+            <button type="submit" class="btn-add-action">+</button>
+          </div>
+          <div id="new-tag-prompt-container" style="display: none; position: relative;">
+            <textarea id="new-tag-prompt-input" class="match-prompt-textarea" placeholder="Auto-generating prompt..." rows="2"></textarea>
+            <button type="button" class="btn-wand" id="new-tag-wand-btn" title="Regenerate prompt with AI">✨</button>
+          </div>
         </form>
       </div>
 

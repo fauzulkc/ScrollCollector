@@ -1197,6 +1197,47 @@ function populateCardInner(card, item) {
     }).join('');
   }
 
+  let infoTooltipHtml = '';
+  if (item.matchInfo) {
+    const mi = item.matchInfo;
+    let tooltipText = '';
+    
+    if (mi.manual) {
+      tooltipText = 'Manually overridden/classified by user.';
+    } else {
+      const parts = [];
+      parts.push(`Classified using: ${mi.engine || 'Rule-based Classifier'}`);
+      
+      if (mi.globalMatchPrompt) {
+        parts.push(`Global Eval Match: "${mi.globalMatchPrompt}"`);
+        if (mi.globalMatchedPhrases && mi.globalMatchedPhrases.length > 0) {
+          parts.push(`Global matched phrase(s): ${mi.globalMatchedPhrases.map(p => `'${p}'`).join(', ')}`);
+        }
+        if (mi.globalMatchedKeywords && mi.globalMatchedKeywords.length > 0) {
+          parts.push(`Global matched keyword(s): ${mi.globalMatchedKeywords.map(k => `'${k}'`).join(', ')}`);
+        }
+      }
+      
+      if (mi.matchedKeywords && mi.matchedKeywords.length > 0) {
+        parts.push(`Matched tag keyword(s): ${mi.matchedKeywords.map(k => `'${k}'`).join(', ')}`);
+      }
+      
+      tooltipText = parts.join(' | ');
+    }
+
+    if (tooltipText) {
+      infoTooltipHtml = `
+        <span class="info-tooltip-wrapper" title="${escapeHTML(tooltipText)}">
+          <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+        </span>
+      `;
+    }
+  }
+
   // Rebuild inside Shell
   card.innerHTML = `
     <div class="card-header">
@@ -1218,7 +1259,13 @@ function populateCardInner(card, item) {
       </div>
     </div>
     
-    <div class="card-summary">${escapeHTML(title)}</div>
+    <div class="card-summary">
+      ${item.sourceUrl ? `
+        <a href="#" class="card-title-link" data-url="${escapeHTML(item.sourceUrl)}" title="Open original post: ${escapeHTML(item.sourceUrl)}">
+          ${escapeHTML(title)} ↗
+        </a>
+      ` : escapeHTML(title)}
+    </div>
     ${bodyHtml}
     ${entityChips}
     
@@ -1230,6 +1277,7 @@ function populateCardInner(card, item) {
         </span>
         ${secondaryTagsHtml}
         ${authorHtml}
+        ${infoTooltipHtml}
       </div>
       <div class="override-trigger-wrapper">
         <button class="btn-override-trigger">
@@ -1250,6 +1298,14 @@ function populateCardInner(card, item) {
     authorLink.addEventListener('click', (e) => {
       e.preventDefault();
       window.open(authorLink.dataset.url, '_blank');
+    });
+  }
+
+  const titleLink = card.querySelector('.card-title-link');
+  if (titleLink) {
+    titleLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      window.open(titleLink.dataset.url, '_blank');
     });
   }
 
@@ -1379,8 +1435,12 @@ function renderTagConfigurator() {
     const isSticky = typeof tag === 'object' && tag.isSticky;
     const color = BADGE_COLORS[i % BADGE_COLORS.length];
 
+    const prompt = typeof tag === 'object' ? (tag.prompt || '') : '';
+
     const row = document.createElement('div');
     row.className = isDynamic ? 'tag-row dynamic' : 'tag-row';
+    row.style.flexDirection = 'column';
+    row.style.alignItems = 'stretch';
 
     const promoteHtml = isDynamic
       ? `<button class="btn-tag-action btn-promote-tag" data-tag="${escapeHTML(label)}" title="Promote to tracking tag">★</button>`
@@ -1391,15 +1451,22 @@ function renderTagConfigurator() {
       : '';
 
     row.innerHTML = `
-      <span class="tag-dot-indicator" style="background: ${color}"></span>
-      <span class="tag-label">${escapeHTML(label)} ${isDynamic ? '<span style="font-size: 9px; opacity: 0.5; font-style: italic;">(dynamic)</span>' : ''}</span>
-      <label class="tag-toggle">
-        <input type="checkbox" ${enabled ? 'checked' : ''} data-tag="${escapeHTML(label)}">
-        <span class="toggle-track"></span>
-      </label>
-      ${stickyHtml}
-      ${promoteHtml}
-      <button class="btn-tag-action btn-delete-tag" data-tag="${escapeHTML(label)}" title="Remove tag">×</button>
+      <div style="display: flex; align-items: center; width: 100%;">
+        <span class="tag-dot-indicator" style="background: ${color}"></span>
+        <span class="tag-label" style="flex: 1;">${escapeHTML(label)} ${isDynamic ? '<span style="font-size: 9px; opacity: 0.5; font-style: italic;">(dynamic)</span>' : ''}</span>
+        <button class="btn-expand-prompt" title="Edit Tag Prompt">✎</button>
+        <label class="tag-toggle" style="margin-left: auto;">
+          <input type="checkbox" ${enabled ? 'checked' : ''} data-tag="${escapeHTML(label)}">
+          <span class="toggle-track"></span>
+        </label>
+        ${stickyHtml}
+        ${promoteHtml}
+        <button class="btn-tag-action btn-delete-tag" data-tag="${escapeHTML(label)}" title="Remove tag">×</button>
+      </div>
+      <div class="tag-prompt-container" style="display: none;">
+        <textarea class="tag-prompt-textarea" rows="2" placeholder="Identify posts related to ${escapeHTML(label)}.">${escapeHTML(prompt)}</textarea>
+        <button type="button" class="btn-wand btn-wand-existing" title="Regenerate prompt with AI">✨</button>
+      </div>
     `;
 
     const checkbox = row.querySelector('input[type="checkbox"]');
@@ -1407,6 +1474,49 @@ function renderTagConfigurator() {
       chrome.runtime.sendMessage({
         type: 'TAG_TOGGLED',
         payload: { tag: label, enabled: checkbox.checked }
+      });
+    });
+
+    // Expand prompt box
+    const expandBtn = row.querySelector('.btn-expand-prompt');
+    const promptContainer = row.querySelector('.tag-prompt-container');
+    const promptTextarea = row.querySelector('.tag-prompt-textarea');
+    expandBtn.addEventListener('click', () => {
+      if (promptContainer.style.display === 'none') {
+        promptContainer.style.display = 'flex';
+        promptTextarea.focus();
+      } else {
+        promptContainer.style.display = 'none';
+      }
+    });
+
+    // Save prompt on change
+    promptTextarea.addEventListener('change', (e) => {
+      chrome.runtime.sendMessage({
+        type: 'TAG_PROMPT_UPDATED',
+        payload: { tag: label, prompt: e.target.value }
+      });
+    });
+
+    // Magic wand for existing tag
+    const wandBtn = row.querySelector('.btn-wand-existing');
+    wandBtn.addEventListener('click', () => {
+      const currentPrompt = promptTextarea.value;
+      promptTextarea.placeholder = 'Regenerating...';
+      promptTextarea.value = '';
+      chrome.runtime.sendMessage({
+        type: 'GENERATE_TAG_EVAL_PROMPT',
+        payload: { tag: label, currentPrompt }
+      }, (response) => {
+        if (response && response.success) {
+          promptTextarea.value = response.prompt;
+          chrome.runtime.sendMessage({
+            type: 'TAG_PROMPT_UPDATED',
+            payload: { tag: label, prompt: response.prompt }
+          });
+        } else {
+          promptTextarea.value = currentPrompt;
+        }
       });
     });
 
@@ -1519,6 +1629,31 @@ function renderIgnoredKeywords() {
   });
 }
 
+function renderMatchPromptConfigurator() {
+  const cfg = state.configuration;
+  if (dom.matchPromptToggle && dom.matchPromptInput) {
+    if (document.activeElement !== dom.matchPromptInput) {
+      dom.matchPromptInput.value = cfg.matchPrompt || '';
+    }
+    dom.matchPromptToggle.checked = !!cfg.isMatchPromptEnabled;
+    
+    // We don't re-render the tags container from state because the tags are transient and generated on the fly.
+    // However, we can render the last saved tags from cfg.matchPromptTags.
+    if (dom.matchPromptTagsContainer) {
+      dom.matchPromptTagsContainer.innerHTML = '';
+      if (cfg.matchPrompt && cfg.matchPromptTags && cfg.matchPromptTags.length > 0) {
+        cfg.matchPromptTags.forEach(t => {
+          const span = document.createElement('span');
+          span.className = 'entity-chip';
+          span.textContent = '#' + escapeHTML(t);
+          span.style.opacity = '0.6';
+          dom.matchPromptTagsContainer.appendChild(span);
+        });
+      }
+    }
+  }
+}
+
 function renderAll() {
   renderTelemetry();
   renderEngineStatus();
@@ -1527,6 +1662,7 @@ function renderAll() {
   renderFilterPills();
   renderSiteFilterPills();
   renderFeed();
+  renderMatchPromptConfigurator();
   renderTagConfigurator();
   renderSitesConfigurator();
   renderIgnoredKeywords();
@@ -2105,6 +2241,10 @@ document.addEventListener('DOMContentLoaded', () => {
     newSiteInput: $('#new-site-input'),
     newKeywordInput: $('#new-keyword-input'),
 
+    matchPromptToggle: $('#match-prompt-toggle'),
+    matchPromptInput: $('#match-prompt-input'),
+    matchPromptTagsContainer: $('#match-prompt-tags-container'),
+
     clearStackBtn: $('#clear-stack-btn'),
     clearConfirmContainer: $('#clear-confirm-container'),
     btnConfirmClearTag: $('#btn-confirm-clear-tag'),
@@ -2130,15 +2270,69 @@ document.addEventListener('DOMContentLoaded', () => {
   initKeyboardNavigation();
 
   // Add tag form handler
+  // New tag prompt logic
+  const newTagInput = $('#new-tag-input');
+  const newTagPromptContainer = $('#new-tag-prompt-container');
+  const newTagPromptInput = $('#new-tag-prompt-input');
+  const newTagWandBtn = $('#new-tag-wand-btn');
+  let newTagDebounce = null;
+
+  newTagInput.addEventListener('input', (e) => {
+    const val = e.target.value.trim();
+    if (!val) {
+      newTagPromptContainer.style.display = 'none';
+      newTagPromptInput.value = '';
+      clearTimeout(newTagDebounce);
+      return;
+    }
+
+    if (newTagPromptContainer.style.display === 'none') {
+      newTagPromptContainer.style.display = 'flex';
+      newTagPromptInput.placeholder = 'Generating prompt...';
+      newTagPromptInput.value = '';
+    }
+
+    clearTimeout(newTagDebounce);
+    newTagDebounce = setTimeout(() => {
+      chrome.runtime.sendMessage({
+        type: 'GENERATE_TAG_EVAL_PROMPT',
+        payload: { tag: val, currentPrompt: '' }
+      }, (response) => {
+        if (response && response.success && !newTagPromptInput.value) { // only set if user hasn't typed
+          newTagPromptInput.value = response.prompt;
+        }
+      });
+    }, 800);
+  });
+
+  newTagWandBtn.addEventListener('click', () => {
+    const val = newTagInput.value.trim();
+    if (!val) return;
+    const currentPrompt = newTagPromptInput.value;
+    newTagPromptInput.value = '';
+    newTagPromptInput.placeholder = 'Regenerating...';
+    chrome.runtime.sendMessage({
+      type: 'GENERATE_TAG_EVAL_PROMPT',
+      payload: { tag: val, currentPrompt }
+    }, (response) => {
+      if (response && response.success) {
+        newTagPromptInput.value = response.prompt;
+      }
+    });
+  });
+
   dom.addTagForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const value = dom.newTagInput.value.trim();
-    if (!value) return;
+    const tagVal = newTagInput.value.trim();
+    const promptVal = newTagPromptInput.value.trim();
+    if (!tagVal) return;
     chrome.runtime.sendMessage({
       type: 'TAG_ADDED',
-      payload: { tag: value }
+      payload: { tag: tagVal, prompt: promptVal }
     });
-    dom.newTagInput.value = '';
+    newTagInput.value = '';
+    newTagPromptInput.value = '';
+    newTagPromptContainer.style.display = 'none';
   });
 
   // Add site form handler
@@ -2168,6 +2362,60 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     dom.newKeywordInput.value = '';
   });
+
+  // Match prompt handlers
+  if (dom.matchPromptToggle && dom.matchPromptInput) {
+    dom.matchPromptToggle.addEventListener('change', (e) => {
+      chrome.runtime.sendMessage({
+        type: 'TOGGLE_MATCH_PROMPT',
+        payload: { isEnabled: e.target.checked }
+      });
+    });
+
+    let debounceTimeout = null;
+    dom.matchPromptInput.addEventListener('input', (e) => {
+      const val = e.target.value;
+      
+      // Save configuration
+      chrome.runtime.sendMessage({
+        type: 'UPDATE_MATCH_PROMPT',
+        payload: { prompt: val }
+      });
+      
+      // Clear container and show loading state if not empty
+      if (dom.matchPromptTagsContainer) {
+        if (!val.trim()) {
+          dom.matchPromptTagsContainer.innerHTML = '';
+        } else {
+          dom.matchPromptTagsContainer.innerHTML = '<span style="font-size: 10px; color: var(--text-secondary);">Generating expected tags...</span>';
+        }
+      }
+
+      // Debounce tag generation (expensive AI call)
+      clearTimeout(debounceTimeout);
+      debounceTimeout = setTimeout(() => {
+        if (!val.trim()) return;
+
+        chrome.runtime.sendMessage({
+          type: 'GENERATE_PROMPT_TAGS',
+          payload: { prompt: val }
+        }, (response) => {
+          if (dom.matchPromptTagsContainer) {
+            dom.matchPromptTagsContainer.innerHTML = ''; // clear loading
+            if (response && response.success && response.tags.length > 0) {
+              response.tags.forEach(t => {
+                const span = document.createElement('span');
+                span.className = 'entity-chip';
+                span.textContent = '#' + escapeHTML(t);
+                span.style.opacity = '0.6'; // subtly show as disabled
+                dom.matchPromptTagsContainer.appendChild(span);
+              });
+            }
+          }
+        });
+      }, 1000); // 1s debounce
+    });
+  }
 
   // Pause button clicker
   dom.pauseToggle.addEventListener('click', () => {

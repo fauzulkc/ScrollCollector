@@ -198,32 +198,47 @@ function findNearestLink(element) {
     }
   }
 
+  const permalinkPatterns = [
+    '/post', '/status', '/p/', '/watch',
+    '/video', '/articles', '/pulse', '/reel',
+    '/jobs/view/', '/jobs/'
+  ];
+
+  const profilePatterns = [
+    '/in/', '/company/', '/@', '/user/', '/channel/'
+  ];
+
+  const innerLinks = element.querySelectorAll ? Array.from(element.querySelectorAll('a[href]')) : [];
+  
+  let permalink = innerLinks.find(a => {
+    const href = a.getAttribute('href') || '';
+    return isUsableHref(href) && permalinkPatterns.some(pat => href.includes(pat));
+  });
+  if (permalink) return toAbsolute(permalink.getAttribute('href'));
+
   let node = element;
   while (node && node !== document.body) {
     if (node.tagName === 'A' && isUsableHref(node.getAttribute('href'))) {
-      return toAbsolute(node.getAttribute('href'));
+      const href = node.getAttribute('href') || '';
+      if (permalinkPatterns.some(pat => href.includes(pat))) {
+        return toAbsolute(href);
+      }
+      if (!profilePatterns.some(pat => href.includes(pat))) {
+        return toAbsolute(href);
+      }
+    }
+    if (node.querySelectorAll) {
+      const nodeLinks = Array.from(node.querySelectorAll('a[href]'));
+      const p = nodeLinks.find(a => {
+        const h = a.getAttribute('href') || '';
+        return isUsableHref(h) && permalinkPatterns.some(pat => h.includes(pat));
+      });
+      if (p) return toAbsolute(p.getAttribute('href'));
     }
     node = node.parentElement;
   }
 
-  const innerLinks = element.querySelectorAll
-    ? Array.from(element.querySelectorAll('a[href]'))
-    : [];
-
   if (innerLinks.length > 0) {
-    const permalinkPatterns = [
-      '/post', '/status', '/p/', '/watch',
-      '/video', '/articles', '/pulse', '/reel'
-    ];
-
-    const permalink = innerLinks.find(a => {
-      const href = a.getAttribute('href') || '';
-      return isUsableHref(href) &&
-        permalinkPatterns.some(pat => href.includes(pat));
-    });
-
-    if (permalink) return toAbsolute(permalink.getAttribute('href'));
-
     const firstUsable = innerLinks.find(a => isUsableHref(a.getAttribute('href')));
     if (firstUsable) return toAbsolute(firstUsable.getAttribute('href'));
   }
@@ -755,8 +770,27 @@ function extractContentInfo(container) {
       authorUrl = actorLink.getAttribute('href');
       authorName = actorLink.innerText.trim().split('\n')[0];
     }
-    const permalinkLink = container.querySelector('.update-components-actor__container a[href*="/posts/"], a[href*="/activity/"]');
-    if (permalinkLink) postUrl = permalinkLink.getAttribute('href');
+    const permalinkLink = container.querySelector(
+      '.update-components-actor__container a[href*="/posts/"], ' +
+      'a[href*="/activity/"], ' +
+      'a[href*="/feed/update/urn:li:activity:"], ' +
+      'a[href*="/jobs/view/"], ' +
+      'a[href*="/jobs/"]'
+    );
+    if (permalinkLink) {
+      postUrl = permalinkLink.getAttribute('href');
+    } else {
+      const allLinks = Array.from(container.querySelectorAll('a[href]'));
+      const foundLink = allLinks.find(a => {
+        const href = a.getAttribute('href') || '';
+        return href.includes('/posts/') || 
+               href.includes('/activity/') || 
+               href.includes('/feed/update/urn:li:activity:') || 
+               href.includes('/jobs/view/') || 
+               href.includes('/jobs/');
+      });
+      if (foundLink) postUrl = foundLink.getAttribute('href');
+    }
   } else if (hostname.includes('twitter.com') || hostname.includes('x.com')) {
     const userEl = container.querySelector('[data-testid="User-Name"]');
     if (userEl) {
