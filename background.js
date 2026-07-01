@@ -11,7 +11,7 @@
  *  5. Broadcasting state updates to all extension contexts
  */
 
-import { classify, checkEngineStatus, evaluateMatch, evaluateMatchWithReason, extractTagsFromPrompt } from './lib/inference-engine.js';
+import { classify, checkEngineStatus, evaluateMatch, evaluateMatchWithReason, extractTagsFromPrompt, evaluateAuthorMatch, heuristicAuthorMatch } from './lib/inference-engine.js';
 
 // ---------------------------------------------------------------------------
 // Storage Wrapper
@@ -108,6 +108,9 @@ async function ensureInitialized() {
           { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false }
         ],
         ignoredKeywords: [],
+        ignoredTags: [],
+        ignoredLinks: [],
+        ignoredDomains: [],
         isTrackingPaused: false,
         matchPrompt: '',
         isMatchPromptEnabled: false
@@ -193,6 +196,21 @@ chrome.runtime.onInstalled.addListener(async () => {
       updated = true;
     }
 
+    if (!existing.configuration.ignoredTags) {
+      existing.configuration.ignoredTags = [];
+      updated = true;
+    }
+
+    if (!existing.configuration.ignoredLinks) {
+      existing.configuration.ignoredLinks = [];
+      updated = true;
+    }
+
+    if (!existing.configuration.ignoredDomains) {
+      existing.configuration.ignoredDomains = [];
+      updated = true;
+    }
+
     if (existing.configuration.isTrackingPaused === undefined) {
       existing.configuration.isTrackingPaused = false;
       updated = true;
@@ -218,6 +236,12 @@ chrome.runtime.onInstalled.addListener(async () => {
       }
       return item;
     });
+
+    // Migrate/populate missing canonicalAuthorName fields
+    const authorMigrationUpdated = migrateCanonicalAuthors(upgradedStack || existing.stack || []);
+    if (authorMigrationUpdated) {
+      stackUpdated = true;
+    }
 
     if (updated || stackUpdated) {
       const payload = {};
@@ -624,6 +648,45 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               }
             }
             
+            // Let's resolve the canonical author name!
+            let canonicalAuthorName = authorName || '';
+            if (authorName) {
+              // Extract unique author names and their platforms/urls from current stack
+              const existingAuthors = [];
+              const seenAuthors = new Set();
+              for (const item of stack) {
+                if (item.authorName && !seenAuthors.has(item.canonicalAuthorName || item.authorName)) {
+                  const cName = item.canonicalAuthorName || item.authorName;
+                  seenAuthors.add(cName);
+                  existingAuthors.push({
+                    name: item.authorName,
+                    canonicalName: cName,
+                    platform: item.sourcePlatform,
+                    url: item.authorUrl
+                  });
+                }
+              }
+
+              // Try to find a match among existing authors
+              let foundMatch = null;
+              for (const extAuth of existingAuthors) {
+                const isSame = await evaluateAuthorMatch(
+                  { name: authorName, platform: normalizedPlatform, url: authorUrl || '' },
+                  { name: extAuth.name, platform: extAuth.platform, url: extAuth.url || '' }
+                );
+                if (isSame) {
+                  foundMatch = extAuth;
+                  break;
+                }
+              }
+
+              if (foundMatch) {
+                canonicalAuthorName = foundMatch.canonicalName;
+              } else {
+                canonicalAuthorName = authorName; // It's a new author
+              }
+            }
+
             // Ensure the dynamic tag is in the tags array if it became the final category
             let storedTags = classifiedTags || [];
             if (finalCategory !== 'Unclassified' && storedTags.length === 0) {
@@ -659,6 +722,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 tags: storedTags,
                 authorName: authorName || existingItem.authorName || '',
                 authorUrl: authorUrl || existingItem.authorUrl || '',
+                canonicalAuthorName: canonicalAuthorName || existingItem.canonicalAuthorName || existingItem.authorName || '',
                 isAd: existingItem.isAd || !!isAd,
                 matchInfo
               };
@@ -675,6 +739,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                 sourceUrl:      sourceUrl || '',
                 authorName:     authorName || '',
                 authorUrl:      authorUrl || '',
+                canonicalAuthorName: canonicalAuthorName || authorName || '',
                 textSnippet:    textToClassify, // Store full body so cards can expand properly
                 assignedTag:    finalCategory,
                 tags:           storedTags,
@@ -1398,3 +1463,64 @@ if (chrome.alarms) {
   }
 });
 }
+
+/**
+ * Migration helper to update existing stack items with canonicalAuthorName fields.
+ */
+function migrateCanonicalAuthors(stack) {
+  let updated = false;
+  const knownAuthors = [];
+
+  for (let i = stack.length - 1; i >= 0; i--) {
+    const item = stack[i];
+    if (!item.authorName) {
+      if (item.canonicalAuthorName !== '') {
+        item.canonicalAuthorName = '';
+        updated = true;
+      }
+      continue;
+    }
+
+    if (item.canonicalAuthorName) {
+      const exists = knownAuthors.some(ka => ka.canonicalName === item.canonicalAuthorName);
+      if (!exists) {
+        knownAuthors.push({
+          name: item.authorName,
+          platform: item.sourcePlatform,
+          url: item.authorUrl || '',
+          canonicalName: item.canonicalAuthorName
+        });
+      }
+      continue;
+    }
+
+    let foundMatch = null;
+    for (const ka of knownAuthors) {
+      const isSame = heuristicAuthorMatch(
+        { name: item.authorName, platform: item.sourcePlatform, url: item.authorUrl || '' },
+        { name: ka.name, platform: ka.platform, url: ka.url || '' }
+      );
+      if (isSame) {
+        foundMatch = ka;
+        break;
+      }
+    }
+
+    if (foundMatch) {
+      item.canonicalAuthorName = foundMatch.canonicalName;
+      updated = true;
+    } else {
+      item.canonicalAuthorName = item.authorName;
+      updated = true;
+      knownAuthors.push({
+        name: item.authorName,
+        platform: item.sourcePlatform,
+        url: item.authorUrl || '',
+        canonicalName: item.canonicalAuthorName
+      });
+    }
+  }
+
+  return updated;
+}
+

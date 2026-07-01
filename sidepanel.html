@@ -83,7 +83,24 @@
     
     <!-- Tab 1: Stream Panel -->
     <section id="panel-stream" class="tab-panel active">
-      <!-- Horizontal Filter Pills (Tags & Sites) -->
+      <!-- Search Box -->
+      <div class="search-wrapper">
+        <div class="search-input-container">
+          <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="global-search" placeholder="Search tags, posts, authors, sites..." autocomplete="off">
+          <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Horizontal Filter Pills (Tags & Sites & Authors) -->
       <div class="filter-wrapper">
         <div id="filter-pills" class="filter-pills">
           <!-- Dynamically populated: e.g. All, Favorites (<3), Tech, Finance... -->
@@ -94,6 +111,12 @@
           <!-- Dynamically populated: e.g. All Sites, linkedin.com, youtube.com... -->
         </div>
       </div>
+      <div class="filter-wrapper" style="padding-top: 0; margin-top: -4px;">
+        <div id="filter-author-pills" class="filter-pills">
+          <!-- Dynamically populated: e.g. All Authors, John Doe, Jane Smith... -->
+        </div>
+      </div>
+
       
       <!-- Feed Container -->
       <div id="feed-container">

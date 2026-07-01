@@ -4,7 +4,7 @@ import './lib/sanitizer.js';
 const { sanitize } = globalThis.MindstreamSanitizer;
 
 import { buildSystemPrompt, buildUserPrompt } from './lib/prompt-builder.js';
-import { cleanTagName, keywordFallback, extractNounTopic } from './lib/inference-engine.js';
+import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch } from './lib/inference-engine.js';
 
 test('PII Sanitizer Tests', (t) => {
   // Test email redaction
@@ -86,3 +86,47 @@ test('Inference Engine - extractNounTopic Heuristic Tests', (t) => {
   const topic = extractNounTopic(text);
   assert.strictEqual(topic, 'Microsoft');
 });
+
+test('Inference Engine - heuristicAuthorMatch Tests', (t) => {
+  // Test direct exact match
+  assert.ok(heuristicAuthorMatch(
+    { name: 'John Doe', platform: 'x.com', url: '' },
+    { name: 'john doe', platform: 'linkedin.com', url: '' }
+  ));
+
+  // Test name normalization (punctuation, spaces, handles)
+  assert.ok(heuristicAuthorMatch(
+    { name: '@JohnDoe', platform: 'x.com', url: '' },
+    { name: 'john_doe', platform: 'linkedin.com', url: '' }
+  ));
+
+  assert.ok(heuristicAuthorMatch(
+    { name: 'John Doe 123', platform: 'x.com', url: '' },
+    { name: 'John-Doe', platform: 'linkedin.com', url: '' }
+  ));
+
+  // Test URL handle extraction
+  assert.ok(heuristicAuthorMatch(
+    { name: 'John Doe', platform: 'x.com', url: 'https://x.com/johndoe' },
+    { name: 'John D.', platform: 'linkedin.com', url: 'https://linkedin.com/in/johndoe/' }
+  ));
+
+  // Test substring matching
+  assert.ok(heuristicAuthorMatch(
+    { name: 'Johnathan Doe', platform: 'x.com', url: '' },
+    { name: 'Johnathan', platform: 'linkedin.com', url: '' }
+  ));
+
+  // Test Levenshtein distance similarity (> 0.8)
+  assert.ok(heuristicAuthorMatch(
+    { name: 'Johnathan Doe', platform: 'x.com', url: '' },
+    { name: 'Johnathon Doe', platform: 'linkedin.com', url: '' }
+  ));
+
+  // Test mismatch
+  assert.ok(!heuristicAuthorMatch(
+    { name: 'John Doe', platform: 'x.com', url: 'https://x.com/johndoe' },
+    { name: 'Jane Smith', platform: 'linkedin.com', url: 'https://linkedin.com/in/janesmith' }
+  ));
+});
+

@@ -42,6 +42,8 @@ let state = {
 
 let activeFilterTag = 'All'; // Horizontal category tag filter
 let activeFilterSite = 'All'; // Horizontal website filter
+let activeFilterAuthor = 'All'; // Global active author filter
+let searchQuery = ''; // Global search query
 let openDropdownItemId = null; // Track currently open override dropdown item ID
 let expandedItemIds = new Set(); // Track expanded text snippet row IDs
 
@@ -402,7 +404,7 @@ function renderPauseStatus() {
 // ---------- Drag-to-Scroll pills containers ----------
 
 function initDragToScroll() {
-  [dom.filterPills, dom.filterSitePills].forEach(el => {
+  [dom.filterPills, dom.filterSitePills, dom.filterAuthorPills].forEach(el => {
     if (!el) return;
     let isDragging = false;
     let startX;
@@ -724,8 +726,10 @@ function renderFilterPills() {
     
     pill.addEventListener('click', () => {
       activeFilterTag = cat;
+      activeFilterAuthor = 'All'; // Reset author filter on category change
       renderFilterPills();
       renderSiteFilterPills();
+      renderAuthorPills();
       renderFeed();
     });
 
@@ -767,6 +771,7 @@ function renderFilterPills() {
 function setFilterSite(site) {
   if (activeFilterSite === site) return;
   activeFilterSite = site;
+  activeFilterAuthor = 'All'; // Reset author filter on site change
 
   // If the active tag filter is not 'All' or 'Favorites', check if any items match the activeTag + new site
   if (activeFilterTag !== 'All' && activeFilterTag !== 'Favorites' && activeFilterTag !== 'Ads') {
@@ -952,6 +957,114 @@ function renderSiteFilterPills() {
   });
 }
 
+// ---------- Rendering: Author Filters ----------
+
+function getFilterAuthors() {
+  const list = state.stack || [];
+  const counts = { All: 0 };
+  
+  // Count authors that match the activeTag and activeSite filters!
+  list.forEach(item => {
+    // Check if item matches current activeTag filter
+    let tagMatch = true;
+    if (activeFilterTag === 'Favorites') {
+      tagMatch = item.isFavorite;
+    } else if (activeFilterTag === 'Ads') {
+      tagMatch = item.isAd;
+    } else if (activeFilterTag !== 'All') {
+      tagMatch = item.assignedTag === activeFilterTag;
+    }
+    
+    // Check if item matches current activeSite filter
+    let siteMatch = true;
+    if (activeFilterSite !== 'All') {
+      const rawPlatform = (item.sourcePlatform || '').toLowerCase();
+      if (activeFilterSite === 'Other') {
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
+        const configuredSites = state.configuration.sites || [];
+        const enabledDomains = [...defaultSites, ...customSites].filter(d => {
+          const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
+          return !cfg || cfg.isEnabled !== false;
+        });
+        siteMatch = !enabledDomains.some(domain => rawPlatform === domain || rawPlatform.endsWith('.' + domain));
+      } else {
+        siteMatch = rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
+      }
+    }
+    
+    if (tagMatch && siteMatch) {
+      counts.All++;
+      const auth = item.canonicalAuthorName || item.authorName || '';
+      if (auth) {
+        counts[auth] = (counts[auth] || 0) + 1;
+      }
+    }
+  });
+
+  // Extract author names (excluding empty and 'All')
+  const authorNames = Object.keys(counts).filter(k => k !== 'All' && k !== '');
+  
+  // Sort authors by post count descending
+  authorNames.sort((a, b) => counts[b] - counts[a]);
+
+  // Keep top 10 authors, but if the activeFilterAuthor is set and not in the top 10, include it.
+  let displayAuthors = authorNames.slice(0, 10);
+  if (activeFilterAuthor !== 'All' && !displayAuthors.includes(activeFilterAuthor)) {
+    displayAuthors.push(activeFilterAuthor);
+  }
+
+  return {
+    authors: ['All', ...displayAuthors],
+    counts
+  };
+}
+
+function renderAuthorPills() {
+  const { authors, counts } = getFilterAuthors();
+  
+  dom.filterAuthorPills.innerHTML = '';
+  
+  // If there are no authors or only 'All' with 0 posts, we can hide the wrapper or just show 'All'
+  if (authors.length <= 1) {
+    dom.filterAuthorPills.parentElement.classList.add('hidden');
+    return;
+  }
+  dom.filterAuthorPills.parentElement.classList.remove('hidden');
+
+  authors.forEach(auth => {
+    const count = counts[auth] || 0;
+    if (auth !== 'All' && count === 0) return; // Skip if no posts for this author in current filters
+
+    const pill = document.createElement('button');
+    pill.className = `filter-pill ${activeFilterAuthor === auth ? 'active' : ''}`;
+    pill.dataset.author = auth;
+    
+    const color = '#8b5cf6'; // Violet for authors
+    pill.style.setProperty('--pill-color', color);
+    const rgb = hexToRgb(color);
+    pill.style.setProperty('--pill-color-rgb', rgb);
+
+    let labelText = auth === 'All' ? 'All Authors' : auth;
+
+    pill.innerHTML = `
+      <span class="pill-dot" style="background: ${color}"></span>
+      <span class="pill-label">${escapeHTML(labelText)}</span>
+      <span class="pill-count">${count}</span>
+    `;
+
+    pill.addEventListener('click', () => {
+      activeFilterAuthor = auth;
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderAuthorPills();
+      renderFeed();
+    });
+
+    dom.filterAuthorPills.appendChild(pill);
+  });
+}
+
 // ---------- Rendering: Feed Cards ----------
 
 function renderFeed() {
@@ -993,6 +1106,26 @@ function renderFeed() {
       return rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
     });
   }
+
+  // Filter 3: Author
+  if (activeFilterAuthor !== 'All') {
+    filteredStack = filteredStack.filter(i => i.canonicalAuthorName === activeFilterAuthor);
+  }
+
+  // Filter 4: Global Search Query
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase().trim();
+    filteredStack = filteredStack.filter(i => {
+      const tagMatch = (i.assignedTag || '').toLowerCase().includes(q) || 
+                       (i.tags || []).some(t => t.name.toLowerCase().includes(q));
+      const postMatch = (i.textSnippet || '').toLowerCase().includes(q);
+      const authorMatch = (i.authorName || '').toLowerCase().includes(q) || 
+                          (i.canonicalAuthorName || '').toLowerCase().includes(q);
+      const siteMatch = (i.sourcePlatform || '').toLowerCase().includes(q);
+      return tagMatch || postMatch || authorMatch || siteMatch;
+    });
+  }
+
 
   if (filteredStack.length === 0) {
     list.innerHTML = '';
@@ -1142,12 +1275,19 @@ function populateCardInner(card, item) {
   let authorHtml = '';
   if (item.authorName) {
     let authorNameSafe = escapeHTML(item.authorName);
+    let canonicalAuthorNameSafe = escapeHTML(item.canonicalAuthorName || item.authorName);
     if (item.authorUrl) {
-      authorHtml = `<a href="#" class="card-author-link card-author-pill" data-url="${escapeHTML(item.authorUrl)}" title="Visit ${authorNameSafe}'s profile">@${authorNameSafe}</a>`;
+      authorHtml = `
+        <span class="card-author-pill-wrapper">
+          <span class="card-author-pill card-author-filter-btn" data-author="${canonicalAuthorNameSafe}" title="Filter by ${canonicalAuthorNameSafe}">@${authorNameSafe}</span>
+          <a href="#" class="card-author-profile-link" data-url="${escapeHTML(item.authorUrl)}" title="Visit ${authorNameSafe}'s profile">↗</a>
+        </span>
+      `;
     } else {
-      authorHtml = `<span class="card-author-pill">@${authorNameSafe}</span>`;
+      authorHtml = `<span class="card-author-pill card-author-filter-btn" data-author="${canonicalAuthorNameSafe}" title="Filter by ${canonicalAuthorNameSafe}">@${authorNameSafe}</span>`;
     }
   }
+
 
   const favClass = item.isFavorite ? 'favorited' : '';
   const favIcon = item.isFavorite
@@ -1293,13 +1433,35 @@ function populateCardInner(card, item) {
     </div>
   `;
 
-  const authorLink = card.querySelector('.card-author-link');
-  if (authorLink) {
-    authorLink.addEventListener('click', (e) => {
+  // Handle author profile clicks
+  const profileLinks = card.querySelectorAll('.card-author-profile-link');
+  profileLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
       e.preventDefault();
-      window.open(authorLink.dataset.url, '_blank');
+      e.stopPropagation();
+      window.open(link.dataset.url, '_blank');
     });
-  }
+  });
+
+  // Handle author filter button clicks
+  const filterBtns = card.querySelectorAll('.card-author-filter-btn');
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const author = btn.dataset.author;
+      if (activeFilterAuthor === author) {
+        activeFilterAuthor = 'All';
+      } else {
+        activeFilterAuthor = author;
+      }
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderAuthorPills();
+      renderFeed();
+    });
+  });
+
 
   const titleLink = card.querySelector('.card-title-link');
   if (titleLink) {
@@ -1661,6 +1823,7 @@ function renderAll() {
   renderPauseStatus();
   renderFilterPills();
   renderSiteFilterPills();
+  renderAuthorPills();
   renderFeed();
   renderMatchPromptConfigurator();
   renderTagConfigurator();
@@ -1690,11 +1853,22 @@ function triggerHtmlExport() {
     const bodyStr = body ? `<div class="card-body">${escapeHTML(body)}</div>` : '';
     const favIndicator = item.isFavorite ? '<span class="fav-indicator">❤️ Favorite</span>' : '';
 
+    let authorHtml = '';
+    if (item.authorName) {
+      const authorNameSafe = escapeHTML(item.authorName);
+      if (item.authorUrl) {
+        authorHtml = `<a href="${escapeHTML(item.authorUrl)}" target="_blank" class="card-author-pill">@${authorNameSafe}</a>`;
+      } else {
+        authorHtml = `<span class="card-author-pill">@${authorNameSafe}</span>`;
+      }
+    }
+
     return `
       <div class="card" data-category="${escapeHTML(tag)}" data-favorite="${item.isFavorite}" data-ad="${item.isAd}">
         <div class="card-header">
           <span class="platform">${escapeHTML(platform)}</span>
           ${linkStr}
+          ${authorHtml}
           <span class="time">${timestampStr}</span>
           ${adBadge}
           ${favIndicator}
@@ -1709,6 +1883,7 @@ function triggerHtmlExport() {
       </div>
     `;
   }).join('\n');
+
 
   const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
@@ -1898,6 +2073,22 @@ function triggerHtmlExport() {
       border-radius: 4px;
       font-weight: 700;
     }
+
+    .card-author-pill {
+      font-size: 11px;
+      color: var(--text-primary);
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 12px;
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 150px;
+      display: inline-block;
+    }
+
 
     .card-title {
       font-size: 16px;
@@ -2215,6 +2406,9 @@ document.addEventListener('DOMContentLoaded', () => {
     streamEmpty: $('#stream-empty'),
     filterPills: $('#filter-pills'),
     filterSitePills: $('#filter-site-pills'), // Site filter scroller
+    filterAuthorPills: $('#filter-author-pills'), // Author filter scroller
+    globalSearch: $('#global-search'), // Search input element
+    searchClearBtn: $('#search-clear-btn'), // Search clear button
     tabCountStream: $('#tab-count-stream'),
     feedContainer: $('#feed-container'),
 
@@ -2480,6 +2674,33 @@ document.addEventListener('DOMContentLoaded', () => {
       openDropdownItemId = null;
     }
   });
+
+  // Search input listeners
+  if (dom.globalSearch && dom.searchClearBtn) {
+    dom.globalSearch.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      if (searchQuery.trim().length > 0) {
+        dom.searchClearBtn.classList.remove('hidden');
+      } else {
+        dom.searchClearBtn.classList.add('hidden');
+      }
+      activeFilterAuthor = 'All'; // Reset author filter during search for better relevance
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderAuthorPills();
+      renderFeed();
+    });
+
+    dom.searchClearBtn.addEventListener('click', () => {
+      dom.globalSearch.value = '';
+      searchQuery = '';
+      dom.searchClearBtn.classList.add('hidden');
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderAuthorPills();
+      renderFeed();
+    });
+  }
 
   // Message listeners
   initMessageListener();
