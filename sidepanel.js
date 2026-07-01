@@ -961,11 +961,21 @@ function renderFilterPills() {
       btn.style.setProperty('--pill-color-rgb', hexToRgb(color));
       
       let labelText = cat;
-      if (cat === 'Favorites') labelText = 'Favorites ❤️';
+      if (cat === 'Favorites') labelText = 'Favorites';
       else if (cat === 'All') labelText = 'All Categories';
 
+      let dotHtml = `<span class="pill-dot" style="background: ${color}; margin-right: 6px; width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>`;
+      if (cat === 'Favorites') {
+        dotHtml = `<span style="margin-right: 6px; font-size: 11px; flex-shrink: 0; line-height: 1;">❤️</span>`;
+      } else if (cat === 'All') {
+        dotHtml = `<span class="pill-dot" style="background: var(--text-muted); opacity: 0.3; margin-right: 6px; width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>`;
+      }
+
       btn.innerHTML = `
-        <span>${escapeHTML(labelText)}</span>
+        <span style="display: flex; align-items: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+          ${dotHtml}
+          <span>${escapeHTML(labelText)}</span>
+        </span>
         <span class="filter-dropdown-item-count">${count}</span>
       `;
 
@@ -1199,8 +1209,13 @@ function renderSiteFilterPills() {
       let labelText = site;
       if (site === 'All') labelText = 'All Sites';
 
+      const iconHtml = PLATFORM_ICONS[site] || PLATFORM_ICONS['fallback'];
+
       btn.innerHTML = `
-        <span>${escapeHTML(labelText)}</span>
+        <span style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+          <span class="pill-icon" style="display: inline-flex; align-items: center; width: 12px; height: 12px; flex-shrink: 0;">${iconHtml}</span>
+          <span>${escapeHTML(labelText)}</span>
+        </span>
         <span class="filter-dropdown-item-count">${count}</span>
       `;
 
@@ -1352,8 +1367,17 @@ function renderAuthorPills() {
       
       let labelText = auth === 'All' ? 'All Authors' : auth;
 
+      const color = '#8b5cf6'; // Violet for authors
+      let dotHtml = `<span class="pill-dot" style="background: ${color}; margin-right: 6px; width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>`;
+      if (auth === 'All') {
+        dotHtml = `<span class="pill-dot" style="background: var(--text-muted); opacity: 0.3; margin-right: 6px; width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>`;
+      }
+
       btn.innerHTML = `
-        <span>${escapeHTML(labelText)}</span>
+        <span style="display: flex; align-items: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+          ${dotHtml}
+          <span>${escapeHTML(labelText)}</span>
+        </span>
         <span class="filter-dropdown-item-count">${count}</span>
       `;
 
