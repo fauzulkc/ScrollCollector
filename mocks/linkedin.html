@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LinkedIn Integration Mock — ScrollCollector</title>
+  <style>
+    :root {
+      --bg: #f3f3f3;
+      --bg-card: #ffffff;
+      --border: #e0e0e0;
+      --text: #191919;
+      --text-muted: #5e5e5e;
+      --accent: #0a66c2;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      color: var(--accent);
+    }
+
+    button.btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 20px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.btn:hover {
+      background: #004182;
+    }
+
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* LinkedIn Card Styles */
+    div[role="article"].linkedin-post {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      display: block;
+    }
+
+    .li-author {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .li-title {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .li-text {
+      font-size: 14px;
+      color: var(--text);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>LinkedIn Simulator</h1>
+      <span style="font-size: 11px; color: var(--text-muted);">Version: 2026.06.27</span>
+    </div>
+    <button class="btn" id="btn-scroll">Simulate LinkedIn Scroll</button>
+  </header>
+
+  <div class="feed" id="feed">
+
+    <!-- Standard Feed Card -->
+    <div role="article" class="linkedin-post">
+      <div class="li-author">Satya Nadella</div>
+      <div class="li-title">CEO at Microsoft</div>
+      <div class="li-text">We are entering a new era where coding is collaborative with AI. GitHub Copilot has become the default partner for millions of software developers globally, enabling focus on architectural patterns rather than boilerplate code.</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let postCount = 0;
+  document.getElementById('btn-scroll').addEventListener('click', () => {
+    postCount++;
+    const feed = document.getElementById('feed');
+    const newLi = document.createElement('div');
+    newLi.setAttribute('role', 'article');
+    newLi.className = 'linkedin-post';
+    newLi.innerHTML = `
+      <div class="li-author">Sarah Jenkins [Scroll ${postCount}]</div>
+      <div class="li-title">VP of Engineering at CloudCorp</div>
+      <div class="li-text">We just migrated our entire infrastructure to serverless edge functions. Cold starts dropped by 70%, and our database connection pooling issue is resolved. Kudos to the platform team!</div>
+    `;
+    feed.appendChild(newLi);
+    
+    const btn = document.getElementById('btn-scroll');
+    const originalText = btn.innerText;
+    btn.innerText = "⚡ Post Injected!";
+    btn.style.background = "#22c55e";
+    setTimeout(() => {
+      btn.innerText = originalText;
+      btn.style.background = "";
+    }, 800);
+  });
+</script>
+</body>
+</html>

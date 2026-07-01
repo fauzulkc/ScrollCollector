@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Twitter/X Integration Mock — ScrollCollector</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --bg-card: #15181c;
+      --border: #2f3336;
+      --text: #e7e9ea;
+      --text-muted: #71767b;
+      --accent: #1d9bf0;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      color: var(--text);
+    }
+
+    button.btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 9999px;
+      font-weight: 700;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.btn:hover {
+      background: #1a8cd8;
+    }
+
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Tweet Card Styles */
+    article[role="article"] {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: block;
+    }
+
+    .tw-author {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 2px;
+    }
+
+    .tw-handle {
+      font-weight: 400;
+      color: var(--text-muted);
+    }
+
+    .tw-text {
+      font-size: 15px;
+      color: var(--text);
+      line-height: 20px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>Twitter / X Simulator</h1>
+      <span style="font-size: 11px; color: var(--text-muted);">Version: 2026.06.27</span>
+    </div>
+    <button class="btn" id="btn-scroll">Post Tweet</button>
+  </header>
+
+  <div class="feed" id="feed">
+
+    <article role="article">
+      <div class="tw-author">Elon Musk <span class="tw-handle">@elonmusk</span></div>
+      <div class="tw-text">Next SpaceX Falcon Heavy launch is scheduled for Thursday. Super Heavy booster landing will be visible from the beach.</div>
+    </article>
+
+    <article role="article">
+      <div class="tw-author">AI Frontier <span class="tw-handle">@ai_frontier</span></div>
+      <div class="tw-text">OpenAI just released fine-tuning APIs for their latest reasoning model. Developers can now customize system prompts for complex logical tasks.</div>
+    </article>
+
+  </div>
+</div>
+
+<script>
+  let postCount = 0;
+  document.getElementById('btn-scroll').addEventListener('click', () => {
+    postCount++;
+    const feed = document.getElementById('feed');
+    const newX = document.createElement('article');
+    newX.setAttribute('role', 'article');
+    newX.innerHTML = `
+      <div class="tw-author">Web3 Watcher <span class="tw-handle">@web3_watcher</span></div>
+      <div class="tw-text">Dynamic rollups are scaling layer-2 transactions down to fractions of a cent. High throughput is finally unlocking decentralized microtransactions [Tweet ${postCount}].</div>
+    `;
+    feed.appendChild(newX);
+    
+    const btn = document.getElementById('btn-scroll');
+    const originalText = btn.innerText;
+    btn.innerText = "⚡ Tweeted!";
+    btn.style.background = "#22c55e";
+    setTimeout(() => {
+      btn.innerText = originalText;
+      btn.style.background = "";
+    }, 800);
+  });
+</script>
+</body>
+</html>

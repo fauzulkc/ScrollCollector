@@ -1,0 +1,266 @@
+<!-- Version: 2026.06.28 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Instagram Integration Mock — ScrollCollector</title>
+  <style>
+    :root {
+      --bg: #000000;
+      --bg-card: #000000;
+      --border: #262626;
+      --text: #f5f5f5;
+      --text-muted: #a8a8a8;
+      --accent: #0095f6;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      color: var(--accent);
+    }
+
+    button.btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.btn:hover {
+      background: #1877f2;
+    }
+
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* Instagram Article Styling */
+    article.instagram-post {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .post-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .author-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .username-link {
+      font-weight: 600;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    .follow-btn {
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+
+    .suggested-label {
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .media-placeholder {
+      background: #121212;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      height: 300px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .post-metrics {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .caption-container {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .hashtag {
+      color: #00376b;
+      text-decoration: none;
+    }
+
+    .version-tag {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>Instagram Mock Feed</h1>
+      <div class="version-tag">Version: 2026.06.28</div>
+    </div>
+    <button class="btn" id="simulate-scroll">Simulate Instagram Scroll</button>
+  </header>
+
+  <main class="feed" id="post-feed">
+    <!-- Post 1 -->
+    <article class="instagram-post">
+      <div class="post-header">
+        <div class="author-info">
+          <a href="/orientwatches/" class="username-link">orientwatches</a>
+          <span class="suggested-label">• Suggested for you</span>
+        </div>
+        <button class="follow-btn">Follow</button>
+      </div>
+      <div class="media-placeholder">Orient Bambino Media</div>
+      <div class="post-metrics">
+        <span>2.1K likes</span>
+        <span>20 comments</span>
+      </div>
+      <div class="caption-container">
+        <a href="/orientwatches/" class="username-link">orientwatches</a>
+        <span>Our classic Bambino dress watch arrives with an Arabic numeral index for the very first time. Say hello to the Orient... <span style="color: var(--text-muted); cursor: pointer;">more</span></span>
+        <div style="margin-top: 6px;">
+          <a href="#" class="hashtag">#Bambino</a>
+          <a href="#" class="hashtag">#Arabic</a>
+          <a href="#" class="hashtag">#Orient</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- Post 2 -->
+    <article class="instagram-post">
+      <div class="post-header">
+        <div class="author-info">
+          <a href="/anthropic_ai/" class="username-link">anthropic_ai</a>
+        </div>
+        <button class="follow-btn">Follow</button>
+      </div>
+      <div class="media-placeholder">Claude Code Media</div>
+      <div class="post-metrics">
+        <span>33.4K likes</span>
+        <span>110 comments</span>
+      </div>
+      <div class="caption-container">
+        <a href="/anthropic_ai/" class="username-link">anthropic_ai</a>
+        <span>The person who actually built Claude Code just gave away 40 real prompting techniques in 24 minutes and it costs nothing... <span style="color: var(--text-muted); cursor: pointer;">more</span></span>
+        <div style="margin-top: 6px;">
+          <a href="#" class="hashtag">#Tech</a>
+          <a href="#" class="hashtag">#Claude</a>
+          <a href="#" class="hashtag">#Code</a>
+        </div>
+      </div>
+    </article>
+  </main>
+</div>
+
+<script>
+  // Simple simulator script
+  const samplePosts = [
+    {
+      author: 'fauzulkc',
+      caption: 'Testing the new scroll collector extension on instagram web layout. Hopefully it classifies correctly!',
+      hashtags: ['#ScrollCollector', '#Extension', '#Aesthetic'],
+      likes: '922',
+      comments: '15'
+    },
+    {
+      author: 'google_deepmind',
+      caption: 'AlphaFold 3 predicts the structures and interactions of all life molecules with unprecedented accuracy.',
+      hashtags: ['#AlphaFold3', '#Biology', '#AI'],
+      likes: '45.1K',
+      comments: '340'
+    }
+  ];
+
+  let postIndex = 0;
+
+  document.getElementById('simulate-scroll').addEventListener('click', () => {
+    const post = samplePosts[postIndex % samplePosts.length];
+    postIndex++;
+
+    const feed = document.getElementById('post-feed');
+    const article = document.createElement('article');
+    article.className = 'instagram-post';
+    article.innerHTML = `
+      <div class="post-header">
+        <div class="author-info">
+          <a href="/${post.author}/" class="username-link">${post.author}</a>
+          <span class="suggested-label">• Suggested for you</span>
+        </div>
+        <button class="follow-btn">Follow</button>
+      </div>
+      <div class="media-placeholder">${post.author} Post Media</div>
+      <div class="post-metrics">
+        <span>${post.likes} likes</span>
+        <span>${post.comments} comments</span>
+      </div>
+      <div class="caption-container">
+        <a href="/${post.author}/" class="username-link">${post.author}</a>
+        <span>${post.caption}</span>
+        <div style="margin-top: 6px;">
+          ${post.hashtags.map(h => `<a href="#" class="hashtag">${h}</a>`).join(' ')}
+        </div>
+      </div>
+    `;
+
+    feed.prepend(article);
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScrollCollector Setup Wizard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-start: #09090b;
+      --bg-end: #09090b;
+      --card-bg: rgba(19, 19, 22, 0.85);
+      --card-border: rgba(255, 255, 255, 0.06);
+      --text-main: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --success: #10b981;
+      --success-glow: rgba(16, 185, 129, 0.15);
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at center, #16161a 0%, #09090b 100%);
+      font-family: 'Outfit', sans-serif;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-main);
+      -webkit-app-region: drag;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    /* Standard Card View */
+    .installer-card {
+      width: 90%;
+      max-width: 800px;
+      height: 80%;
+      max-height: 480px;
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+      display: flex;
+      overflow: hidden;
+      animation: scaleUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      -webkit-app-region: no-drag;
+    }
+
+    /* Left Pane: App Intro */
+    .intro-pane {
+      width: 45%;
+      background: rgba(9, 9, 11, 0.25);
+      padding: 40px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      border-right: 1px solid var(--card-border);
+    }
+
+    .logo-container {
+      position: relative;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .logo-outer {
+      width: 88px;
+      height: 88px;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.12) 0%, rgba(9, 9, 11, 0) 70%);
+      border-radius: 50%;
+      position: absolute;
+      animation: pulse 2.5s infinite ease-in-out;
+    }
+
+    .logo {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, #818cf8 0%, #4f46e5 100%);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 8px 24px var(--accent-glow);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      z-index: 2;
+    }
+
+    .logo svg {
+      width: 28px;
+      height: 28px;
+      fill: #ffffff;
+    }
+
+    .intro-pane h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 0 0 12px 0;
+      letter-spacing: -0.02em;
+    }
+
+    .intro-pane p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin: 0;
+      font-weight: 300;
+    }
+
+    /* Right Pane: Configuration */
+    .setup-pane {
+      width: 55%;
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .setup-pane h3 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      margin: 0 0 4px 0;
+      letter-spacing: -0.01em;
+    }
+
+    .subtitle {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin: 0 0 28px 0;
+      font-weight: 300;
+    }
+
+    .browser-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex-grow: 1;
+    }
+
+    .browser-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      padding: 14px 20px;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .browser-item:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+
+    .browser-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.9rem;
+      font-weight: 500;
+    }
+
+    .browser-icon {
+      font-size: 1.2rem;
+    }
+
+    /* iOS Toggle Switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(255, 255, 255, 0.1);
+      transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 34px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 2px;
+      bottom: 2px;
+      background-color: #ffffff;
+      transition: .3s cubic-bezier(0.4, 0, 0.2, 1);
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    input:checked + .slider {
+      background-color: var(--accent);
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+
+    .btn-install {
+      width: 100%;
+      background: #6366f1;
+      color: #ffffff;
+      border: none;
+      padding: 14px;
+      border-radius: 12px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px var(--accent-glow);
+      transition: all 0.2s ease;
+      font-family: inherit;
+      margin-top: 24px;
+    }
+ 
+    .btn-install:hover {
+      background: #4f46e5;
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(99, 102, 241, 0.3);
+    }
+ 
+    .btn-install:active {
+      transform: translateY(0);
+    }
+
+    /* Splash Progress Pane */
+    .splash-pane {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      animation: fadeIn 0.3s ease-out forwards;
+    }
+
+    .splash-pane h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin: 0 0 8px 0;
+      letter-spacing: -0.02em;
+    }
+
+    .splash-pane .status-text {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+
+    /* Progress bar */
+    .progress-container {
+      width: 320px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 99px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #818cf8, #4f46e5);
+      border-radius: 99px;
+      box-shadow: 0 0 10px #4f46e5;
+      transition: width 0.3s ease;
+    }
+
+    .progress-bar.loading {
+      animation: progress-indeterminate 2.5s infinite linear;
+      width: 40%;
+      position: absolute;
+    }
+
+    .progress-bar.success {
+      width: 100% !important;
+      background: linear-gradient(90deg, #34d399, #059669);
+      box-shadow: 0 0 12px #059669;
+    }
+
+    .progress-bar.danger {
+      width: 100% !important;
+      background: linear-gradient(90deg, #f87171, #dc2626);
+      box-shadow: 0 0 12px #dc2626;
+    }
+
+    /* Success Checkmark Icon */
+    .success-icon {
+      display: none;
+      width: 32px;
+      height: 32px;
+      stroke: var(--success);
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+      animation: scaleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    .error-container {
+      display: none;
+      margin-top: 24px;
+    }
+
+    .btn-close {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+      padding: 8px 24px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s ease;
+    }
+
+    .btn-close:hover {
+      background: rgba(239, 68, 68, 0.2);
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    /* Animations */
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 0.4; }
+      50% { transform: scale(1.15); opacity: 0.7; }
+    }
+
+    @keyframes progress-indeterminate {
+      0% { left: -40%; }
+      100% { left: 100%; }
+    }
+
+    @keyframes scaleUp {
+      0% { transform: scale(0.9); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes fadeIn {
+      0% { opacity: 0; transform: translateY(10px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes scaleIn {
+      0% { transform: scale(0); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Screen 1: Browser Selection -->
+  <div class="installer-card" id="setupCard">
+    <div class="intro-pane">
+      <div class="logo-container">
+        <div class="logo-outer"></div>
+        <div class="logo">
+          <svg viewBox="0 0 24 24">
+            <path d="M19 3H7a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3zm-1 14H7a1 1 0 0 1 0-2h11v2zm0-4H7a1 1 0 0 1 0-2h11v2zm0-4H7a1 1 0 0 1 0-2h11v2z"/>
+          </svg>
+        </div>
+      </div>
+      <h2>ScrollCollector</h2>
+      <p>Synchronize your social media tracking feeds directly into a lightweight native service.</p>
+    </div>
+    
+    <div class="setup-pane">
+      <div>
+        <h3>Install Extension</h3>
+        <p class="subtitle" id="browserStatusText">Scanning for Google Chrome...</p>
+      </div>
+      
+      <button class="btn-install" id="installBtn" onclick="beginInstallation()">
+        Install & Launch
+      </button>
+    </div>
+  </div>
+
+  <!-- Screen 2: Install Progress Splash -->
+  <div class="splash-pane" id="splashPane" style="display: none;">
+    <div class="logo-container">
+      <div class="logo-outer" id="logo-glow"></div>
+      <div class="logo" id="logo-icon">
+        <svg viewBox="0 0 24 24" id="svg-scroll">
+          <path d="M19 3H7a3 3 0 0 0-3 3v12a3 3 0 0 0 3 3h12a3 3 0 0 0 3-3V6a3 3 0 0 0-3-3zm-1 14H7a1 1 0 0 1 0-2h11v2zm0-4H7a1 1 0 0 1 0-2h11v2zm0-4H7a1 1 0 0 1 0-2h11v2z"/>
+        </svg>
+        <svg viewBox="0 0 24 24" class="success-icon" id="svg-success">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+    </div>
+
+    <h1 id="splashTitle">Installing ScrollCollector</h1>
+    <p class="status-text" id="status">Initializing configuration files...</p>
+
+    <div class="progress-container">
+      <div class="progress-bar loading" id="progress"></div>
+    </div>
+
+    <div class="error-container" id="error-box">
+      <button class="btn-close" onclick="window.exitInstaller()">Close Installer</button>
+    </div>
+  </div>
+
+  <!-- Screen 3: Guided Drag & Drop -->
+  <div class="splash-pane" id="dragDropPane" style="display: none; animation: fadeIn 0.4s ease-out forwards;">
+    <div class="logo-container">
+      <div class="logo-outer" style="background: radial-gradient(circle, rgba(16, 185, 129, 0.2) 0%, rgba(9, 13, 27, 0) 70%);"></div>
+      <div class="logo" style="background: linear-gradient(135deg, #34d399 0%, #059669 100%); box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);">
+        <svg viewBox="0 0 24 24" class="success-icon" style="display: block;">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+    </div>
+    
+    <h1>Final Step!</h1>
+    <p class="status-text" style="max-width: 340px; line-height: 1.5;">
+      We've highlighted the <b>ScrollCollector Extension</b> folder on your computer.<br><br>
+      1. Open Chrome and go to <b>chrome://extensions</b><br>
+      2. Turn on <b>Developer Mode</b> in the top right.<br>
+      3. <b>Drag and Drop</b> the folder into Chrome.
+    </p>
+
+    <button class="btn-install" onclick="window.exitInstaller()" style="margin-top: 10px; background: rgba(255, 255, 255, 0.1); box-shadow: none;">
+      I'm Done, Close Setup
+    </button>
+  </div>
+
+  <script>
+    let detectedBrowsers = { chrome: false, edge: false, brave: false };
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Small boot delay
+      await new Promise(r => setTimeout(r, 200));
+
+      if (typeof window.detectBrowsers === 'function') {
+        try {
+          const res = await window.detectBrowsers();
+          detectedBrowsers = JSON.parse(res);
+          renderBrowsers();
+        } catch (err) {
+          console.error("Browser detection error:", err);
+          renderFallbackBrowsers();
+        }
+      } else {
+        // Fallback simulation mock values
+        detectedBrowsers = { chrome: true, edge: true, brave: false };
+        renderBrowsers();
+      }
+    });
+
+    function renderBrowsers() {
+      const statusText = document.getElementById('browserStatusText');
+      const installBtn = document.getElementById('installBtn');
+
+      if (detectedBrowsers.chrome) {
+        statusText.innerHTML = "Google Chrome detected! Ready to install ScrollCollector.";
+      } else {
+        statusText.innerHTML = "<span style='color: #ff5252;'>Google Chrome not detected. Please install Chrome.</span>";
+        installBtn.style.display = "none";
+      }
+    }
+
+    function renderFallbackBrowsers() {
+      const statusText = document.getElementById('browserStatusText');
+      statusText.innerHTML = "Auto-detection unavailable. Proceeding with installation anyway.";
+      
+      detectedBrowsers = { chrome: true };
+    }
+
+    function beginInstallation() {
+      const installBtn = document.getElementById('installBtn');
+      if (installBtn.disabled) return;
+      installBtn.disabled = true;
+      installBtn.innerText = "Installing...";
+
+      // Swap viewports to progress screen
+      document.getElementById('setupCard').style.display = 'none';
+      document.getElementById('splashPane').style.display = 'flex';
+
+      const steps = [
+        "Initializing installation directory...",
+        "Extracting ScrollCollector extension...",
+        "Preparing Chrome extension assets...",
+        "Finalizing settings..."
+      ];
+      let stepIdx = 0;
+      const statusEl = document.getElementById('status');
+      const progressEl = document.getElementById('progress');
+      const splashTitle = document.getElementById('splashTitle');
+      const svgScroll = document.getElementById('svg-scroll');
+      const svgSuccess = document.getElementById('svg-success');
+      const logoIcon = document.getElementById('logo-icon');
+
+      const stepInterval = setInterval(() => {
+        if (stepIdx < steps.length - 1) {
+          stepIdx++;
+          statusEl.innerText = steps[stepIdx];
+        }
+      }, 700);
+
+      setTimeout(async () => {
+        try {
+          const resStr = await window.installScrollCollector();
+          const res = JSON.parse(resStr);
+          
+          clearInterval(stepInterval);
+          if (res.success) {
+            statusEl.innerText = "ScrollCollector has been installed!";
+            splashTitle.innerText = "Setup Complete";
+            progressEl.className = "progress-bar success";
+
+            svgScroll.style.display = "none";
+            svgSuccess.style.display = "block";
+            logoIcon.style.background = "linear-gradient(135deg, #34d399 0%, #059669 100%)";
+            logoIcon.style.boxShadow = "0 8px 24px var(--success-glow)";
+
+            // Wait a brief moment, then switch to drag and drop guide
+            await new Promise(r => setTimeout(r, 1200));
+            document.getElementById('splashPane').style.display = 'none';
+            document.getElementById('dragDropPane').style.display = 'flex';
+          } else {
+            handleFailure(res.error);
+          }
+        } catch (err) {
+          clearInterval(stepInterval);
+          handleFailure(err.message || err);
+        }
+      }, 700);
+    }
+
+    function handleFailure(errorMsg) {
+      document.getElementById('status').innerText = "Error details: " + errorMsg;
+      document.getElementById('splashTitle').innerText = "Setup Failed";
+      document.getElementById('progress').className = "progress-bar danger";
+      document.getElementById('logo-icon').style.background = "linear-gradient(135deg, #f87171 0%, #dc2626 100%)";
+      document.getElementById('logo-icon').style.boxShadow = "0 8px 24px rgba(239, 68, 68, 0.4)";
+      document.getElementById('error-box').style.display = "block";
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScrollCollector Companion App</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090611;
+      --panel-bg: #110e1e;
+      --card-bg: rgba(255, 255, 255, 0.02);
+      --card-border: rgba(99, 102, 241, 0.12);
+      --card-border-hover: rgba(99, 102, 241, 0.3);
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --primary-glow: rgba(99, 102, 241, 0.25);
+      --secondary: #a855f7;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --success: #10b981;
+      --danger: #ef4444;
+      --warn: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg);
+      background-image: 
+        radial-gradient(circle at 5% 5%, rgba(99, 102, 241, 0.08) 0%, transparent 35%),
+        radial-gradient(circle at 95% 95%, rgba(168, 85, 247, 0.08) 0%, transparent 35%);
+      background-attachment: fixed;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+    }
+
+    /* Sidebar Layout */
+    aside {
+      width: 260px;
+      background: var(--panel-bg);
+      border-right: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      position: fixed;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .brand-logo {
+      font-size: 1.75rem;
+    }
+
+    .brand-name {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 800;
+      font-size: 1.25rem;
+      background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      letter-spacing: -0.02em;
+    }
+
+    .nav-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      flex-grow: 1;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1rem;
+      border-radius: 12px;
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .nav-item:hover, .nav-item.active {
+      color: white;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .nav-item.active {
+      border: 1px solid var(--card-border);
+      background: rgba(99, 102, 241, 0.08);
+      color: #a5b4fc;
+    }
+
+    /* Main Content Layout */
+    main {
+      margin-left: 260px;
+      flex-grow: 1;
+      padding: 2.5rem;
+      max-width: 1200px;
+      width: calc(100% - 260px);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+    }
+
+    .header-info h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .header-info p {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    /* Toggle pause button */
+    .btn-pause {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.65rem 1.25rem;
+      border-radius: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+      box-shadow: 0 4px 15px var(--primary-glow);
+    }
+
+    .btn-pause:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-pause.paused {
+      background: var(--warn);
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.2);
+    }
+
+    /* Stats Grid */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .stat-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 18px;
+      padding: 1.5rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .stat-val {
+      font-family: 'Outfit', sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      color: white;
+    }
+
+    /* Panels switching */
+    .view-panel {
+      display: none;
+    }
+
+    .view-panel.active {
+      display: block;
+    }
+
+    /* Cards Stream Grid */
+    .stream-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    .grid-view {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .post-card {
+      background: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .post-card:hover {
+      border-color: var(--card-border-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 25px rgba(99, 102, 241, 0.08);
+    }
+
+    .post-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .post-source {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .post-favicon {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+    }
+
+    .badge {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.25rem 0.65rem;
+      border-radius: 100px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .badge.category {
+      background: rgba(99, 102, 241, 0.12);
+      border-color: rgba(99, 102, 241, 0.3);
+      color: #a5b4fc;
+      cursor: pointer;
+    }
+
+    .badge.fav {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.3);
+      color: var(--danger);
+    }
+
+    .post-body {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
+      word-break: break-word;
+    }
+
+    .post-body.expanded {
+      display: block;
+      -webkit-line-clamp: none;
+    }
+
+    .post-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+      border-top: 1px solid rgba(255,255,255,0.03);
+      padding-top: 0.75rem;
+    }
+
+    .post-time {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .post-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .icon-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.08);
+      color: var(--text-muted);
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: rgba(255,255,255,0.03);
+      color: white;
+    }
+
+    .icon-btn.fav-btn.active {
+      color: var(--danger);
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    .icon-btn.delete-btn:hover {
+      color: var(--danger);
+      background: rgba(239, 68, 68, 0.08);
+      border-color: rgba(239, 68, 68, 0.3);
+    }
+
+    /* Tag Selector Override Popover */
+    .override-popover {
+      display: none;
+      position: absolute;
+      bottom: 45px;
+      left: 10px;
+      background: #181528;
+      border: 1px solid rgba(99, 102, 241, 0.4);
+      border-radius: 12px;
+      padding: 0.5rem;
+      z-index: 100;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      max-height: 180px;
+      overflow-y: auto;
+      width: 180px;
+    }
+
+    .override-popover.show {
+      display: block;
+    }
+
+    .popover-item {
+      padding: 0.4rem 0.65rem;
+      font-size: 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--text-muted);
+      transition: background 0.2s;
+    }
+
+    .popover-item:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+    }
+
+    /* Settings and Analytics layouts */
+    .flex-layout {
+      display: flex;
+      gap: 2rem;
+    }
+
+    .flex-column {
+      flex: 1;
+      background: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 1.75rem;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+
+    .section-title {
+      font-family: 'Outfit', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      color: #cbd5e1;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding-bottom: 0.5rem;
+    }
+
+    .settings-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      max-height: 250px;
+      overflow-y: auto;
+      margin-bottom: 1.25rem;
+    }
+
+    .settings-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255,255,255,0.02);
+      padding: 0.5rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.04);
+      font-size: 0.9rem;
+    }
+
+    .btn-delete-item {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-weight: 700;
+      padding: 2px 6px;
+    }
+
+    .btn-delete-item:hover {
+      color: var(--danger);
+    }
+
+    .settings-form {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .settings-input {
+      flex-grow: 1;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      color: white;
+      padding: 0.5rem;
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+
+    .settings-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    .btn-add {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+    }
+
+    /* Analytics Chart list */
+    .chart-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .chart-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .chart-label-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .chart-bar-bg {
+      height: 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .chart-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+      border-radius: 10px;
+      width: 0;
+      transition: width 0.8s ease-out;
+    }
+
+    /* Toast alert */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--success);
+      color: white;
+      padding: 1rem 1.5rem;
+      border-radius: 12px;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3);
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    /* Search bar */
+    .search-section {
+      margin-bottom: 1.5rem;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .search-input {
+      flex-grow: 1;
+      background: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      color: white;
+      border-radius: 12px;
+      padding: 0.75rem 1.25rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+    }
+
+    .search-input:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Navigation Sidebar -->
+  <aside>
+    <div class="brand">
+      <span class="brand-logo">📜</span>
+      <span class="brand-name">ScrollCollector</span>
+    </div>
+    
+    <ul class="nav-list">
+      <li class="nav-item active" onclick="switchTab('stream')">
+        <span>📜</span> Stream
+      </li>
+      <li class="nav-item" onclick="switchTab('analytics')">
+        <span>📊</span> Analytics
+      </li>
+      <li class="nav-item" onclick="switchTab('settings')">
+        <span>⚙️</span> Settings
+      </li>
+    </ul>
+
+    <div style="font-size: 0.7rem; color: var(--text-muted); text-align: center;">
+      ScrollCollector Companion v2.0
+    </div>
+  </aside>
+
+  <!-- Main Content Space -->
+  <main>
+    <header>
+      <div class="header-info">
+        <h1 id="page-title">Collected Stream</h1>
+        <p id="page-subtitle">Unified timeline compiled across all Chromium browsers</p>
+      </div>
+      <div class="header-controls">
+        <button id="btnPause" class="btn-pause" onclick="togglePauseState()">
+          <span>⏸️</span> Pause
+        </button>
+      </div>
+    </header>
+
+    <!-- Stats Grid -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total items</div>
+        <div class="stat-val" id="statTotal">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Classified ratio</div>
+        <div class="stat-val" id="statRatio">0%</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Favorites</div>
+        <div class="stat-val" id="statFavs">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Active filters</div>
+        <div class="stat-val" id="statFilters">All</div>
+      </div>
+    </section>
+
+    <!-- VIEW PANEL: STREAM -->
+    <div id="view-stream" class="view-panel active">
+      <div class="search-section">
+        <input type="text" id="searchInput" class="search-input" placeholder="Search collected items by text..." oninput="handleSearch()" />
+      </div>
+      <div class="grid-view" id="cardsGrid">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+
+    <!-- VIEW PANEL: ANALYTICS -->
+    <div id="view-analytics" class="view-panel">
+      <div class="flex-layout">
+        <!-- Classifications -->
+        <div class="flex-column">
+          <div class="section-title">Feed Classifications</div>
+          <div class="chart-list" id="analyticsChart">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+        <!-- Source Domains -->
+        <div class="flex-column">
+          <div class="section-title">Social Feeds Coverage</div>
+          <div class="chart-list" id="analyticsSites">
+            <!-- Rendered dynamically -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VIEW PANEL: SETTINGS -->
+    <div id="view-settings" class="view-panel">
+      <div class="flex-layout">
+        <!-- Managed Tags -->
+        <div class="flex-column">
+          <div class="section-title">Curation Categories</div>
+          <ul class="settings-list" id="settingsTags"></ul>
+          <form class="settings-form" onsubmit="addTag(event)">
+            <input type="text" id="newTagInput" class="settings-input" placeholder="Add custom category..." required />
+            <button type="submit" class="btn-add">Add</button>
+          </form>
+        </div>
+        <!-- Ignored Keywords -->
+        <div class="flex-column">
+          <div class="section-title">Ignored Keywords</div>
+          <ul class="settings-list" id="settingsKeywords"></ul>
+          <form class="settings-form" onsubmit="addKeyword(event)">
+            <input type="text" id="newKeywordInput" class="settings-input" placeholder="Filter keyword..." required />
+            <button type="submit" class="btn-add">Block</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Toast system -->
+  <div class="toast" id="toast">State updated successfully!</div>
+
+  <script>
+    let state = {
+      configuration: { trackedTags: [], ignoredKeywords: [], isTrackingPaused: false },
+      metrics: { counts: {} },
+      stack: [],
+      telemetry: { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0 }
+    };
+    
+    let activeView = 'stream';
+    let searchQuery = '';
+    let openOverrideId = null;
+
+    async function loadState() {
+      try {
+        const res = await fetch('/api/state');
+        if (res.ok) {
+          state = await res.json();
+          updateDashboard();
+        }
+      } catch (err) {
+        console.error("Error loading state from Go server:", err);
+      }
+    }
+
+    async function saveState() {
+      try {
+        const res = await fetch('/api/state', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(state)
+        });
+        if (res.ok) {
+          showToast("Changes synced to all browsers!");
+          updateDashboard();
+        }
+      } catch (err) {
+        console.error("Error saving state:", err);
+      }
+    }
+
+    function switchTab(tab) {
+      activeView = tab;
+      
+      // Update nav active styling
+      document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+      const activeIdx = tab === 'stream' ? 0 : (tab === 'analytics' ? 1 : 2);
+      document.querySelectorAll('.nav-item')[activeIdx].classList.add('active');
+
+      // Update visibility
+      document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+      document.getElementById(`view-${tab}`).classList.add('active');
+      
+      // Headers
+      const title = document.getElementById('page-title');
+      const subtitle = document.getElementById('page-subtitle');
+      if (tab === 'stream') {
+        title.innerText = 'Collected Stream';
+        subtitle.innerText = 'Unified timeline compiled across all Chromium browsers';
+      } else if (tab === 'analytics') {
+        title.innerText = 'Analytics & Insights';
+        subtitle.innerText = 'Visualized metrics of collected content';
+      } else {
+        title.innerText = 'System Settings';
+        subtitle.innerText = 'Manage keywords, custom tags, and configurations';
+      }
+      
+      updateDashboard();
+    }
+
+    function updateDashboard() {
+      // 1. Header controls (pause button)
+      const pauseBtn = document.getElementById('btnPause');
+      if (state.configuration.isTrackingPaused) {
+        pauseBtn.innerHTML = "▶️ Resume";
+        pauseBtn.classList.add('paused');
+      } else {
+        pauseBtn.innerHTML = "⏸️ Pause";
+        pauseBtn.classList.remove('paused');
+      }
+
+      // 2. Stats values
+      document.getElementById('statTotal').innerText = state.stack ? state.stack.length : 0;
+      
+      // Ratio
+      const total = state.telemetry ? state.telemetry.totalProcessed : 0;
+      const classified = state.telemetry ? state.telemetry.classifiedCount : 0;
+      const ratio = total > 0 ? Math.round((classified / total) * 100) : 0;
+      document.getElementById('statRatio').innerText = `${ratio}%`;
+
+      // Favorites
+      const favsCount = state.stack ? state.stack.filter(item => item.isFavorite).length : 0;
+      document.getElementById('statFavs').innerText = favsCount;
+
+      // 3. Render active tab UI
+      if (activeView === 'stream') {
+        renderStream();
+      } else if (activeView === 'analytics') {
+        renderAnalytics();
+      } else if (activeView === 'settings') {
+        renderSettings();
+      }
+    }
+
+    function renderStream() {
+      const grid = document.getElementById('cardsGrid');
+      grid.innerHTML = '';
+      
+      if (!state.stack || state.stack.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem;">No items collected yet. Start scrolling feeds in your browser!</div>';
+        return;
+      }
+
+      const filtered = state.stack.filter(item => {
+        if (!searchQuery) return true;
+        return item.textSnippet.toLowerCase().includes(searchQuery.toLowerCase()) || 
+               item.assignedTag.toLowerCase().includes(searchQuery.toLowerCase());
+      });
+
+      if (filtered.length === 0) {
+        grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; color: var(--text-muted); padding: 3rem;">No matches found for your search.</div>';
+        return;
+      }
+
+      filtered.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'post-card';
+        card.setAttribute('data-id', item.id);
+        
+        const favIconUrl = `https://www.google.com/s2/favicons?sz=32&domain=${item.sourcePlatform}`;
+        const timeStr = new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        card.innerHTML = `
+          <div class="post-header">
+            <div class="post-source">
+              <img class="post-favicon" src="${favIconUrl}" alt="" onerror="this.src='data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'16\' height=\'16\'><circle cx=\'8\' cy=\'8\' r=\'6\' fill=\'%236366f1\'/></svg>'">
+              <span>${item.sourcePlatform}</span>
+            </div>
+            <div class="post-badges">
+              <span class="badge category" onclick="toggleOverrideMenu('${item.id}', event)">${item.assignedTag}</span>
+              ${item.isFavorite ? '<span class="badge fav">❤️</span>' : ''}
+            </div>
+          </div>
+          <div class="post-body" onclick="this.classList.toggle('expanded')">${escapeHtml(item.textSnippet)}</div>
+          <div class="post-footer">
+            <span class="post-time">${timeStr}</span>
+            <div class="post-actions">
+              <button class="icon-btn fav-btn ${item.isFavorite ? 'active' : ''}" onclick="toggleFav('${item.id}')">❤️</button>
+              <button class="icon-btn delete-btn" onclick="deleteCard('${item.id}')">🗑️</button>
+            </div>
+          </div>
+          <div class="override-popover" id="popover-${item.id}"></div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function toggleOverrideMenu(itemId, event) {
+      event.stopPropagation();
+      
+      // Close previous popover
+      if (openOverrideId && openOverrideId !== itemId) {
+        document.getElementById(`popover-${openOverrideId}`).classList.remove('show');
+      }
+
+      const popover = document.getElementById(`popover-${itemId}`);
+      if (popover.classList.contains('show')) {
+        popover.classList.remove('show');
+        openOverrideId = null;
+        return;
+      }
+
+      popover.innerHTML = '';
+      state.configuration.trackedTags.forEach(t => {
+        const item = document.createElement('div');
+        item.className = 'popover-item';
+        item.innerText = t.label;
+        item.onclick = () => {
+          reclassifyCard(itemId, t.label);
+          popover.classList.remove('show');
+          openOverrideId = null;
+        };
+        popover.appendChild(item);
+      });
+
+      popover.classList.add('show');
+      openOverrideId = itemId;
+    }
+
+    // Dismiss override menu on global click
+    document.addEventListener('click', () => {
+      if (openOverrideId) {
+        const popover = document.getElementById(`popover-${openOverrideId}`);
+        if (popover) popover.classList.remove('show');
+        openOverrideId = null;
+      }
+    });
+
+    async function reclassifyCard(itemId, newTag) {
+      const card = state.stack.find(item => item.id === itemId);
+      if (card) {
+        // Adjust metrics count
+        const oldTag = card.assignedTag;
+        if (state.metrics.counts[oldTag]) state.metrics.counts[oldTag]--;
+        state.metrics.counts[newTag] = (state.metrics.counts[newTag] || 0) + 1;
+        
+        card.assignedTag = newTag;
+        await saveState();
+      }
+    }
+
+    async function toggleFav(itemId) {
+      const card = state.stack.find(item => item.id === itemId);
+      if (card) {
+        card.isFavorite = !card.isFavorite;
+        card.favoritedAt = card.isFavorite ? Date.now() : null;
+        await saveState();
+      }
+    }
+
+    async function deleteCard(itemId) {
+      const cardIdx = state.stack.findIndex(item => item.id === itemId);
+      if (cardIdx !== -1) {
+        const card = state.stack[cardIdx];
+        
+        // Decrement metrics count
+        if (state.metrics.counts[card.assignedTag]) {
+          state.metrics.counts[card.assignedTag]--;
+        }
+        
+        state.stack.splice(cardIdx, 1);
+        await saveState();
+      }
+    }
+
+    function handleSearch() {
+      searchQuery = document.getElementById('searchInput').value;
+      renderStream();
+    }
+
+    function renderAnalytics() {
+      // Category counts
+      const countsDiv = document.getElementById('analyticsChart');
+      countsDiv.innerHTML = '';
+      
+      const counts = state.metrics.counts || {};
+      const maxCount = Math.max(...Object.values(counts), 1);
+      
+      Object.entries(counts).sort((a,b) => b[1] - a[1]).forEach(([tag, count]) => {
+        if (count === 0) return;
+        const pct = Math.round((count / maxCount) * 100);
+        
+        const row = document.createElement('div');
+        row.className = 'chart-item';
+        row.innerHTML = `
+          <div class="chart-label-row">
+            <span>${tag}</span>
+            <span>${count}</span>
+          </div>
+          <div class="chart-bar-bg">
+            <div class="chart-bar-fill" style="width: ${pct}%"></div>
+          </div>
+        `;
+        countsDiv.appendChild(row);
+      });
+
+      // Sites coverage
+      const sitesDiv = document.getElementById('analyticsSites');
+      sitesDiv.innerHTML = '';
+      
+      // Calculate site distribution
+      const siteCounts = {};
+      if (state.stack) {
+        state.stack.forEach(item => {
+          siteCounts[item.sourcePlatform] = (siteCounts[item.sourcePlatform] || 0) + 1;
+        });
+      }
+      
+      const maxSiteCount = Math.max(...Object.values(siteCounts), 1);
+      Object.entries(siteCounts).sort((a,b) => b[1] - a[1]).forEach(([site, count]) => {
+        const pct = Math.round((count / maxSiteCount) * 100);
+        const row = document.createElement('div');
+        row.className = 'chart-item';
+        row.innerHTML = `
+          <div class="chart-label-row">
+            <span>${site}</span>
+            <span>${count}</span>
+          </div>
+          <div class="chart-bar-bg">
+            <div class="chart-bar-fill" style="width: ${pct}%"></div>
+          </div>
+        `;
+        sitesDiv.appendChild(row);
+      });
+    }
+
+    function renderSettings() {
+      // Tags
+      const tagsList = document.getElementById('settingsTags');
+      tagsList.innerHTML = '';
+      state.configuration.trackedTags.forEach(t => {
+        const item = document.createElement('li');
+        item.className = 'settings-item';
+        item.innerHTML = `
+          <span>${t.label} ${t.isDynamic ? '<em>(Dynamic)</em>' : ''}</span>
+          <button class="btn-delete-item" onclick="deleteTag('${t.id}')">×</button>
+        `;
+        tagsList.appendChild(item);
+      });
+
+      // Keywords
+      const keywordsList = document.getElementById('settingsKeywords');
+      keywordsList.innerHTML = '';
+      if (state.configuration.ignoredKeywords) {
+        state.configuration.ignoredKeywords.forEach(kw => {
+          const item = document.createElement('li');
+          item.className = 'settings-item';
+          item.innerHTML = `
+            <span>${kw}</span>
+            <button class="btn-delete-item" onclick="deleteKeyword('${kw}')">×</button>
+          `;
+          keywordsList.appendChild(item);
+        });
+      }
+    }
+
+    async function togglePauseState() {
+      state.configuration.isTrackingPaused = !state.configuration.isTrackingPaused;
+      await saveState();
+    }
+
+    async function addTag(e) {
+      e.preventDefault();
+      const val = document.getElementById('newTagInput').value.trim();
+      if (!val) return;
+      
+      const exists = state.configuration.trackedTags.some(t => t.label.toLowerCase() === val.toLowerCase());
+      if (!exists) {
+        state.configuration.trackedTags.push({
+          id: 't_' + Date.now(),
+          label: val,
+          isEnabled: true
+        });
+        document.getElementById('newTagInput').value = '';
+        await saveState();
+      }
+    }
+
+    async function deleteTag(id) {
+      state.configuration.trackedTags = state.configuration.trackedTags.filter(t => t.id !== id);
+      await saveState();
+    }
+
+    async function addKeyword(e) {
+      e.preventDefault();
+      const val = document.getElementById('newKeywordInput').value.trim();
+      if (!val) return;
+      
+      if (!state.configuration.ignoredKeywords) {
+        state.configuration.ignoredKeywords = [];
+      }
+      const exists = state.configuration.ignoredKeywords.includes(val);
+      if (!exists) {
+        state.configuration.ignoredKeywords.push(val);
+        document.getElementById('newKeywordInput').value = '';
+        await saveState();
+      }
+    }
+
+    async function deleteKeyword(kw) {
+      state.configuration.ignoredKeywords = state.configuration.ignoredKeywords.filter(k => k !== kw);
+      await saveState();
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3000);
+    }
+
+    function escapeHtml(text) {
+      return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Bootstrap loading
+    loadState();
+    // Poll updates every 3 seconds
+    setInterval(loadState, 3000);
+  </script>
+</body>
+</html>

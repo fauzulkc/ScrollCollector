@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Medium Integration Mock — ScrollCollector</title>
+  <style>
+    :root {
+      --bg: #ffffff;
+      --border: #f2f2f2;
+      --text: #292929;
+      --text-muted: #757575;
+      --accent: #1a8917;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    header {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 15px;
+      margin-bottom: 25px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin: 0;
+      color: var(--text);
+    }
+
+    button.btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 99px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    button.btn:hover {
+      background: #156f12;
+    }
+
+    .feed {
+      display: flex;
+      flex-direction: column;
+      gap: 30px;
+    }
+
+    /* Medium Density Article Blocks */
+    .article-card {
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 20px;
+    }
+
+    .author-line {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 8px;
+    }
+
+    .article-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 0 0 6px 0;
+      color: var(--text);
+      line-height: 24px;
+    }
+
+    .article-snippet {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 20px;
+      margin-bottom: 12px;
+    }
+
+    .read-time {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div>
+      <h1>Medium Simulator</h1>
+      <span style="font-size: 11px; color: var(--text-muted);">Version: 2026.06.27</span>
+    </div>
+    <button class="btn" id="btn-scroll">Publish Article</button>
+  </header>
+
+  <div class="feed" id="feed">
+
+    <div class="article-card">
+      <div class="author-line">Alex Jenkins in Towards Data Science</div>
+      <h2 class="article-title">How we optimized our local transformer performance by 300% using quantization</h2>
+      <p class="article-snippet">Optimizing large language models for client-side web applications has always been a bottleneck. In this guide, we dive into INT8 and INT4 quantization techniques on-device.</p>
+      <span class="read-time">5 min read</span>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let postCount = 0;
+  document.getElementById('btn-scroll').addEventListener('click', () => {
+    postCount++;
+    const feed = document.getElementById('feed');
+    const newArt = document.createElement('div');
+    newArt.className = 'article-card';
+    newArt.innerHTML = `
+      <div class="author-line">Writer #${postCount} in Engineering Tech</div>
+      <h2 class="article-title">Deploying Microservices on Kubernetes with Zero Downtime [Article ${postCount}]</h2>
+      <p class="article-snippet">Scaling deployments inside distributed cloud containers requires careful orchestrator setup. Let's look at rolling updates and readiness probes.</p>
+      <span class="read-time">4 min read</span>
+    `;
+    feed.appendChild(newArt);
+    
+    const btn = document.getElementById('btn-scroll');
+    const originalText = btn.innerText;
+    btn.innerText = "⚡ Article Added!";
+    btn.style.background = "#22c55e";
+    setTimeout(() => {
+      btn.innerText = originalText;
+      btn.style.background = "";
+    }, 800);
+  });
+</script>
+</body>
+</html>

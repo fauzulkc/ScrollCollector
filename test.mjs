@@ -35,9 +35,12 @@ test('PII Sanitizer Tests', (t) => {
 });
 
 test('Prompt Builder Tests', (t) => {
-  const systemPrompt = buildSystemPrompt(['Tech', 'Finance']);
-  assert.ok(systemPrompt.includes('Tech, Finance'));
-  assert.ok(systemPrompt.includes('deterministic text categorization'));
+  const systemPrompt = buildSystemPrompt([
+    { label: 'Tech', prompt: 'Identify posts related to Tech.' },
+    { label: 'Finance', prompt: 'Identify posts related to Finance.' }
+  ]);
+  assert.ok(systemPrompt.includes('Tech: Identify posts related to Tech.'));
+  assert.ok(systemPrompt.includes('semantic text categorization'));
 
   const userPrompt = buildUserPrompt('Exploring Bitcoin markets', 'linkedin.com');
   assert.strictEqual(userPrompt, '[Source: linkedin.com] "Exploring Bitcoin markets"');
@@ -51,23 +54,27 @@ test('Inference Engine - cleanTagName Tests', (t) => {
 });
 
 test('Inference Engine - keywordFallback Tests', (t) => {
-  const enabledTags = ['Tech', 'Finance', 'AI & Machine Learning'];
+  const enabledTags = [
+    { label: 'Tech', prompt: 'Identify posts related to technology, code, coding, programming.' },
+    { label: 'Finance', prompt: 'Identify posts related to finance, economy, bond, yields, market stocks.' },
+    { label: 'AI & Machine Learning', prompt: 'Identify posts related to AI, machine learning, deep learning, model, transformers.' }
+  ];
 
   // Tech match
   const match1 = keywordFallback('We need to write python code and commit it to our repository.', enabledTags);
-  assert.strictEqual(match1.category, 'Tech');
+  assert.strictEqual(match1.tags[0]?.name, 'Tech');
 
   // Finance match
   const match2 = keywordFallback('The bond yield curve is showing recession indicators.', enabledTags);
-  assert.strictEqual(match2.category, 'Finance');
+  assert.strictEqual(match2.tags[0]?.name, 'Finance');
 
   // AI match
   const match3 = keywordFallback('A new transformers language model was trained on GPUs.', enabledTags);
-  assert.strictEqual(match3.category, 'AI & Machine Learning');
+  assert.strictEqual(match3.tags[0]?.name, 'AI & Machine Learning');
 
   // Unclassified fallback
   const match4 = keywordFallback('The weather is lovely outside today.', enabledTags);
-  assert.strictEqual(match4.category, 'Unclassified');
+  assert.strictEqual(match4.tags.length, 0);
 });
 
 test('Inference Engine - extractNounTopic Heuristic Tests', (t) => {
