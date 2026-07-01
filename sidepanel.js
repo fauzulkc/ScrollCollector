@@ -27,7 +27,7 @@ const PLATFORM_ICONS = {
 // ---------- State ----------
 
 let state = {
-  configuration: { trackedTags: [], sites: [], ignoredKeywords: [], isTrackingPaused: false, trackingPausedAt: null },
+  configuration: { trackedTags: [], sites: [], ignoredKeywords: [], ignoredTags: [], ignoredLinks: [], ignoredDomains: [], isTrackingPaused: false, trackingPausedAt: null },
   metrics: { counts: {} },
   stack: [],
   telemetry: {
@@ -39,6 +39,21 @@ let state = {
   },
   engineStatus: { tier: 2, name: 'Rule-based Classifier', status: 'ready' }
 };
+
+function getActiveStack() {
+  const stack = state.stack || [];
+  const ignoredTags = (state.configuration?.ignoredTags || []).map(t => t.toLowerCase());
+  const ignoredLinks = state.configuration?.ignoredLinks || [];
+  const ignoredDomains = (state.configuration?.ignoredDomains || []).map(d => d.toLowerCase());
+
+  return stack.filter(i => {
+    if (ignoredTags.includes((i.assignedTag || '').toLowerCase())) return false;
+    if (i.sourceUrl && ignoredLinks.includes(i.sourceUrl)) return false;
+    const rawPlatform = (i.sourcePlatform || '').toLowerCase();
+    if (ignoredDomains.some(d => rawPlatform === d || rawPlatform.endsWith('.' + d))) return false;
+    return true;
+  });
+}
 
 let activeFilterTag = 'All'; // Horizontal category tag filter
 let activeFilterSite = 'All'; // Horizontal website filter
@@ -316,7 +331,7 @@ function renderTelemetry() {
   const rate = total > 0 ? Math.round((classified / total) * 100) : 0;
   const engineName = (state.engineStatus && state.engineStatus.name) || '—';
 
-  dom.tabCountStream.textContent = state.stack.length;
+  dom.tabCountStream.textContent = getActiveStack().length;
 
   dom.telTotal.textContent = total;
   dom.telRate.textContent = rate + '%';
@@ -646,13 +661,14 @@ function initVirtualizer() {
 
 function getFilterCategories() {
   const tags = state.configuration.trackedTags || [];
-  const list = state.stack || [];
+  const list = getActiveStack();
+  const ignoredTags = (state.configuration?.ignoredTags || []).map(t => t.toLowerCase());
 
   const enabledTags = [];
   tags.forEach(t => {
     const label = typeof t === 'string' ? t : t.label;
     const enabled = typeof t === 'string' ? true : t.isEnabled !== false;
-    if (enabled && label !== 'Ads') {
+    if (enabled && label !== 'Ads' && !ignoredTags.includes(label.toLowerCase())) {
       enabledTags.push(label);
     }
   });
@@ -677,7 +693,7 @@ function getFilterCategories() {
 
 function renderFilterPills() {
   const categories = getFilterCategories();
-  const list = state.stack || [];
+  const list = getActiveStack();
 
   const counts = { All: list.length, Favorites: list.filter(i => i.isFavorite).length };
   list.forEach(item => {
@@ -775,7 +791,7 @@ function setFilterSite(site) {
 
   // If the active tag filter is not 'All' or 'Favorites', check if any items match the activeTag + new site
   if (activeFilterTag !== 'All' && activeFilterTag !== 'Favorites' && activeFilterTag !== 'Ads') {
-    const hasItemsForTagOnSite = (state.stack || []).some(item => {
+    const hasItemsForTagOnSite = getActiveStack().some(item => {
       const tagMatch = item.assignedTag === activeFilterTag;
       if (!tagMatch) return false;
       
@@ -798,7 +814,7 @@ function setFilterSite(site) {
       activeFilterTag = 'All';
     }
   } else if (activeFilterTag === 'Ads') {
-    const hasAdsOnSite = (state.stack || []).some(item => {
+    const hasAdsOnSite = getActiveStack().some(item => {
       if (!item.isAd) return false;
       if (activeFilterSite === 'All') return true;
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
@@ -840,10 +856,10 @@ function renderSiteFilterPills() {
   });
 
   // 2. Compute counts dynamically
-  const counts = { All: state.stack ? state.stack.length : 0 };
+  const counts = { All: getActiveStack().length };
   let otherCount = 0;
 
-  (state.stack || []).forEach(item => {
+  getActiveStack().forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
     
     // Find matching site candidate
@@ -865,7 +881,7 @@ function renderSiteFilterPills() {
 
   // 3. Sort candidate sites by recency (last item added timestamp)
   const siteTimestamps = {};
-  (state.stack || []).forEach(item => {
+  getActiveStack().forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
     let matchedCandidate = null;
     for (const site of candidateSites) {
@@ -960,7 +976,7 @@ function renderSiteFilterPills() {
 // ---------- Rendering: Author Filters ----------
 
 function getFilterAuthors() {
-  const list = state.stack || [];
+  const list = getActiveStack();
   const counts = { All: 0 };
   
   // Count authors that match the activeTag and activeSite filters!
@@ -1068,7 +1084,7 @@ function renderAuthorPills() {
 // ---------- Rendering: Feed Cards ----------
 
 function renderFeed() {
-  const stack = state.stack || [];
+  const stack = getActiveStack();
   const list = dom.streamList;
   
   if (virtualizerObserver) {
@@ -1834,7 +1850,7 @@ function renderAll() {
 // ---------- HTML Feed Diary Export Builder ----------
 
 function triggerHtmlExport() {
-  const stack = state.stack || [];
+  const stack = getActiveStack();
   if (stack.length === 0) {
     alert('No items collected to export. Start scrolling feeds first!');
     return;
@@ -2259,7 +2275,7 @@ function triggerHtmlExport() {
 // ---------- Standard Data Downloaders ----------
 
 function triggerJsonExport() {
-  const stack = state.stack || [];
+  const stack = getActiveStack();
   if (stack.length === 0) {
     alert('No items collected to export.');
     return;
@@ -2278,7 +2294,7 @@ function triggerJsonExport() {
 }
 
 function triggerCsvExport() {
-  const stack = state.stack || [];
+  const stack = getActiveStack();
   if (stack.length === 0) {
     alert('No items collected to export.');
     return;

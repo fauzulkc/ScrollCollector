@@ -1751,3 +1751,57 @@ kbd {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
+
+/* Flag buttons for ignoring elements */
+.platform-name-wrapper,
+.card-site-link-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-ignore-tag,
+.btn-ignore-domain,
+.btn-ignore-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  transition: opacity 0.2s ease, width 0.2s ease, transform 0.2s ease;
+  vertical-align: middle;
+}
+
+/* Hover behaviors */
+.card-category-label:hover .btn-ignore-tag,
+.platform-name-wrapper:hover .btn-ignore-domain,
+.card-site-link-wrapper:hover .btn-ignore-link {
+  opacity: 0.6;
+  width: 12px;
+  margin-left: 4px;
+}
+
+.btn-ignore-tag:hover,
+.btn-ignore-domain:hover,
+.btn-ignore-link:hover {
+  opacity: 1 !important;
+  color: var(--danger) !important;
+  transform: scale(1.2);
+}
+
+.btn-ignore-tag svg,
+.btn-ignore-domain svg,
+.btn-ignore-link svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 2.2;
+}
+

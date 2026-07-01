@@ -563,6 +563,27 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               break;
             }
 
+            // Guard 2a: Ignore if sourceUrl is in ignoredLinks
+            const ignoredLinks = config.ignoredLinks || [];
+            if (sourceUrl && ignoredLinks.includes(sourceUrl)) {
+              sendResponse({ success: false, reason: 'ignored_link' });
+              break;
+            }
+
+            // Guard 2b: Ignore if domain/platform matches ignoredDomains
+            const ignoredDomains = config.ignoredDomains || [];
+            if (normalizedPlatform) {
+              const matchedDomain = ignoredDomains.some(d => {
+                const lowerPlatform = normalizedPlatform.toLowerCase();
+                const lowerD = d.toLowerCase();
+                return lowerPlatform === lowerD || lowerPlatform.endsWith('.' + lowerD);
+              });
+              if (matchedDomain) {
+                sendResponse({ success: false, reason: 'ignored_domain' });
+                break;
+              }
+            }
+
             // Deduplication logic: Check if we already have this sourceUrl in the stack
             let existingItemIndex = -1;
             let textToClassify = text;
@@ -646,6 +667,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                   finalCategory = 'Unclassified';
                 }
               }
+            }
+
+            // Guard 3: Ignore if final category is in ignoredTags
+            const ignoredTags = config.ignoredTags || [];
+            if (ignoredTags.some(t => finalCategory.toLowerCase() === t.toLowerCase())) {
+              sendResponse({ success: false, reason: 'ignored_tag' });
+              break;
             }
             
             // Let's resolve the canonical author name!
@@ -1299,6 +1327,126 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
           const filtered = keywords.filter(k => k !== keyword);
           configuration.ignoredKeywords = filtered;
+
+          await storage.set({ configuration });
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // IGNORE_TAG_ADDED — add an ignored tag
+        // -----------------------------------------------------------------
+        case 'IGNORE_TAG_ADDED': {
+          const { tag } = message.payload;
+          const { configuration } = await storage.get('configuration');
+          const ignoredTags = configuration.ignoredTags || [];
+
+          const exists = ignoredTags.some(t => t.toLowerCase() === tag.toLowerCase());
+          if (exists) {
+            sendResponse({ success: false, error: 'Tag already ignored' });
+            break;
+          }
+
+          ignoredTags.push(tag);
+          configuration.ignoredTags = ignoredTags;
+
+          await storage.set({ configuration });
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // IGNORE_TAG_REMOVED — remove an ignored tag
+        // -----------------------------------------------------------------
+        case 'IGNORE_TAG_REMOVED': {
+          const { tag } = message.payload;
+          const { configuration } = await storage.get('configuration');
+          const ignoredTags = configuration.ignoredTags || [];
+
+          const filtered = ignoredTags.filter(t => t.toLowerCase() !== tag.toLowerCase());
+          configuration.ignoredTags = filtered;
+
+          await storage.set({ configuration });
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // IGNORE_DOMAIN_ADDED — add an ignored domain
+        // -----------------------------------------------------------------
+        case 'IGNORE_DOMAIN_ADDED': {
+          const { domain } = message.payload;
+          const { configuration } = await storage.get('configuration');
+          const ignoredDomains = configuration.ignoredDomains || [];
+
+          const exists = ignoredDomains.some(d => d.toLowerCase() === domain.toLowerCase());
+          if (exists) {
+            sendResponse({ success: false, error: 'Domain already ignored' });
+            break;
+          }
+
+          ignoredDomains.push(domain);
+          configuration.ignoredDomains = ignoredDomains;
+
+          await storage.set({ configuration });
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // IGNORE_DOMAIN_REMOVED — remove an ignored domain
+        // -----------------------------------------------------------------
+        case 'IGNORE_DOMAIN_REMOVED': {
+          const { domain } = message.payload;
+          const { configuration } = await storage.get('configuration');
+          const ignoredDomains = configuration.ignoredDomains || [];
+
+          const filtered = ignoredDomains.filter(d => d.toLowerCase() !== domain.toLowerCase());
+          configuration.ignoredDomains = filtered;
+
+          await storage.set({ configuration });
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // IGNORE_LINK_ADDED — add an ignored link
+        // -----------------------------------------------------------------
+        case 'IGNORE_LINK_ADDED': {
+          const { url } = message.payload;
+          const { configuration } = await storage.get('configuration');
+          const ignoredLinks = configuration.ignoredLinks || [];
+
+          const exists = ignoredLinks.includes(url);
+          if (exists) {
+            sendResponse({ success: false, error: 'Link already ignored' });
+            break;
+          }
+
+          ignoredLinks.push(url);
+          configuration.ignoredLinks = ignoredLinks;
+
+          await storage.set({ configuration });
+          await broadcastStateUpdate();
+          sendResponse({ success: true });
+          break;
+        }
+
+        // -----------------------------------------------------------------
+        // IGNORE_LINK_REMOVED — remove an ignored link
+        // -----------------------------------------------------------------
+        case 'IGNORE_LINK_REMOVED': {
+          const { url } = message.payload;
+          const { configuration } = await storage.get('configuration');
+          const ignoredLinks = configuration.ignoredLinks || [];
+
+          const filtered = ignoredLinks.filter(lnk => lnk !== url);
+          configuration.ignoredLinks = filtered;
 
           await storage.set({ configuration });
           await broadcastStateUpdate();
