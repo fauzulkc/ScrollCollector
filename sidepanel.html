@@ -83,7 +83,24 @@
     
     <!-- Tab 1: Stream Panel -->
     <section id="panel-stream" class="tab-panel active">
-      <!-- Horizontal Filter Pills (Tags & Sites) -->
+      <!-- Search Box -->
+      <div class="search-wrapper">
+        <div class="search-input-container">
+          <svg class="search-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="global-search" placeholder="Search tags, posts, authors, sites..." autocomplete="off">
+          <button id="search-clear-btn" class="search-clear-btn hidden" title="Clear search">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Horizontal Filter Pills (Tags & Sites & Authors) -->
       <div class="filter-wrapper">
         <div id="filter-pills" class="filter-pills">
           <!-- Dynamically populated: e.g. All, Favorites (<3), Tech, Finance... -->
@@ -94,6 +111,12 @@
           <!-- Dynamically populated: e.g. All Sites, linkedin.com, youtube.com... -->
         </div>
       </div>
+      <div class="filter-wrapper" style="padding-top: 0; margin-top: -4px;">
+        <div id="filter-author-pills" class="filter-pills">
+          <!-- Dynamically populated: e.g. All Authors, John Doe, Jane Smith... -->
+        </div>
+      </div>
+
       
       <!-- Feed Container -->
       <div id="feed-container">
@@ -229,6 +252,36 @@
         <div id="keywords-list" class="settings-list"></div>
         <form id="add-keyword-form" class="add-row">
           <input type="text" id="new-keyword-input" placeholder="Ignore posts containing word…" maxlength="32" autocomplete="off">
+          <button type="submit" class="btn-add-action">+</button>
+        </form>
+      </div>
+
+      <!-- Ignored Tags Configurator -->
+      <div class="settings-section">
+        <div class="settings-title">Ignored Categories (Tags)</div>
+        <div id="ignored-tags-list" class="settings-list"></div>
+        <form id="add-ignored-tag-form" class="add-row">
+          <input type="text" id="new-ignored-tag-input" placeholder="Ignore posts with tag…" maxlength="32" autocomplete="off">
+          <button type="submit" class="btn-add-action">+</button>
+        </form>
+      </div>
+
+      <!-- Ignored Domains Configurator -->
+      <div class="settings-section">
+        <div class="settings-title">Ignored Domains</div>
+        <div id="ignored-domains-list" class="settings-list"></div>
+        <form id="add-ignored-domain-form" class="add-row">
+          <input type="text" id="new-ignored-domain-input" placeholder="Ignore domain (e.g. reddit.com)…" maxlength="64" autocomplete="off">
+          <button type="submit" class="btn-add-action">+</button>
+        </form>
+      </div>
+
+      <!-- Ignored Links Configurator -->
+      <div class="settings-section">
+        <div class="settings-title">Ignored Links</div>
+        <div id="ignored-links-list" class="settings-list"></div>
+        <form id="add-ignored-link-form" class="add-row">
+          <input type="text" id="new-ignored-link-input" placeholder="Ignore link (URL)…" autocomplete="off">
           <button type="submit" class="btn-add-action">+</button>
         </form>
       </div>

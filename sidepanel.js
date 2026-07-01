@@ -27,7 +27,7 @@ const PLATFORM_ICONS = {
 // ---------- State ----------
 
 let state = {
-  configuration: { trackedTags: [], sites: [], ignoredKeywords: [], isTrackingPaused: false, trackingPausedAt: null },
+  configuration: { trackedTags: [], sites: [], ignoredKeywords: [], ignoredTags: [], ignoredLinks: [], ignoredDomains: [], isTrackingPaused: false, trackingPausedAt: null },
   metrics: { counts: {} },
   stack: [],
   telemetry: {
@@ -40,8 +40,25 @@ let state = {
   engineStatus: { tier: 2, name: 'Rule-based Classifier', status: 'ready' }
 };
 
+function getActiveStack() {
+  const stack = state.stack || [];
+  const ignoredTags = (state.configuration?.ignoredTags || []).map(t => t.toLowerCase());
+  const ignoredLinks = state.configuration?.ignoredLinks || [];
+  const ignoredDomains = (state.configuration?.ignoredDomains || []).map(d => d.toLowerCase());
+
+  return stack.filter(i => {
+    if (ignoredTags.includes((i.assignedTag || '').toLowerCase())) return false;
+    if (i.sourceUrl && ignoredLinks.includes(i.sourceUrl)) return false;
+    const rawPlatform = (i.sourcePlatform || '').toLowerCase();
+    if (ignoredDomains.some(d => rawPlatform === d || rawPlatform.endsWith('.' + d))) return false;
+    return true;
+  });
+}
+
 let activeFilterTag = 'All'; // Horizontal category tag filter
 let activeFilterSite = 'All'; // Horizontal website filter
+let activeFilterAuthor = 'All'; // Global active author filter
+let searchQuery = ''; // Global search query
 let openDropdownItemId = null; // Track currently open override dropdown item ID
 let expandedItemIds = new Set(); // Track expanded text snippet row IDs
 
@@ -233,6 +250,98 @@ function showUntrackConfirmation(tag) {
   document.body.appendChild(overlay);
 }
 
+function showIgnoreTagConfirmation(tag, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  
+  overlay.innerHTML = `
+    <div class="confirm-dialog">
+      <div class="confirm-title">Ignore tag?</div>
+      <div class="confirm-message">Are you sure you want to ignore tag <strong>#${escapeHTML(tag)}</strong>? Existing and future posts with this tag will be hidden.</div>
+      <div class="confirm-actions">
+        <button class="btn-confirm-cancel">Cancel</button>
+        <button class="btn-confirm-ok">Ignore Tag</button>
+      </div>
+    </div>
+  `;
+  
+  const cancelBtn = overlay.querySelector('.btn-confirm-cancel');
+  const okBtn = overlay.querySelector('.btn-confirm-ok');
+  
+  const closeDialog = () => {
+    overlay.classList.add('fadeOut');
+    overlay.addEventListener('animationend', () => {
+      overlay.remove();
+    });
+  };
+  
+  cancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDialog();
+  });
+  
+  okBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onConfirm();
+    closeDialog();
+  });
+  
+  overlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target === overlay) {
+      closeDialog();
+    }
+  });
+  
+  document.body.appendChild(overlay);
+}
+
+function showIgnoreDomainConfirmation(domain, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  
+  overlay.innerHTML = `
+    <div class="confirm-dialog">
+      <div class="confirm-title">Ignore domain?</div>
+      <div class="confirm-message">Are you sure you want to ignore all posts from <strong>${escapeHTML(domain)}</strong>? Existing and future posts from this domain will be hidden.</div>
+      <div class="confirm-actions">
+        <button class="btn-confirm-cancel">Cancel</button>
+        <button class="btn-confirm-ok">Ignore Domain</button>
+      </div>
+    </div>
+  `;
+  
+  const cancelBtn = overlay.querySelector('.btn-confirm-cancel');
+  const okBtn = overlay.querySelector('.btn-confirm-ok');
+  
+  const closeDialog = () => {
+    overlay.classList.add('fadeOut');
+    overlay.addEventListener('animationend', () => {
+      overlay.remove();
+    });
+  };
+  
+  cancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDialog();
+  });
+  
+  okBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onConfirm();
+    closeDialog();
+  });
+  
+  overlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target === overlay) {
+      closeDialog();
+    }
+  });
+  
+  document.body.appendChild(overlay);
+}
+
 function hexToRgb(hex) {
   const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
   const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
@@ -314,7 +423,7 @@ function renderTelemetry() {
   const rate = total > 0 ? Math.round((classified / total) * 100) : 0;
   const engineName = (state.engineStatus && state.engineStatus.name) || '—';
 
-  dom.tabCountStream.textContent = state.stack.length;
+  dom.tabCountStream.textContent = getActiveStack().length;
 
   dom.telTotal.textContent = total;
   dom.telRate.textContent = rate + '%';
@@ -402,7 +511,7 @@ function renderPauseStatus() {
 // ---------- Drag-to-Scroll pills containers ----------
 
 function initDragToScroll() {
-  [dom.filterPills, dom.filterSitePills].forEach(el => {
+  [dom.filterPills, dom.filterSitePills, dom.filterAuthorPills].forEach(el => {
     if (!el) return;
     let isDragging = false;
     let startX;
@@ -644,13 +753,14 @@ function initVirtualizer() {
 
 function getFilterCategories() {
   const tags = state.configuration.trackedTags || [];
-  const list = state.stack || [];
+  const list = getActiveStack();
+  const ignoredTags = (state.configuration?.ignoredTags || []).map(t => t.toLowerCase());
 
   const enabledTags = [];
   tags.forEach(t => {
     const label = typeof t === 'string' ? t : t.label;
     const enabled = typeof t === 'string' ? true : t.isEnabled !== false;
-    if (enabled && label !== 'Ads') {
+    if (enabled && label !== 'Ads' && !ignoredTags.includes(label.toLowerCase())) {
       enabledTags.push(label);
     }
   });
@@ -675,7 +785,7 @@ function getFilterCategories() {
 
 function renderFilterPills() {
   const categories = getFilterCategories();
-  const list = state.stack || [];
+  const list = getActiveStack();
 
   const counts = { All: list.length, Favorites: list.filter(i => i.isFavorite).length };
   list.forEach(item => {
@@ -724,8 +834,10 @@ function renderFilterPills() {
     
     pill.addEventListener('click', () => {
       activeFilterTag = cat;
+      activeFilterAuthor = 'All'; // Reset author filter on category change
       renderFilterPills();
       renderSiteFilterPills();
+      renderAuthorPills();
       renderFeed();
     });
 
@@ -767,10 +879,11 @@ function renderFilterPills() {
 function setFilterSite(site) {
   if (activeFilterSite === site) return;
   activeFilterSite = site;
+  activeFilterAuthor = 'All'; // Reset author filter on site change
 
   // If the active tag filter is not 'All' or 'Favorites', check if any items match the activeTag + new site
   if (activeFilterTag !== 'All' && activeFilterTag !== 'Favorites' && activeFilterTag !== 'Ads') {
-    const hasItemsForTagOnSite = (state.stack || []).some(item => {
+    const hasItemsForTagOnSite = getActiveStack().some(item => {
       const tagMatch = item.assignedTag === activeFilterTag;
       if (!tagMatch) return false;
       
@@ -793,7 +906,7 @@ function setFilterSite(site) {
       activeFilterTag = 'All';
     }
   } else if (activeFilterTag === 'Ads') {
-    const hasAdsOnSite = (state.stack || []).some(item => {
+    const hasAdsOnSite = getActiveStack().some(item => {
       if (!item.isAd) return false;
       if (activeFilterSite === 'All') return true;
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
@@ -835,10 +948,10 @@ function renderSiteFilterPills() {
   });
 
   // 2. Compute counts dynamically
-  const counts = { All: state.stack ? state.stack.length : 0 };
+  const counts = { All: getActiveStack().length };
   let otherCount = 0;
 
-  (state.stack || []).forEach(item => {
+  getActiveStack().forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
     
     // Find matching site candidate
@@ -860,7 +973,7 @@ function renderSiteFilterPills() {
 
   // 3. Sort candidate sites by recency (last item added timestamp)
   const siteTimestamps = {};
-  (state.stack || []).forEach(item => {
+  getActiveStack().forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
     let matchedCandidate = null;
     for (const site of candidateSites) {
@@ -952,10 +1065,118 @@ function renderSiteFilterPills() {
   });
 }
 
+// ---------- Rendering: Author Filters ----------
+
+function getFilterAuthors() {
+  const list = getActiveStack();
+  const counts = { All: 0 };
+  
+  // Count authors that match the activeTag and activeSite filters!
+  list.forEach(item => {
+    // Check if item matches current activeTag filter
+    let tagMatch = true;
+    if (activeFilterTag === 'Favorites') {
+      tagMatch = item.isFavorite;
+    } else if (activeFilterTag === 'Ads') {
+      tagMatch = item.isAd;
+    } else if (activeFilterTag !== 'All') {
+      tagMatch = item.assignedTag === activeFilterTag;
+    }
+    
+    // Check if item matches current activeSite filter
+    let siteMatch = true;
+    if (activeFilterSite !== 'All') {
+      const rawPlatform = (item.sourcePlatform || '').toLowerCase();
+      if (activeFilterSite === 'Other') {
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
+        const configuredSites = state.configuration.sites || [];
+        const enabledDomains = [...defaultSites, ...customSites].filter(d => {
+          const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
+          return !cfg || cfg.isEnabled !== false;
+        });
+        siteMatch = !enabledDomains.some(domain => rawPlatform === domain || rawPlatform.endsWith('.' + domain));
+      } else {
+        siteMatch = rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
+      }
+    }
+    
+    if (tagMatch && siteMatch) {
+      counts.All++;
+      const auth = item.canonicalAuthorName || item.authorName || '';
+      if (auth) {
+        counts[auth] = (counts[auth] || 0) + 1;
+      }
+    }
+  });
+
+  // Extract author names (excluding empty and 'All')
+  const authorNames = Object.keys(counts).filter(k => k !== 'All' && k !== '');
+  
+  // Sort authors by post count descending
+  authorNames.sort((a, b) => counts[b] - counts[a]);
+
+  // Keep top 10 authors, but if the activeFilterAuthor is set and not in the top 10, include it.
+  let displayAuthors = authorNames.slice(0, 10);
+  if (activeFilterAuthor !== 'All' && !displayAuthors.includes(activeFilterAuthor)) {
+    displayAuthors.push(activeFilterAuthor);
+  }
+
+  return {
+    authors: ['All', ...displayAuthors],
+    counts
+  };
+}
+
+function renderAuthorPills() {
+  const { authors, counts } = getFilterAuthors();
+  
+  dom.filterAuthorPills.innerHTML = '';
+  
+  // If there are no authors or only 'All' with 0 posts, we can hide the wrapper or just show 'All'
+  if (authors.length <= 1) {
+    dom.filterAuthorPills.parentElement.classList.add('hidden');
+    return;
+  }
+  dom.filterAuthorPills.parentElement.classList.remove('hidden');
+
+  authors.forEach(auth => {
+    const count = counts[auth] || 0;
+    if (auth !== 'All' && count === 0) return; // Skip if no posts for this author in current filters
+
+    const pill = document.createElement('button');
+    pill.className = `filter-pill ${activeFilterAuthor === auth ? 'active' : ''}`;
+    pill.dataset.author = auth;
+    
+    const color = '#8b5cf6'; // Violet for authors
+    pill.style.setProperty('--pill-color', color);
+    const rgb = hexToRgb(color);
+    pill.style.setProperty('--pill-color-rgb', rgb);
+
+    let labelText = auth === 'All' ? 'All Authors' : auth;
+
+    pill.innerHTML = `
+      <span class="pill-dot" style="background: ${color}"></span>
+      <span class="pill-label">${escapeHTML(labelText)}</span>
+      <span class="pill-count">${count}</span>
+    `;
+
+    pill.addEventListener('click', () => {
+      activeFilterAuthor = auth;
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderAuthorPills();
+      renderFeed();
+    });
+
+    dom.filterAuthorPills.appendChild(pill);
+  });
+}
+
 // ---------- Rendering: Feed Cards ----------
 
 function renderFeed() {
-  const stack = state.stack || [];
+  const stack = getActiveStack();
   const list = dom.streamList;
   
   if (virtualizerObserver) {
@@ -993,6 +1214,26 @@ function renderFeed() {
       return rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
     });
   }
+
+  // Filter 3: Author
+  if (activeFilterAuthor !== 'All') {
+    filteredStack = filteredStack.filter(i => i.canonicalAuthorName === activeFilterAuthor);
+  }
+
+  // Filter 4: Global Search Query
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase().trim();
+    filteredStack = filteredStack.filter(i => {
+      const tagMatch = (i.assignedTag || '').toLowerCase().includes(q) || 
+                       (i.tags || []).some(t => t.name.toLowerCase().includes(q));
+      const postMatch = (i.textSnippet || '').toLowerCase().includes(q);
+      const authorMatch = (i.authorName || '').toLowerCase().includes(q) || 
+                          (i.canonicalAuthorName || '').toLowerCase().includes(q);
+      const siteMatch = (i.sourcePlatform || '').toLowerCase().includes(q);
+      return tagMatch || postMatch || authorMatch || siteMatch;
+    });
+  }
+
 
   if (filteredStack.length === 0) {
     list.innerHTML = '';
@@ -1136,18 +1377,32 @@ function populateCardInner(card, item) {
   let linkHtml = '';
   if (item.sourceUrl) {
     const domain = escapeHTML(extractDomain(item.sourceUrl));
-    linkHtml = `<a href="#" class="card-site-link" data-url="${escapeHTML(item.sourceUrl)}" title="${escapeHTML(item.sourceUrl)}">${domain} ↗</a>`;
+    linkHtml = `
+      <span class="card-site-link-wrapper">
+        <a href="#" class="card-site-link" data-url="${escapeHTML(item.sourceUrl)}" title="${escapeHTML(item.sourceUrl)}">${domain} ↗</a>
+        <button class="btn-flag btn-ignore-link" title="Ignore link" data-url="${escapeHTML(item.sourceUrl)}">
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+        </button>
+      </span>
+    `;
   }
 
   let authorHtml = '';
   if (item.authorName) {
     let authorNameSafe = escapeHTML(item.authorName);
+    let canonicalAuthorNameSafe = escapeHTML(item.canonicalAuthorName || item.authorName);
     if (item.authorUrl) {
-      authorHtml = `<a href="#" class="card-author-link card-author-pill" data-url="${escapeHTML(item.authorUrl)}" title="Visit ${authorNameSafe}'s profile">@${authorNameSafe}</a>`;
+      authorHtml = `
+        <span class="card-author-pill-wrapper">
+          <span class="card-author-pill card-author-filter-btn" data-author="${canonicalAuthorNameSafe}" title="Filter by ${canonicalAuthorNameSafe}">@${authorNameSafe}</span>
+          <a href="#" class="card-author-profile-link" data-url="${escapeHTML(item.authorUrl)}" title="Visit ${authorNameSafe}'s profile">↗</a>
+        </span>
+      `;
     } else {
-      authorHtml = `<span class="card-author-pill">@${authorNameSafe}</span>`;
+      authorHtml = `<span class="card-author-pill card-author-filter-btn" data-author="${canonicalAuthorNameSafe}" title="Filter by ${canonicalAuthorNameSafe}">@${authorNameSafe}</span>`;
     }
   }
+
 
   const favClass = item.isFavorite ? 'favorited' : '';
   const favIcon = item.isFavorite
@@ -1192,6 +1447,9 @@ function populateCardInner(card, item) {
       return `
         <span class="card-category-label secondary ${isTagDynamic(sTag) ? 'is-dynamic' : ''}" style="--tag-color: ${sTagColor}" title="Confidence: ${Math.round(t.score * 100)}%" data-filter-tag="${escapeHTML(sTag)}">
           <span>${escapeHTML(sTag)}</span>
+          <button class="btn-flag btn-ignore-tag" title="Ignore tag ${escapeHTML(sTag)}" data-tag="${escapeHTML(sTag)}">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+          </button>
         </span>
       `;
     }).join('');
@@ -1242,7 +1500,12 @@ function populateCardInner(card, item) {
   card.innerHTML = `
     <div class="card-header">
       <span class="platform-logo">${faviconHtml}</span>
-      <span class="platform-name">${escapeHTML(platform)}</span>
+      <span class="platform-name-wrapper">
+        <span class="platform-name">${escapeHTML(platform)}</span>
+        <button class="btn-flag btn-ignore-domain" title="Ignore domain ${escapeHTML(platform)}" data-domain="${escapeHTML(platform)}">
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+        </button>
+      </span>
       ${linkHtml}
       <span class="card-time">${timeStr}</span>
       ${adBadge}
@@ -1274,6 +1537,9 @@ function populateCardInner(card, item) {
         <span class="card-category-label ${isTagDynamic(tag) ? 'is-dynamic' : ''}" style="--tag-color: ${tagColor}" data-filter-tag="${escapeHTML(tag)}">
           <span class="cat-dot"></span>
           <span>${escapeHTML(tag)}</span>
+          <button class="btn-flag btn-ignore-tag" title="Ignore tag ${escapeHTML(tag)}" data-tag="${escapeHTML(tag)}">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+          </button>
         </span>
         ${secondaryTagsHtml}
         ${authorHtml}
@@ -1293,13 +1559,80 @@ function populateCardInner(card, item) {
     </div>
   `;
 
-  const authorLink = card.querySelector('.card-author-link');
-  if (authorLink) {
-    authorLink.addEventListener('click', (e) => {
+  // Handle author profile clicks
+  const profileLinks = card.querySelectorAll('.card-author-profile-link');
+  profileLinks.forEach(link => {
+    link.addEventListener('click', (e) => {
       e.preventDefault();
-      window.open(authorLink.dataset.url, '_blank');
+      e.stopPropagation();
+      window.open(link.dataset.url, '_blank');
     });
-  }
+  });
+
+  // Handle author filter button clicks
+  const filterBtns = card.querySelectorAll('.card-author-filter-btn');
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const author = btn.dataset.author;
+      if (activeFilterAuthor === author) {
+        activeFilterAuthor = 'All';
+      } else {
+        activeFilterAuthor = author;
+      }
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderAuthorPills();
+      renderFeed();
+    });
+  });
+
+  // Handle ignore tag button clicks
+  const ignoreTagBtns = card.querySelectorAll('.btn-ignore-tag');
+  ignoreTagBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const tagToIgnore = btn.dataset.tag;
+      showIgnoreTagConfirmation(tagToIgnore, () => {
+        chrome.runtime.sendMessage({
+          type: 'IGNORE_TAG_ADDED',
+          payload: { tag: tagToIgnore }
+        });
+      });
+    });
+  });
+
+  // Handle ignore domain button clicks
+  const ignoreDomainBtns = card.querySelectorAll('.btn-ignore-domain');
+  ignoreDomainBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const domainToIgnore = btn.dataset.domain;
+      showIgnoreDomainConfirmation(domainToIgnore, () => {
+        chrome.runtime.sendMessage({
+          type: 'IGNORE_DOMAIN_ADDED',
+          payload: { domain: domainToIgnore }
+        });
+      });
+    });
+  });
+
+  // Handle ignore link button clicks
+  const ignoreLinkBtns = card.querySelectorAll('.btn-ignore-link');
+  ignoreLinkBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const linkToIgnore = btn.dataset.url;
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_LINK_ADDED',
+        payload: { url: linkToIgnore }
+      });
+    });
+  });
 
   const titleLink = card.querySelector('.card-title-link');
   if (titleLink) {
@@ -1629,6 +1962,99 @@ function renderIgnoredKeywords() {
   });
 }
 
+function renderIgnoredTags() {
+  const tags = state.configuration.ignoredTags || [];
+  const list = dom.ignoredTagsList;
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (tags.length === 0) {
+    list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0;">No ignored tags.</div>`;
+    return;
+  }
+
+  tags.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+    row.innerHTML = `
+      <span class="tag-dot-indicator" style="background: var(--danger); opacity: 0.5;"></span>
+      <span class="tag-label">${escapeHTML(t)}</span>
+      <button class="btn-tag-action btn-delete-tag btn-delete-ignored-tag" data-tag="${escapeHTML(t)}" title="Remove filter">×</button>
+    `;
+
+    row.querySelector('.btn-delete-ignored-tag').addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_TAG_REMOVED',
+        payload: { tag: t }
+      });
+    });
+
+    list.appendChild(row);
+  });
+}
+
+function renderIgnoredDomains() {
+  const domains = state.configuration.ignoredDomains || [];
+  const list = dom.ignoredDomainsList;
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (domains.length === 0) {
+    list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0;">No ignored domains.</div>`;
+    return;
+  }
+
+  domains.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+    row.innerHTML = `
+      <span class="tag-dot-indicator" style="background: var(--danger); opacity: 0.5;"></span>
+      <span class="tag-label">${escapeHTML(d)}</span>
+      <button class="btn-tag-action btn-delete-tag btn-delete-ignored-domain" data-domain="${escapeHTML(d)}" title="Remove filter">×</button>
+    `;
+
+    row.querySelector('.btn-delete-ignored-domain').addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_DOMAIN_REMOVED',
+        payload: { domain: d }
+      });
+    });
+
+    list.appendChild(row);
+  });
+}
+
+function renderIgnoredLinks() {
+  const links = state.configuration.ignoredLinks || [];
+  const list = dom.ignoredLinksList;
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (links.length === 0) {
+    list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0;">No ignored links.</div>`;
+    return;
+  }
+
+  links.forEach(lnk => {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+    row.innerHTML = `
+      <span class="tag-dot-indicator" style="background: var(--danger); opacity: 0.5;"></span>
+      <span class="tag-label" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 180px;" title="${escapeHTML(lnk)}">${escapeHTML(lnk)}</span>
+      <button class="btn-tag-action btn-delete-tag btn-delete-ignored-link" data-link="${escapeHTML(lnk)}" title="Remove filter">×</button>
+    `;
+
+    row.querySelector('.btn-delete-ignored-link').addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_LINK_REMOVED',
+        payload: { url: lnk }
+      });
+    });
+
+    list.appendChild(row);
+  });
+}
+
 function renderMatchPromptConfigurator() {
   const cfg = state.configuration;
   if (dom.matchPromptToggle && dom.matchPromptInput) {
@@ -1661,17 +2087,21 @@ function renderAll() {
   renderPauseStatus();
   renderFilterPills();
   renderSiteFilterPills();
+  renderAuthorPills();
   renderFeed();
   renderMatchPromptConfigurator();
   renderTagConfigurator();
   renderSitesConfigurator();
   renderIgnoredKeywords();
+  renderIgnoredTags();
+  renderIgnoredDomains();
+  renderIgnoredLinks();
 }
 
 // ---------- HTML Feed Diary Export Builder ----------
 
 function triggerHtmlExport() {
-  const stack = state.stack || [];
+  const stack = getActiveStack();
   if (stack.length === 0) {
     alert('No items collected to export. Start scrolling feeds first!');
     return;
@@ -1690,11 +2120,22 @@ function triggerHtmlExport() {
     const bodyStr = body ? `<div class="card-body">${escapeHTML(body)}</div>` : '';
     const favIndicator = item.isFavorite ? '<span class="fav-indicator">❤️ Favorite</span>' : '';
 
+    let authorHtml = '';
+    if (item.authorName) {
+      const authorNameSafe = escapeHTML(item.authorName);
+      if (item.authorUrl) {
+        authorHtml = `<a href="${escapeHTML(item.authorUrl)}" target="_blank" class="card-author-pill">@${authorNameSafe}</a>`;
+      } else {
+        authorHtml = `<span class="card-author-pill">@${authorNameSafe}</span>`;
+      }
+    }
+
     return `
       <div class="card" data-category="${escapeHTML(tag)}" data-favorite="${item.isFavorite}" data-ad="${item.isAd}">
         <div class="card-header">
           <span class="platform">${escapeHTML(platform)}</span>
           ${linkStr}
+          ${authorHtml}
           <span class="time">${timestampStr}</span>
           ${adBadge}
           ${favIndicator}
@@ -1709,6 +2150,7 @@ function triggerHtmlExport() {
       </div>
     `;
   }).join('\n');
+
 
   const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
@@ -1899,6 +2341,22 @@ function triggerHtmlExport() {
       font-weight: 700;
     }
 
+    .card-author-pill {
+      font-size: 11px;
+      color: var(--text-primary);
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      border-radius: 12px;
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 150px;
+      display: inline-block;
+    }
+
+
     .card-title {
       font-size: 16px;
       font-weight: 700;
@@ -2068,7 +2526,7 @@ function triggerHtmlExport() {
 // ---------- Standard Data Downloaders ----------
 
 function triggerJsonExport() {
-  const stack = state.stack || [];
+  const stack = getActiveStack();
   if (stack.length === 0) {
     alert('No items collected to export.');
     return;
@@ -2087,7 +2545,7 @@ function triggerJsonExport() {
 }
 
 function triggerCsvExport() {
-  const stack = state.stack || [];
+  const stack = getActiveStack();
   if (stack.length === 0) {
     alert('No items collected to export.');
     return;
@@ -2215,6 +2673,9 @@ document.addEventListener('DOMContentLoaded', () => {
     streamEmpty: $('#stream-empty'),
     filterPills: $('#filter-pills'),
     filterSitePills: $('#filter-site-pills'), // Site filter scroller
+    filterAuthorPills: $('#filter-author-pills'), // Author filter scroller
+    globalSearch: $('#global-search'), // Search input element
+    searchClearBtn: $('#search-clear-btn'), // Search clear button
     tabCountStream: $('#tab-count-stream'),
     feedContainer: $('#feed-container'),
 
@@ -2240,6 +2701,16 @@ document.addEventListener('DOMContentLoaded', () => {
     newTagInput: $('#new-tag-input'),
     newSiteInput: $('#new-site-input'),
     newKeywordInput: $('#new-keyword-input'),
+
+    ignoredTagsList: $('#ignored-tags-list'),
+    ignoredDomainsList: $('#ignored-domains-list'),
+    ignoredLinksList: $('#ignored-links-list'),
+    addIgnoredTagForm: $('#add-ignored-tag-form'),
+    addIgnoredDomainForm: $('#add-ignored-domain-form'),
+    addIgnoredLinkForm: $('#add-ignored-link-form'),
+    newIgnoredTagInput: $('#new-ignored-tag-input'),
+    newIgnoredDomainInput: $('#new-ignored-domain-input'),
+    newIgnoredLinkInput: $('#new-ignored-link-input'),
 
     matchPromptToggle: $('#match-prompt-toggle'),
     matchPromptInput: $('#match-prompt-input'),
@@ -2363,6 +2834,48 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.newKeywordInput.value = '';
   });
 
+  // Add ignored tag form handler
+  if (dom.addIgnoredTagForm) {
+    dom.addIgnoredTagForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = dom.newIgnoredTagInput.value.trim();
+      if (!value) return;
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_TAG_ADDED',
+        payload: { tag: value }
+      });
+      dom.newIgnoredTagInput.value = '';
+    });
+  }
+
+  // Add ignored domain form handler
+  if (dom.addIgnoredDomainForm) {
+    dom.addIgnoredDomainForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = dom.newIgnoredDomainInput.value.trim();
+      if (!value) return;
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_DOMAIN_ADDED',
+        payload: { domain: value }
+      });
+      dom.newIgnoredDomainInput.value = '';
+    });
+  }
+
+  // Add ignored link form handler
+  if (dom.addIgnoredLinkForm) {
+    dom.addIgnoredLinkForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = dom.newIgnoredLinkInput.value.trim();
+      if (!value) return;
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_LINK_ADDED',
+        payload: { url: value }
+      });
+      dom.newIgnoredLinkInput.value = '';
+    });
+  }
+
   // Match prompt handlers
   if (dom.matchPromptToggle && dom.matchPromptInput) {
     dom.matchPromptToggle.addEventListener('change', (e) => {
@@ -2480,6 +2993,33 @@ document.addEventListener('DOMContentLoaded', () => {
       openDropdownItemId = null;
     }
   });
+
+  // Search input listeners
+  if (dom.globalSearch && dom.searchClearBtn) {
+    dom.globalSearch.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      if (searchQuery.trim().length > 0) {
+        dom.searchClearBtn.classList.remove('hidden');
+      } else {
+        dom.searchClearBtn.classList.add('hidden');
+      }
+      activeFilterAuthor = 'All'; // Reset author filter during search for better relevance
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderAuthorPills();
+      renderFeed();
+    });
+
+    dom.searchClearBtn.addEventListener('click', () => {
+      dom.globalSearch.value = '';
+      searchQuery = '';
+      dom.searchClearBtn.classList.add('hidden');
+      renderFilterPills();
+      renderSiteFilterPills();
+      renderAuthorPills();
+      renderFeed();
+    });
+  }
 
   // Message listeners
   initMessageListener();

@@ -4,7 +4,7 @@ import './lib/sanitizer.js';
 const { sanitize } = globalThis.MindstreamSanitizer;
 
 import { buildSystemPrompt, buildUserPrompt } from './lib/prompt-builder.js';
-import { cleanTagName, keywordFallback, extractNounTopic } from './lib/inference-engine.js';
+import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch } from './lib/inference-engine.js';
 
 test('PII Sanitizer Tests', (t) => {
   // Test email redaction
@@ -86,3 +86,89 @@ test('Inference Engine - extractNounTopic Heuristic Tests', (t) => {
   const topic = extractNounTopic(text);
   assert.strictEqual(topic, 'Microsoft');
 });
+
+test('Inference Engine - heuristicAuthorMatch Tests', (t) => {
+  // Test direct exact match
+  assert.ok(heuristicAuthorMatch(
+    { name: 'John Doe', platform: 'x.com', url: '' },
+    { name: 'john doe', platform: 'linkedin.com', url: '' }
+  ));
+
+  // Test name normalization (punctuation, spaces, handles)
+  assert.ok(heuristicAuthorMatch(
+    { name: '@JohnDoe', platform: 'x.com', url: '' },
+    { name: 'john_doe', platform: 'linkedin.com', url: '' }
+  ));
+
+  assert.ok(heuristicAuthorMatch(
+    { name: 'John Doe 123', platform: 'x.com', url: '' },
+    { name: 'John-Doe', platform: 'linkedin.com', url: '' }
+  ));
+
+  // Test URL handle extraction
+  assert.ok(heuristicAuthorMatch(
+    { name: 'John Doe', platform: 'x.com', url: 'https://x.com/johndoe' },
+    { name: 'John D.', platform: 'linkedin.com', url: 'https://linkedin.com/in/johndoe/' }
+  ));
+
+  // Test substring matching
+  assert.ok(heuristicAuthorMatch(
+    { name: 'Johnathan Doe', platform: 'x.com', url: '' },
+    { name: 'Johnathan', platform: 'linkedin.com', url: '' }
+  ));
+
+  // Test Levenshtein distance similarity (> 0.8)
+  assert.ok(heuristicAuthorMatch(
+    { name: 'Johnathan Doe', platform: 'x.com', url: '' },
+    { name: 'Johnathon Doe', platform: 'linkedin.com', url: '' }
+  ));
+
+  // Test mismatch
+  assert.ok(!heuristicAuthorMatch(
+    { name: 'John Doe', platform: 'x.com', url: 'https://x.com/johndoe' },
+    { name: 'Jane Smith', platform: 'linkedin.com', url: 'https://linkedin.com/in/janesmith' }
+  ));
+});
+
+test('Ignore List Filtering Logic Tests', (t) => {
+  const mockStack = [
+    { id: '1', assignedTag: 'Tech', sourcePlatform: 'linkedin.com', sourceUrl: 'https://linkedin.com/post1' },
+    { id: '2', assignedTag: 'Finance', sourcePlatform: 'x.com', sourceUrl: 'https://x.com/post2' },
+    { id: '3', assignedTag: 'AI', sourcePlatform: 'youtube.com', sourceUrl: 'https://youtube.com/post3' },
+    { id: '4', assignedTag: 'Tech', sourcePlatform: 'medium.com', sourceUrl: 'https://medium.com/post4' }
+  ];
+
+  const filterFn = (stack, configuration) => {
+    const ignoredTags = (configuration.ignoredTags || []).map(t => t.toLowerCase());
+    const ignoredLinks = configuration.ignoredLinks || [];
+    const ignoredDomains = (configuration.ignoredDomains || []).map(d => d.toLowerCase());
+
+    return stack.filter(i => {
+      if (ignoredTags.includes((i.assignedTag || '').toLowerCase())) return false;
+      if (i.sourceUrl && ignoredLinks.includes(i.sourceUrl)) return false;
+      const rawPlatform = (i.sourcePlatform || '').toLowerCase();
+      if (ignoredDomains.some(d => rawPlatform === d || rawPlatform.endsWith('.' + d))) return false;
+      return true;
+    });
+  };
+
+  // 1. Test Tag Ignore
+  const config1 = { ignoredTags: ['Tech'], ignoredDomains: [], ignoredLinks: [] };
+  const filtered1 = filterFn(mockStack, config1);
+  assert.strictEqual(filtered1.length, 2);
+  assert.ok(!filtered1.some(i => i.id === '1' || i.id === '4'));
+
+  // 2. Test Link Ignore
+  const config2 = { ignoredTags: [], ignoredDomains: [], ignoredLinks: ['https://x.com/post2'] };
+  const filtered2 = filterFn(mockStack, config2);
+  assert.strictEqual(filtered2.length, 3);
+  assert.ok(!filtered2.some(i => i.id === '2'));
+
+  // 3. Test Domain Ignore
+  const config3 = { ignoredTags: [], ignoredDomains: ['youtube.com'], ignoredLinks: [] };
+  const filtered3 = filterFn(mockStack, config3);
+  assert.strictEqual(filtered3.length, 3);
+  assert.ok(!filtered3.some(i => i.id === '3'));
+});
+
+

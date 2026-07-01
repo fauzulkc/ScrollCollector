@@ -33,11 +33,19 @@ const EdgeExtensionID = "obgignpijgkbhhggkbhdfhbhjfadabdc"
 
 func main() {
 	// Initialize installation directory
-	home, _ := os.UserHomeDir()
-	if runtime.GOOS == "windows" {
-		installPath = filepath.Join(home, "ScrollCollector")
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		if runtime.GOOS == "windows" {
+			installPath = `C:\ScrollCollector`
+		} else {
+			installPath = "/Applications/ScrollCollector"
+		}
 	} else {
-		installPath = filepath.Join(home, "Applications", "ScrollCollector")
+		if runtime.GOOS == "windows" {
+			installPath = filepath.Join(home, "ScrollCollector")
+		} else {
+			installPath = filepath.Join(home, "Applications", "ScrollCollector")
+		}
 	}
 
 	// Perform browser detection
