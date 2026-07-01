@@ -1,6 +1,6 @@
 {
   "name": "scrollcollector",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Deterministic web page feed tracking and categorizer using Gemini Nano.",
   "type": "module",
   "scripts": {
