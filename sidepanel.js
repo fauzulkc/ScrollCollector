@@ -672,6 +672,12 @@ function initKeyboardNavigation() {
             payload: { itemId: item.id, isFavorite }
           });
           item.isFavorite = isFavorite;
+
+          const cardRow = dom.streamList.querySelector(`.item-row[data-id="${item.id}"]`);
+          if (cardRow) {
+            updateFavoriteButtonUI(cardRow, isFavorite, true);
+          }
+
           renderFilterPills();
           renderFeed();
           focusCard(focusedItemIndex);
@@ -749,11 +755,32 @@ function initVirtualizer() {
   });
 }
 
+function getSearchFilteredStack() {
+  const stack = [...getActiveStack()];
+  // Always search latest to oldest
+  stack.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  if (!searchQuery) {
+    return stack;
+  }
+
+  const q = searchQuery.toLowerCase().trim();
+  return stack.filter(i => {
+    const tagMatch = (i.assignedTag || '').toLowerCase().includes(q) || 
+                     (i.tags || []).some(t => t.name.toLowerCase().includes(q));
+    const postMatch = (i.textSnippet || '').toLowerCase().includes(q);
+    const authorMatch = (i.authorName || '').toLowerCase().includes(q) || 
+                        (i.canonicalAuthorName || '').toLowerCase().includes(q);
+    const siteMatch = (i.sourcePlatform || '').toLowerCase().includes(q);
+    return tagMatch || postMatch || authorMatch || siteMatch;
+  });
+}
+
 // ---------- Rendering: Tag Filters ----------
 
 function getFilterCategories() {
   const tags = state.configuration.trackedTags || [];
-  const list = getActiveStack();
+  const list = getSearchFilteredStack();
   const ignoredTags = (state.configuration?.ignoredTags || []).map(t => t.toLowerCase());
 
   const enabledTags = [];
@@ -785,7 +812,7 @@ function getFilterCategories() {
 
 function renderFilterPills() {
   const categories = getFilterCategories();
-  const list = getActiveStack();
+  const list = getSearchFilteredStack();
 
   const counts = { All: list.length, Favorites: list.filter(i => i.isFavorite).length };
   list.forEach(item => {
@@ -806,7 +833,17 @@ function renderFilterPills() {
   });
 
   dom.filterPills.innerHTML = '';
-  categories.forEach(cat => {
+
+  const displayCategories = categories.filter(cat => {
+    if (cat === 'All' || cat === 'Favorites') return true;
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase().trim();
+    if (cat.toLowerCase().includes(q)) return true;
+    if (counts[cat] > 0) return true;
+    return false;
+  });
+
+  displayCategories.forEach(cat => {
     const count = counts[cat] || 0;
     const pill = document.createElement('button');
     const isDyn = isTagDynamic(cat);
@@ -883,7 +920,7 @@ function setFilterSite(site) {
 
   // If the active tag filter is not 'All' or 'Favorites', check if any items match the activeTag + new site
   if (activeFilterTag !== 'All' && activeFilterTag !== 'Favorites' && activeFilterTag !== 'Ads') {
-    const hasItemsForTagOnSite = getActiveStack().some(item => {
+    const hasItemsForTagOnSite = getSearchFilteredStack().some(item => {
       const tagMatch = item.assignedTag === activeFilterTag;
       if (!tagMatch) return false;
       
@@ -906,7 +943,7 @@ function setFilterSite(site) {
       activeFilterTag = 'All';
     }
   } else if (activeFilterTag === 'Ads') {
-    const hasAdsOnSite = getActiveStack().some(item => {
+    const hasAdsOnSite = getSearchFilteredStack().some(item => {
       if (!item.isAd) return false;
       if (activeFilterSite === 'All') return true;
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
@@ -920,6 +957,7 @@ function setFilterSite(site) {
       activeFilterTag = 'All';
     }
   }
+
 
   renderFilterPills();
   renderSiteFilterPills();
@@ -948,10 +986,11 @@ function renderSiteFilterPills() {
   });
 
   // 2. Compute counts dynamically
-  const counts = { All: getActiveStack().length };
+  const searchList = getSearchFilteredStack();
+  const counts = { All: searchList.length };
   let otherCount = 0;
 
-  getActiveStack().forEach(item => {
+  searchList.forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
     
     // Find matching site candidate
@@ -973,7 +1012,7 @@ function renderSiteFilterPills() {
 
   // 3. Sort candidate sites by recency (last item added timestamp)
   const siteTimestamps = {};
-  getActiveStack().forEach(item => {
+  searchList.forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
     let matchedCandidate = null;
     for (const site of candidateSites) {
@@ -1010,7 +1049,18 @@ function renderSiteFilterPills() {
 
   dom.filterSitePills.innerHTML = '';
 
-  orderedSites.forEach(site => {
+  let displaySites = orderedSites;
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase().trim();
+    displaySites = orderedSites.filter(site => {
+      if (site === 'All' || site === 'Other') return true;
+      if (site.toLowerCase().includes(q)) return true;
+      if (counts[site] > 0) return true;
+      return false;
+    });
+  }
+
+  displaySites.forEach(site => {
     const count = counts[site] || 0;
     const pill = document.createElement('div');
     pill.dataset.site = site;
@@ -1068,7 +1118,7 @@ function renderSiteFilterPills() {
 // ---------- Rendering: Author Filters ----------
 
 function getFilterAuthors() {
-  const list = getActiveStack();
+  const list = getSearchFilteredStack();
   const counts = { All: 0 };
   
   // Count authors that match the activeTag and activeSite filters!
@@ -1120,6 +1170,16 @@ function getFilterAuthors() {
   let displayAuthors = authorNames.slice(0, 10);
   if (activeFilterAuthor !== 'All' && !displayAuthors.includes(activeFilterAuthor)) {
     displayAuthors.push(activeFilterAuthor);
+  }
+
+  // Filter displayAuthors by search query if present
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase().trim();
+    displayAuthors = displayAuthors.filter(auth => {
+      if (auth.toLowerCase().includes(q)) return true;
+      if (counts[auth] > 0) return true;
+      return false;
+    });
   }
 
   return {
@@ -1176,7 +1236,7 @@ function renderAuthorPills() {
 // ---------- Rendering: Feed Cards ----------
 
 function renderFeed() {
-  const stack = getActiveStack();
+  const searchResults = getSearchFilteredStack();
   const list = dom.streamList;
   
   if (virtualizerObserver) {
@@ -1187,14 +1247,15 @@ function renderFeed() {
 
   const oldFilteredStack = [...filteredStack];
 
+  filteredStack = searchResults;
+
   // Filter 1: Tag
-  filteredStack = stack;
   if (activeFilterTag === 'Favorites') {
-    filteredStack = stack.filter(i => i.isFavorite);
+    filteredStack = searchResults.filter(i => i.isFavorite);
   } else if (activeFilterTag === 'Ads') {
-    filteredStack = stack.filter(i => i.isAd);
+    filteredStack = searchResults.filter(i => i.isAd);
   } else if (activeFilterTag !== 'All') {
-    filteredStack = stack.filter(i => i.assignedTag === activeFilterTag);
+    filteredStack = searchResults.filter(i => i.assignedTag === activeFilterTag);
   }
 
   // Filter 2: Website
@@ -1220,19 +1281,6 @@ function renderFeed() {
     filteredStack = filteredStack.filter(i => i.canonicalAuthorName === activeFilterAuthor);
   }
 
-  // Filter 4: Global Search Query
-  if (searchQuery) {
-    const q = searchQuery.toLowerCase().trim();
-    filteredStack = filteredStack.filter(i => {
-      const tagMatch = (i.assignedTag || '').toLowerCase().includes(q) || 
-                       (i.tags || []).some(t => t.name.toLowerCase().includes(q));
-      const postMatch = (i.textSnippet || '').toLowerCase().includes(q);
-      const authorMatch = (i.authorName || '').toLowerCase().includes(q) || 
-                          (i.canonicalAuthorName || '').toLowerCase().includes(q);
-      const siteMatch = (i.sourcePlatform || '').toLowerCase().includes(q);
-      return tagMatch || postMatch || authorMatch || siteMatch;
-    });
-  }
 
 
   if (filteredStack.length === 0) {
@@ -1312,6 +1360,15 @@ function renderFeed() {
         } else {
           element.classList.remove('keyboard-focused');
         }
+
+        // Update card contents if favorite status or assigned tag has changed
+        if (!element.classList.contains('is-virtualized')) {
+          const domFavorite = element.dataset.favorite === 'true';
+          const domTag = element.dataset.tag || 'Unclassified';
+          if (domFavorite !== !!entry.item.isFavorite || domTag !== (entry.item.assignedTag || 'Unclassified')) {
+            populateCardInner(element, entry.item);
+          }
+        }
       }
     }
 
@@ -1349,7 +1406,45 @@ function createDaySeparator(label, id) {
   return div;
 }
 
+function updateFavoriteButtonUI(card, isFavorite, shouldAnimate = false) {
+  const favBtn = card.querySelector('.btn-favorite');
+  if (!favBtn) return;
+
+  card.dataset.favorite = isFavorite ? 'true' : 'false';
+
+  if (isFavorite) {
+    favBtn.classList.add('favorited');
+    favBtn.title = 'Remove from favorites';
+    favBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+    if (shouldAnimate) {
+      favBtn.classList.remove('animate-unpop');
+      favBtn.classList.add('animate-pop');
+      const onAnimEnd = () => {
+        favBtn.classList.remove('animate-pop');
+        favBtn.removeEventListener('animationend', onAnimEnd);
+      };
+      favBtn.addEventListener('animationend', onAnimEnd);
+    }
+  } else {
+    favBtn.classList.remove('favorited');
+    favBtn.title = 'Add to favorites';
+    favBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+    if (shouldAnimate) {
+      favBtn.classList.remove('animate-pop');
+      favBtn.classList.add('animate-unpop');
+      const onAnimEnd = () => {
+        favBtn.classList.remove('animate-unpop');
+        favBtn.removeEventListener('animationend', onAnimEnd);
+      };
+      favBtn.addEventListener('animationend', onAnimEnd);
+    }
+  }
+}
+
 function populateCardInner(card, item) {
+  card.dataset.favorite = item.isFavorite ? 'true' : 'false';
+  card.dataset.tag = item.assignedTag || 'Unclassified';
+
   const platform = item.sourcePlatform || 'unknown';
   const timeStr = relativeTime(item.timestamp);
   const tag = item.assignedTag || 'Unclassified';
@@ -1700,6 +1795,7 @@ function populateCardInner(card, item) {
       payload: { itemId: item.id, isFavorite }
     });
     item.isFavorite = isFavorite;
+    updateFavoriteButtonUI(card, isFavorite, true);
     renderFilterPills();
     renderFeed();
   });
@@ -3003,12 +3099,16 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         dom.searchClearBtn.classList.add('hidden');
       }
-      activeFilterAuthor = 'All'; // Reset author filter during search for better relevance
+      // Post search works for all posts first: reset active sub-filters when searching
+      activeFilterTag = 'All';
+      activeFilterSite = 'All';
+      activeFilterAuthor = 'All';
       renderFilterPills();
       renderSiteFilterPills();
       renderAuthorPills();
       renderFeed();
     });
+
 
     dom.searchClearBtn.addEventListener('click', () => {
       dom.globalSearch.value = '';
