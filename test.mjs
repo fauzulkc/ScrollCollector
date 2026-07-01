@@ -130,3 +130,45 @@ test('Inference Engine - heuristicAuthorMatch Tests', (t) => {
   ));
 });
 
+test('Ignore List Filtering Logic Tests', (t) => {
+  const mockStack = [
+    { id: '1', assignedTag: 'Tech', sourcePlatform: 'linkedin.com', sourceUrl: 'https://linkedin.com/post1' },
+    { id: '2', assignedTag: 'Finance', sourcePlatform: 'x.com', sourceUrl: 'https://x.com/post2' },
+    { id: '3', assignedTag: 'AI', sourcePlatform: 'youtube.com', sourceUrl: 'https://youtube.com/post3' },
+    { id: '4', assignedTag: 'Tech', sourcePlatform: 'medium.com', sourceUrl: 'https://medium.com/post4' }
+  ];
+
+  const filterFn = (stack, configuration) => {
+    const ignoredTags = (configuration.ignoredTags || []).map(t => t.toLowerCase());
+    const ignoredLinks = configuration.ignoredLinks || [];
+    const ignoredDomains = (configuration.ignoredDomains || []).map(d => d.toLowerCase());
+
+    return stack.filter(i => {
+      if (ignoredTags.includes((i.assignedTag || '').toLowerCase())) return false;
+      if (i.sourceUrl && ignoredLinks.includes(i.sourceUrl)) return false;
+      const rawPlatform = (i.sourcePlatform || '').toLowerCase();
+      if (ignoredDomains.some(d => rawPlatform === d || rawPlatform.endsWith('.' + d))) return false;
+      return true;
+    });
+  };
+
+  // 1. Test Tag Ignore
+  const config1 = { ignoredTags: ['Tech'], ignoredDomains: [], ignoredLinks: [] };
+  const filtered1 = filterFn(mockStack, config1);
+  assert.strictEqual(filtered1.length, 2);
+  assert.ok(!filtered1.some(i => i.id === '1' || i.id === '4'));
+
+  // 2. Test Link Ignore
+  const config2 = { ignoredTags: [], ignoredDomains: [], ignoredLinks: ['https://x.com/post2'] };
+  const filtered2 = filterFn(mockStack, config2);
+  assert.strictEqual(filtered2.length, 3);
+  assert.ok(!filtered2.some(i => i.id === '2'));
+
+  // 3. Test Domain Ignore
+  const config3 = { ignoredTags: [], ignoredDomains: ['youtube.com'], ignoredLinks: [] };
+  const filtered3 = filterFn(mockStack, config3);
+  assert.strictEqual(filtered3.length, 3);
+  assert.ok(!filtered3.some(i => i.id === '3'));
+});
+
+

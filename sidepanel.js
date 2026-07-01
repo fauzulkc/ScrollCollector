@@ -250,6 +250,98 @@ function showUntrackConfirmation(tag) {
   document.body.appendChild(overlay);
 }
 
+function showIgnoreTagConfirmation(tag, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  
+  overlay.innerHTML = `
+    <div class="confirm-dialog">
+      <div class="confirm-title">Ignore tag?</div>
+      <div class="confirm-message">Are you sure you want to ignore tag <strong>#${escapeHTML(tag)}</strong>? Existing and future posts with this tag will be hidden.</div>
+      <div class="confirm-actions">
+        <button class="btn-confirm-cancel">Cancel</button>
+        <button class="btn-confirm-ok">Ignore Tag</button>
+      </div>
+    </div>
+  `;
+  
+  const cancelBtn = overlay.querySelector('.btn-confirm-cancel');
+  const okBtn = overlay.querySelector('.btn-confirm-ok');
+  
+  const closeDialog = () => {
+    overlay.classList.add('fadeOut');
+    overlay.addEventListener('animationend', () => {
+      overlay.remove();
+    });
+  };
+  
+  cancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDialog();
+  });
+  
+  okBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onConfirm();
+    closeDialog();
+  });
+  
+  overlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target === overlay) {
+      closeDialog();
+    }
+  });
+  
+  document.body.appendChild(overlay);
+}
+
+function showIgnoreDomainConfirmation(domain, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  
+  overlay.innerHTML = `
+    <div class="confirm-dialog">
+      <div class="confirm-title">Ignore domain?</div>
+      <div class="confirm-message">Are you sure you want to ignore all posts from <strong>${escapeHTML(domain)}</strong>? Existing and future posts from this domain will be hidden.</div>
+      <div class="confirm-actions">
+        <button class="btn-confirm-cancel">Cancel</button>
+        <button class="btn-confirm-ok">Ignore Domain</button>
+      </div>
+    </div>
+  `;
+  
+  const cancelBtn = overlay.querySelector('.btn-confirm-cancel');
+  const okBtn = overlay.querySelector('.btn-confirm-ok');
+  
+  const closeDialog = () => {
+    overlay.classList.add('fadeOut');
+    overlay.addEventListener('animationend', () => {
+      overlay.remove();
+    });
+  };
+  
+  cancelBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDialog();
+  });
+  
+  okBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    onConfirm();
+    closeDialog();
+  });
+  
+  overlay.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target === overlay) {
+      closeDialog();
+    }
+  });
+  
+  document.body.appendChild(overlay);
+}
+
 function hexToRgb(hex) {
   const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
   const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
@@ -1285,7 +1377,14 @@ function populateCardInner(card, item) {
   let linkHtml = '';
   if (item.sourceUrl) {
     const domain = escapeHTML(extractDomain(item.sourceUrl));
-    linkHtml = `<a href="#" class="card-site-link" data-url="${escapeHTML(item.sourceUrl)}" title="${escapeHTML(item.sourceUrl)}">${domain} ↗</a>`;
+    linkHtml = `
+      <span class="card-site-link-wrapper">
+        <a href="#" class="card-site-link" data-url="${escapeHTML(item.sourceUrl)}" title="${escapeHTML(item.sourceUrl)}">${domain} ↗</a>
+        <button class="btn-flag btn-ignore-link" title="Ignore link" data-url="${escapeHTML(item.sourceUrl)}">
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+        </button>
+      </span>
+    `;
   }
 
   let authorHtml = '';
@@ -1348,6 +1447,9 @@ function populateCardInner(card, item) {
       return `
         <span class="card-category-label secondary ${isTagDynamic(sTag) ? 'is-dynamic' : ''}" style="--tag-color: ${sTagColor}" title="Confidence: ${Math.round(t.score * 100)}%" data-filter-tag="${escapeHTML(sTag)}">
           <span>${escapeHTML(sTag)}</span>
+          <button class="btn-flag btn-ignore-tag" title="Ignore tag ${escapeHTML(sTag)}" data-tag="${escapeHTML(sTag)}">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+          </button>
         </span>
       `;
     }).join('');
@@ -1398,7 +1500,12 @@ function populateCardInner(card, item) {
   card.innerHTML = `
     <div class="card-header">
       <span class="platform-logo">${faviconHtml}</span>
-      <span class="platform-name">${escapeHTML(platform)}</span>
+      <span class="platform-name-wrapper">
+        <span class="platform-name">${escapeHTML(platform)}</span>
+        <button class="btn-flag btn-ignore-domain" title="Ignore domain ${escapeHTML(platform)}" data-domain="${escapeHTML(platform)}">
+          <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+        </button>
+      </span>
       ${linkHtml}
       <span class="card-time">${timeStr}</span>
       ${adBadge}
@@ -1430,6 +1537,9 @@ function populateCardInner(card, item) {
         <span class="card-category-label ${isTagDynamic(tag) ? 'is-dynamic' : ''}" style="--tag-color: ${tagColor}" data-filter-tag="${escapeHTML(tag)}">
           <span class="cat-dot"></span>
           <span>${escapeHTML(tag)}</span>
+          <button class="btn-flag btn-ignore-tag" title="Ignore tag ${escapeHTML(tag)}" data-tag="${escapeHTML(tag)}">
+            <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+          </button>
         </span>
         ${secondaryTagsHtml}
         ${authorHtml}
@@ -1478,6 +1588,51 @@ function populateCardInner(card, item) {
     });
   });
 
+  // Handle ignore tag button clicks
+  const ignoreTagBtns = card.querySelectorAll('.btn-ignore-tag');
+  ignoreTagBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const tagToIgnore = btn.dataset.tag;
+      showIgnoreTagConfirmation(tagToIgnore, () => {
+        chrome.runtime.sendMessage({
+          type: 'IGNORE_TAG_ADDED',
+          payload: { tag: tagToIgnore }
+        });
+      });
+    });
+  });
+
+  // Handle ignore domain button clicks
+  const ignoreDomainBtns = card.querySelectorAll('.btn-ignore-domain');
+  ignoreDomainBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const domainToIgnore = btn.dataset.domain;
+      showIgnoreDomainConfirmation(domainToIgnore, () => {
+        chrome.runtime.sendMessage({
+          type: 'IGNORE_DOMAIN_ADDED',
+          payload: { domain: domainToIgnore }
+        });
+      });
+    });
+  });
+
+  // Handle ignore link button clicks
+  const ignoreLinkBtns = card.querySelectorAll('.btn-ignore-link');
+  ignoreLinkBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const linkToIgnore = btn.dataset.url;
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_LINK_ADDED',
+        payload: { url: linkToIgnore }
+      });
+    });
+  });
 
   const titleLink = card.querySelector('.card-title-link');
   if (titleLink) {
@@ -1807,6 +1962,99 @@ function renderIgnoredKeywords() {
   });
 }
 
+function renderIgnoredTags() {
+  const tags = state.configuration.ignoredTags || [];
+  const list = dom.ignoredTagsList;
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (tags.length === 0) {
+    list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0;">No ignored tags.</div>`;
+    return;
+  }
+
+  tags.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+    row.innerHTML = `
+      <span class="tag-dot-indicator" style="background: var(--danger); opacity: 0.5;"></span>
+      <span class="tag-label">${escapeHTML(t)}</span>
+      <button class="btn-tag-action btn-delete-tag btn-delete-ignored-tag" data-tag="${escapeHTML(t)}" title="Remove filter">×</button>
+    `;
+
+    row.querySelector('.btn-delete-ignored-tag').addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_TAG_REMOVED',
+        payload: { tag: t }
+      });
+    });
+
+    list.appendChild(row);
+  });
+}
+
+function renderIgnoredDomains() {
+  const domains = state.configuration.ignoredDomains || [];
+  const list = dom.ignoredDomainsList;
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (domains.length === 0) {
+    list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0;">No ignored domains.</div>`;
+    return;
+  }
+
+  domains.forEach(d => {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+    row.innerHTML = `
+      <span class="tag-dot-indicator" style="background: var(--danger); opacity: 0.5;"></span>
+      <span class="tag-label">${escapeHTML(d)}</span>
+      <button class="btn-tag-action btn-delete-tag btn-delete-ignored-domain" data-domain="${escapeHTML(d)}" title="Remove filter">×</button>
+    `;
+
+    row.querySelector('.btn-delete-ignored-domain').addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_DOMAIN_REMOVED',
+        payload: { domain: d }
+      });
+    });
+
+    list.appendChild(row);
+  });
+}
+
+function renderIgnoredLinks() {
+  const links = state.configuration.ignoredLinks || [];
+  const list = dom.ignoredLinksList;
+  if (!list) return;
+  list.innerHTML = '';
+
+  if (links.length === 0) {
+    list.innerHTML = `<div style="font-size: 11px; color: var(--text-muted); font-style: italic; padding: 4px 0;">No ignored links.</div>`;
+    return;
+  }
+
+  links.forEach(lnk => {
+    const row = document.createElement('div');
+    row.className = 'tag-row';
+    row.innerHTML = `
+      <span class="tag-dot-indicator" style="background: var(--danger); opacity: 0.5;"></span>
+      <span class="tag-label" style="text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 180px;" title="${escapeHTML(lnk)}">${escapeHTML(lnk)}</span>
+      <button class="btn-tag-action btn-delete-tag btn-delete-ignored-link" data-link="${escapeHTML(lnk)}" title="Remove filter">×</button>
+    `;
+
+    row.querySelector('.btn-delete-ignored-link').addEventListener('click', () => {
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_LINK_REMOVED',
+        payload: { url: lnk }
+      });
+    });
+
+    list.appendChild(row);
+  });
+}
+
 function renderMatchPromptConfigurator() {
   const cfg = state.configuration;
   if (dom.matchPromptToggle && dom.matchPromptInput) {
@@ -1845,6 +2093,9 @@ function renderAll() {
   renderTagConfigurator();
   renderSitesConfigurator();
   renderIgnoredKeywords();
+  renderIgnoredTags();
+  renderIgnoredDomains();
+  renderIgnoredLinks();
 }
 
 // ---------- HTML Feed Diary Export Builder ----------
@@ -2451,6 +2702,16 @@ document.addEventListener('DOMContentLoaded', () => {
     newSiteInput: $('#new-site-input'),
     newKeywordInput: $('#new-keyword-input'),
 
+    ignoredTagsList: $('#ignored-tags-list'),
+    ignoredDomainsList: $('#ignored-domains-list'),
+    ignoredLinksList: $('#ignored-links-list'),
+    addIgnoredTagForm: $('#add-ignored-tag-form'),
+    addIgnoredDomainForm: $('#add-ignored-domain-form'),
+    addIgnoredLinkForm: $('#add-ignored-link-form'),
+    newIgnoredTagInput: $('#new-ignored-tag-input'),
+    newIgnoredDomainInput: $('#new-ignored-domain-input'),
+    newIgnoredLinkInput: $('#new-ignored-link-input'),
+
     matchPromptToggle: $('#match-prompt-toggle'),
     matchPromptInput: $('#match-prompt-input'),
     matchPromptTagsContainer: $('#match-prompt-tags-container'),
@@ -2572,6 +2833,48 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     dom.newKeywordInput.value = '';
   });
+
+  // Add ignored tag form handler
+  if (dom.addIgnoredTagForm) {
+    dom.addIgnoredTagForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = dom.newIgnoredTagInput.value.trim();
+      if (!value) return;
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_TAG_ADDED',
+        payload: { tag: value }
+      });
+      dom.newIgnoredTagInput.value = '';
+    });
+  }
+
+  // Add ignored domain form handler
+  if (dom.addIgnoredDomainForm) {
+    dom.addIgnoredDomainForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = dom.newIgnoredDomainInput.value.trim();
+      if (!value) return;
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_DOMAIN_ADDED',
+        payload: { domain: value }
+      });
+      dom.newIgnoredDomainInput.value = '';
+    });
+  }
+
+  // Add ignored link form handler
+  if (dom.addIgnoredLinkForm) {
+    dom.addIgnoredLinkForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const value = dom.newIgnoredLinkInput.value.trim();
+      if (!value) return;
+      chrome.runtime.sendMessage({
+        type: 'IGNORE_LINK_ADDED',
+        payload: { url: value }
+      });
+      dom.newIgnoredLinkInput.value = '';
+    });
+  }
 
   // Match prompt handlers
   if (dom.matchPromptToggle && dom.matchPromptInput) {
