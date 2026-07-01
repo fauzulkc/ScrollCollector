@@ -11,7 +11,7 @@
  *  5. Broadcasting state updates to all extension contexts
  */
 
-import { classify, checkEngineStatus, evaluateMatch, evaluateMatchWithReason, extractTagsFromPrompt, evaluateAuthorMatch, heuristicAuthorMatch } from './lib/inference-engine.js';
+import { classify, checkEngineStatus, evaluateMatch, evaluateMatchWithReason, extractTagsFromPrompt, evaluateAuthorMatch, heuristicAuthorMatch, enhancePrompt } from './lib/inference-engine.js';
 
 // ---------------------------------------------------------------------------
 // Storage Wrapper
@@ -105,7 +105,9 @@ async function ensureInitialized() {
           { id: 's4', domain: 'x.com', isEnabled: true, isCustom: false },
           { id: 's5', domain: 'instagram.com', isEnabled: true, isCustom: false },
           { id: 's6', domain: 'youtube.com', isEnabled: true, isCustom: false },
-          { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false }
+          { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false },
+          { id: 's8', domain: 'github.com', isEnabled: true, isCustom: false },
+          { id: 's9', domain: 'news.ycombinator.com', isEnabled: true, isCustom: false }
         ],
         ignoredKeywords: [],
         ignoredTags: [],
@@ -113,6 +115,7 @@ async function ensureInitialized() {
         ignoredDomains: [],
         isTrackingPaused: false,
         matchPrompt: '',
+        matchPromptEnhanced: '',
         isMatchPromptEnabled: false
       },
       metrics: { counts: {} },
@@ -162,7 +165,9 @@ chrome.runtime.onInstalled.addListener(async () => {
         { id: 's4', domain: 'x.com', isEnabled: true, isCustom: false },
         { id: 's5', domain: 'instagram.com', isEnabled: true, isCustom: false },
         { id: 's6', domain: 'youtube.com', isEnabled: true, isCustom: false },
-        { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false }
+        { id: 's7', domain: 'medium.com', isEnabled: true, isCustom: false },
+        { id: 's8', domain: 'github.com', isEnabled: true, isCustom: false },
+        { id: 's9', domain: 'news.ycombinator.com', isEnabled: true, isCustom: false }
       ];
       updated = true;
     } else {
@@ -181,6 +186,17 @@ chrome.runtime.onInstalled.addListener(async () => {
         if (!hasX) {
           existing.configuration.sites.push({ id: 's4', domain: 'x.com', isEnabled: true, isCustom: false });
         }
+        updated = true;
+      }
+
+      const hasGithub = existing.configuration.sites.some(s => s.domain === 'github.com');
+      if (!hasGithub) {
+        existing.configuration.sites.push({ id: 's8', domain: 'github.com', isEnabled: true, isCustom: false });
+        updated = true;
+      }
+      const hasHN = existing.configuration.sites.some(s => s.domain === 'news.ycombinator.com');
+      if (!hasHN) {
+        existing.configuration.sites.push({ id: 's9', domain: 'news.ycombinator.com', isEnabled: true, isCustom: false });
         updated = true;
       }
     }
@@ -220,7 +236,13 @@ chrome.runtime.onInstalled.addListener(async () => {
       existing.configuration.isMatchPromptEnabled = false;
       existing.configuration.matchPrompt = '';
       existing.configuration.matchPromptTags = [];
+      existing.configuration.matchPromptEnhanced = '';
       updated = true;
+    } else {
+      if (existing.configuration.matchPromptEnhanced === undefined) {
+        existing.configuration.matchPromptEnhanced = '';
+        updated = true;
+      }
     }
 
     // Migrate stack pinned state to favorites state
@@ -259,7 +281,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     try {
       const state = await storage.get('configuration');
       const customSites = state.configuration?.sites?.filter(s => s.isCustom).map(s => s.domain) || [];
-      const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+      const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
       const uniqueDomains = Array.from(new Set([...defaultSites, ...customSites]));
       
       const queryUrls = [];
@@ -300,7 +322,7 @@ function checkIfSiteEnabled(hostname, sites) {
   if (lowerHost === 'twitter.com' || lowerHost.endsWith('.twitter.com')) {
     lowerHost = 'x.com';
   }
-  const defaultSites = ['facebook.com', 'linkedin.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+  const defaultSites = ['facebook.com', 'linkedin.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
   
   if (sites && sites.length > 0) {
     const anySite = sites.find(s => s.domain === '*');
@@ -331,7 +353,7 @@ async function ensureContentScriptInjected(tabId, url) {
     const state = await storage.get('configuration');
     const config = state.configuration || {};
     
-    const defaultSites = ['facebook.com', 'linkedin.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+    const defaultSites = ['facebook.com', 'linkedin.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
     const allConfiguredSites = config.sites || defaultSites.map((d, i) => ({ id: 's' + i, domain: d, isEnabled: true }));
 
     const isEnabled = checkIfSiteEnabled(hostname, allConfiguredSites);
@@ -410,6 +432,24 @@ async function broadcastStateUpdate() {
   }
 }
 
+async function broadcastToAllTabs(message) {
+  try {
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
+        chrome.tabs.sendMessage(tab.id, message, () => {
+          // Ignore runtime.lastError since some tabs might not have the script injected
+          if (chrome.runtime.lastError) {
+            // No-op
+          }
+        });
+      }
+    }
+  } catch (err) {
+    console.warn('[background] Error broadcasting to tabs:', err);
+  }
+}
+
 function getEnabledCustomTags(trackedTags) {
   return trackedTags.filter(t => t.isEnabled && !t.isDynamic).map(t => ({ label: t.label, prompt: t.prompt }));
 }
@@ -441,7 +481,7 @@ async function refreshStackInference() {
     };
 
     if (config.isMatchPromptEnabled && config.matchPrompt && config.matchPrompt.trim().length > 0) {
-      const evalResult = await evaluateMatchWithReason(item.textSnippet, item.sourcePlatform, config.matchPrompt);
+      const evalResult = await evaluateMatchWithReason(item.textSnippet, item.sourcePlatform, config.matchPrompt, config.matchPromptEnhanced, config.matchPromptTags);
       if (!evalResult.doesMatch) {
         // Drop items that don't match the new global eval prompt
         continue;
@@ -614,9 +654,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               globalMatchedKeywords: []
             };
 
-            // If Match Prompt mode is enabled, evaluate it first
             if (config.isMatchPromptEnabled && config.matchPrompt && config.matchPrompt.trim().length > 0) {
-              const evalResult = await evaluateMatchWithReason(textToClassify, normalizedPlatform, config.matchPrompt);
+              const evalResult = await evaluateMatchWithReason(textToClassify, normalizedPlatform, config.matchPrompt, config.matchPromptEnhanced, config.matchPromptTags);
               if (!evalResult.doesMatch) {
                 // Drop the item silently
                 sendResponse({ success: false, reason: 'eval_match_failed' });
@@ -863,6 +902,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
           await broadcastStateUpdate();
           triggerRefreshStackInference();
+          broadcastToAllTabs({ type: 'RESET_AND_RESCAN' });
           sendResponse({ success: true });
           break;
         }
@@ -885,19 +925,24 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         }
 
         // -----------------------------------------------------------------
-        // GENERATE_PROMPT_TAGS — generate AI tags for the prompt
+        // GENERATE_PROMPT_TAGS — generate AI tags & enhanced prompt
         // -----------------------------------------------------------------
         case 'GENERATE_PROMPT_TAGS': {
           const { prompt } = message.payload;
-          extractTagsFromPrompt(prompt).then(async tags => {
+          Promise.all([
+            extractTagsFromPrompt(prompt),
+            enhancePrompt(prompt)
+          ]).then(async ([tags, enhancedPrompt]) => {
             const { configuration } = await storage.get('configuration');
             configuration.matchPromptTags = tags;
+            configuration.matchPromptEnhanced = enhancedPrompt;
             await storage.set({ configuration });
             await broadcastStateUpdate();
-            sendResponse({ success: true, tags });
+            broadcastToAllTabs({ type: 'RESET_AND_RESCAN' });
+            sendResponse({ success: true, tags, enhancedPrompt });
           }).catch(err => {
             console.error('Error in GENERATE_PROMPT_TAGS', err);
-            sendResponse({ success: false, tags: [] });
+            sendResponse({ success: false, tags: [], enhancedPrompt: prompt });
           });
           return true; // Keep channel open for async response
         }

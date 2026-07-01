@@ -4,7 +4,7 @@ import './lib/sanitizer.js';
 const { sanitize } = globalThis.MindstreamSanitizer;
 
 import { buildSystemPrompt, buildUserPrompt } from './lib/prompt-builder.js';
-import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch } from './lib/inference-engine.js';
+import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch, extractTagsFromPrompt, enhancePrompt, evaluateMatchWithReason } from './lib/inference-engine.js';
 
 test('PII Sanitizer Tests', (t) => {
   // Test email redaction
@@ -216,6 +216,50 @@ test('Global Search and Sub-filtering Logic Tests', (t) => {
   const subFiltered = searchResultAll.filter(i => i.sourcePlatform === 'youtube.com');
   assert.strictEqual(subFiltered.length, 1);
   assert.strictEqual(subFiltered[0].id, '3');
+});
+
+test('Inference Engine - Weighted Tag Extraction and Enhanced Matching Fallback Tests', async (t) => {
+  // Test fallback tag extraction with culinary query
+  const tags = await extractTagsFromPrompt('find me restaurant and 5 star quality food posts. I am fascinated by michelin star cooking.');
+  assert.ok(tags.length >= 3);
+  
+  const tagNames = tags.map(t => t.name);
+  assert.ok(tagNames.includes('Michelin'));
+  assert.ok(tagNames.includes('5 Star Cooking'));
+  assert.ok(tagNames.includes('Restaurant'));
+  assert.ok(tagNames.includes('Food'));
+  
+  // Verify weights are on 1-5 scale
+  tags.forEach(tag => {
+    assert.strictEqual(typeof tag.weight, 'number');
+    assert.ok(tag.weight >= 1 && tag.weight <= 5);
+  });
+
+  // Test fallback prompt enhancement with culinary query
+  const enhanced = await enhancePrompt('find me restaurant and 5 star quality food posts. I am fascinated by michelin star cooking.');
+  assert.strictEqual(enhanced, 'Identify posts showcasing high-quality restaurants, Michelin-star cooking, culinary arts, gourmet dishes, cooking shows, or celebrity chefs.');
+
+  // Test fallback prompt enhancement with AI query
+  const enhancedAI = await enhancePrompt('AI jobs');
+  assert.strictEqual(enhancedAI, 'Identify posts about software development, artificial intelligence breakthroughs, machine learning models, programming tips, or new tech products.');
+
+  // Test evaluateMatchWithReason Tier 2 fallback with weighted tags and enhanced prompt
+  const matchPromptTags = [
+    { name: 'Tech', weight: 4 },
+    { name: 'Jobs', weight: 5 }
+  ];
+  
+  // Post 1: has both Tech ("python", "code") and Jobs ("hiring", "apply") keywords
+  const text1 = 'We are hiring a backend developer. Apply now to write python code!';
+  const res1 = await evaluateMatchWithReason(text1, 'x.com', 'hiring tech', 'We are hiring technical developers', matchPromptTags);
+  assert.ok(res1.doesMatch);
+  assert.ok(res1.score > 5);
+
+  // Post 2: does not match either Tech or Jobs keywords
+  const text2 = 'The weather today is rainy and wet.';
+  const res2 = await evaluateMatchWithReason(text2, 'x.com', 'hiring tech', 'We are hiring technical developers', matchPromptTags);
+  assert.ok(!res2.doesMatch);
+  assert.strictEqual(res2.score, 0);
 });
 
 
