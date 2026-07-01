@@ -37,7 +37,7 @@ func main() {
 	if runtime.GOOS == "windows" {
 		installPath = filepath.Join(home, "ScrollCollector")
 	} else {
-		installPath = "/Applications/ScrollCollector"
+		installPath = filepath.Join(home, "Applications", "ScrollCollector")
 	}
 
 	// Perform browser detection
