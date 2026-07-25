@@ -317,5 +317,53 @@ test('Requirement 7 — Substring match and weak keyword fallback tests', (t) =>
   assert.notStrictEqual(topic2, 'Starts');
 });
 
+test('Global Search and Sub-filtering Logic Tests', (t) => {
+  const mockStack = [
+    { id: '1', timestamp: 1000, assignedTag: 'Tech', sourcePlatform: 'linkedin.com', textSnippet: 'First post about react' },
+    { id: '2', timestamp: 3000, assignedTag: 'Finance', sourcePlatform: 'x.com', textSnippet: 'Latest post about bitcoin' },
+    { id: '3', timestamp: 2000, assignedTag: 'Tech', sourcePlatform: 'youtube.com', textSnippet: 'Middle post about react' },
+    { id: '4', timestamp: 4000, assignedTag: 'AI', sourcePlatform: 'medium.com', textSnippet: 'Very latest post about ai' }
+  ];
+
+  // Helper matching the logic in getSearchFilteredStack
+  const getSearchFilteredStackFn = (stack, query) => {
+    const list = [...stack];
+    list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    if (!query) return list;
+    const q = query.toLowerCase().trim();
+    return list.filter(i => {
+      const tagMatch = (i.assignedTag || '').toLowerCase().includes(q);
+      const postMatch = (i.textSnippet || '').toLowerCase().includes(q);
+      const siteMatch = (i.sourcePlatform || '').toLowerCase().includes(q);
+      return tagMatch || postMatch || siteMatch;
+    });
+  };
+
+  // 1. Verify latest to oldest sorting
+  const sorted = getSearchFilteredStackFn(mockStack, '');
+  assert.strictEqual(sorted[0].id, '4');
+  assert.strictEqual(sorted[1].id, '2');
+  assert.strictEqual(sorted[2].id, '3');
+  assert.strictEqual(sorted[3].id, '1');
+
+  // 2. Verify search query matches on all posts first (ignoring previous filters)
+  const searchResult = getSearchFilteredStackFn(mockStack, 'react');
+  // Should match post 1 and post 3, sorted latest first (post 3 first because timestamp 2000 > 1000)
+  assert.strictEqual(searchResult.length, 2);
+  assert.strictEqual(searchResult[0].id, '3');
+  assert.strictEqual(searchResult[1].id, '1');
+
+  // 3. Verify sub-filtering of tag on the search result
+  const searchResultAll = getSearchFilteredStackFn(mockStack, 'post');
+  assert.strictEqual(searchResultAll.length, 4);
+
+  // Sub-filter by site (e.g. youtube.com)
+  const subFiltered = searchResultAll.filter(i => i.sourcePlatform === 'youtube.com');
+  assert.strictEqual(subFiltered.length, 1);
+  assert.strictEqual(subFiltered[0].id, '3');
+});
+
+
 
 

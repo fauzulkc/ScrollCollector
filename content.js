@@ -90,6 +90,7 @@ const BOUNDARY_SELECTORS = [
   '[role="article"]', 'div[data-pagelet^="FeedUnit_"]', 'div[data-pagelet^="ReelsConsumerVideoSheet"]', 'div[data-pagelet^="ReelsUnit"]', 'div[data-pagelet^="Reel_"]', '[data-testid="key__feed_story"]', 'div[data-testid="fbfeed_story"]', // Facebook modern & Reels
   'ytd-rich-item-renderer', 'ytd-video-renderer', 'ytd-compact-video-renderer', 'ytd-grid-video-renderer', 'ytd-reel-video-renderer', // YouTube videos
   'ytd-comment-thread-renderer', // YouTube comments
+  'tr.athing', // Hacker News
   'article', 'div.postArticle', '[class*="post-"]', '[class*="article-"]' // Medium & Generic Articles
 ];
 
@@ -153,7 +154,7 @@ function isNoiseOrProcessed(el) {
  */
 function checkIfSiteEnabled(hostname, sites) {
   const lowerHost = hostname.toLowerCase();
-  const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com'];
+  const defaultSites = ['facebook.com', 'linkedin.com', 'twitter.com', 'x.com', 'instagram.com', 'youtube.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
   
   if (sites && sites.length > 0) {
     const anySite = sites.find(s => s.domain === '*');
@@ -183,10 +184,25 @@ function checkIfSiteEnabled(hostname, sites) {
  * @returns {string} Absolute URL string
  */
 function findNearestLink(element) {
+  const hostname = window.location.hostname.toLowerCase();
+  const isPredefined = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com', 'github.com'].some(d => hostname === d || hostname.endsWith('.' + d));
+
+  function isSameSiteLink(href) {
+    if (!href) return false;
+    if (href.startsWith('/') && !href.startsWith('//')) return true;
+    try {
+      const url = new URL(href, window.location.href);
+      return url.hostname.toLowerCase() === hostname || url.hostname.toLowerCase().endsWith('.' + hostname);
+    } catch {
+      return false;
+    }
+  }
+
   function isUsableHref(href) {
     if (!href) return false;
     if (href.startsWith('javascript:')) return false;
     if (href === '#' || href.startsWith('#')) return false;
+    if (isPredefined && !isSameSiteLink(href)) return false;
     return true;
   }
 
@@ -381,7 +397,7 @@ function findBoundaryContainer(element) {
 
   // 3. Custom site card heuristic fallback
   const hostname = window.location.hostname.toLowerCase();
-  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com'].some(d => hostname === d || hostname.endsWith('.' + d));
+  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com', 'github.com', 'news.ycombinator.com'].some(d => hostname === d || hostname.endsWith('.' + d));
   
   if (!isPredefinedSite) {
     const customBoundary = findCustomCardBoundary(element);
@@ -403,7 +419,7 @@ function extractTextFromContainer(container) {
   const hostname = window.location.hostname.toLowerCase();
 
   // Custom site card text extraction
-  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com'].some(d => hostname === d || hostname.endsWith('.' + d));
+  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com', 'github.com', 'news.ycombinator.com'].some(d => hostname === d || hostname.endsWith('.' + d));
   if (!isPredefinedSite) {
     const links = Array.from(container.querySelectorAll('a[href]'));
     const titleLink = links.find(a => {
@@ -532,6 +548,31 @@ function extractTextFromContainer(container) {
     if (title) {
       const authorLine = author ? `By: ${author}` : '';
       return `${title}\n${subtitle}\n${authorLine}`.trim().replace(/\s+/g, ' ');
+    }
+  }
+
+  // Hacker News custom text extraction
+  if (hostname.includes('news.ycombinator.com')) {
+    const titleEl = container.querySelector('.titleline');
+    if (titleEl) {
+      const titleText = titleEl.innerText.trim();
+      const nextRow = container.nextElementSibling;
+      const authorEl = nextRow ? nextRow.querySelector('.hnuser') : null;
+      const authorText = authorEl ? authorEl.innerText.trim() : '';
+      return authorText ? `${titleText}\n\nBy: ${authorText}` : titleText;
+    }
+  }
+
+  // GitHub custom text extraction
+  if (hostname.includes('github.com')) {
+    if (tagName === 'article') {
+      const repoLink = container.querySelector('h1 a, h2 a, h3 a, a[data-hydro-click*="explore"]');
+      const descEl = container.querySelector('p');
+      const descText = descEl ? descEl.innerText.trim() : '';
+      const repoName = repoLink ? repoLink.innerText.trim() : '';
+      if (repoName) {
+        return descText ? `${repoName}\n\n${descText}` : repoName;
+      }
     }
   }
 
@@ -825,6 +866,55 @@ function extractContentInfo(container) {
     }
     const postLinks = Array.from(container.querySelectorAll('a[href*="/posts/"], a[href*="/videos/"], a[href*="/reel/"]'));
     if (postLinks.length > 0) postUrl = postLinks[0].getAttribute('href');
+  } else if (hostname.includes('github.com')) {
+    const repoLinks = Array.from(container.querySelectorAll('a[href]'));
+    const githubLinks = repoLinks.filter(a => {
+      const href = a.getAttribute('href') || '';
+      if (href.startsWith('/') && !href.startsWith('//')) return true;
+      if (href.includes('github.com')) return true;
+      return false;
+    });
+
+    const repoLink = githubLinks.find(a => {
+      const href = a.getAttribute('href') || '';
+      const path = href.replace('https://github.com', '').split('?')[0];
+      const segments = path.split('/').filter(Boolean);
+      return segments.length === 2;
+    });
+
+    if (repoLink) {
+      postUrl = repoLink.getAttribute('href');
+      const parts = repoLink.innerText.trim().split('/');
+      if (parts.length > 0) {
+        authorName = parts[0].trim();
+        authorUrl = '/' + authorName;
+      }
+    } else {
+      const firstGit = githubLinks.find(a => {
+        const href = a.getAttribute('href') || '';
+        return href !== '/' && !href.includes('explore') && !href.includes('dashboard');
+      });
+      if (firstGit) {
+        postUrl = firstGit.getAttribute('href');
+      }
+    }
+  } else if (hostname.includes('news.ycombinator.com')) {
+    const titleLink = container.querySelector('.titleline a');
+    if (titleLink) {
+      postUrl = titleLink.getAttribute('href');
+    }
+    const nextRow = container.nextElementSibling;
+    const actorLink = nextRow ? nextRow.querySelector('a.hnuser') : null;
+    if (actorLink) {
+      authorUrl = actorLink.getAttribute('href');
+      authorName = actorLink.innerText.trim();
+    }
+    if (!postUrl && nextRow) {
+      const ageLink = nextRow.querySelector('.age a');
+      if (ageLink) {
+        postUrl = ageLink.getAttribute('href');
+      }
+    }
   }
 
   function toAbsolute(href) {
@@ -851,7 +941,7 @@ function processBoundaryContainer(el) {
   const contentInfo = extractContentInfo(el);
   const text = contentInfo.text;
   const hostname = window.location.hostname.toLowerCase();
-  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com'].some(d => hostname === d || hostname.endsWith('.' + d));
+  const isPredefinedSite = ['youtube.com', 'facebook.com', 'x.com', 'twitter.com', 'linkedin.com', 'medium.com', 'instagram.com', 'github.com', 'news.ycombinator.com'].some(d => hostname === d || hostname.endsWith('.' + d));
   const minLen = isPredefinedSite ? 20 : MIN_TEXT_LEN;
 
   if (text.length < minLen || text.length > MAX_TEXT_LEN) return;
@@ -1037,11 +1127,24 @@ if (chrome?.storage?.local) {
   startObserver();
 }
 
-// Handle PING messages from background script to verify injection status
+// Handle IPC messages from background script
 if (chrome?.runtime?.onMessage) {
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message && message.type === 'PING') {
-      sendResponse({ alive: true });
+    if (message) {
+      if (message.type === 'PING') {
+        sendResponse({ alive: true });
+      } else if (message.type === 'RESET_AND_RESCAN') {
+        // Reset local duplicate cache
+        seenHashes.clear();
+        
+        // Remove processed attributes from elements
+        const processedElements = document.querySelectorAll(`[${PROCESSED_ATTR}]`);
+        processedElements.forEach(el => el.removeAttribute(PROCESSED_ATTR));
+        
+        // Trigger fresh DOM scan immediately
+        scanSubtree(document.body);
+        sendResponse({ success: true });
+      }
     }
     return true;
   });

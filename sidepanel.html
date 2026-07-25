@@ -101,21 +101,40 @@
       </div>
 
       <!-- Horizontal Filter Pills (Tags & Sites & Authors) -->
-      <div class="filter-wrapper">
+      <div class="filter-wrapper" id="wrapper-tags">
         <div id="filter-pills" class="filter-pills">
           <!-- Dynamically populated: e.g. All, Favorites (<3), Tech, Finance... -->
         </div>
+        <div class="filter-dropdown-container">
+          <button class="filter-dropdown-trigger" id="btn-tags-dropdown" title="Show all tags">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="filter-dropdown-menu" id="menu-tags-dropdown"></div>
+        </div>
       </div>
-      <div class="filter-wrapper" style="padding-top: 0; margin-top: -4px;">
+      <div class="filter-wrapper" id="wrapper-sites" style="padding-top: 0; margin-top: -4px;">
         <div id="filter-site-pills" class="filter-pills">
           <!-- Dynamically populated: e.g. All Sites, linkedin.com, youtube.com... -->
         </div>
+        <div class="filter-dropdown-container">
+          <button class="filter-dropdown-trigger" id="btn-sites-dropdown" title="Show all sites">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="filter-dropdown-menu" id="menu-sites-dropdown"></div>
+        </div>
       </div>
-      <div class="filter-wrapper" style="padding-top: 0; margin-top: -4px;">
+      <div class="filter-wrapper" id="wrapper-authors" style="padding-top: 0; margin-top: -4px;">
         <div id="filter-author-pills" class="filter-pills">
           <!-- Dynamically populated: e.g. All Authors, John Doe, Jane Smith... -->
         </div>
+        <div class="filter-dropdown-container">
+          <button class="filter-dropdown-trigger" id="btn-authors-dropdown" title="Show all authors">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          <div class="filter-dropdown-menu" id="menu-authors-dropdown"></div>
+        </div>
       </div>
+
 
       
       <!-- Feed Container -->
@@ -218,7 +237,7 @@
         </p>
         <textarea id="match-prompt-input" class="match-prompt-textarea" placeholder="e.g. Find posts about AI tools that help with coding..." rows="3"></textarea>
         <div id="match-prompt-tags-container" style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;"></div>
-        <p id="match-prompt-enhanced" style="display: none; font-size: 11px; color: var(--text-secondary); margin-top: 8px; border-left: 2px solid var(--accent-primary); padding-left: 8px;"></p>
+        <p id="match-prompt-enhanced" style="display: none; font-size: 10px; color: var(--text-secondary); margin-top: 8px; font-style: italic; border-left: 2px solid var(--accent); padding-left: 6px;"></p>
       </div>
 
       <!-- Tag Configurator -->

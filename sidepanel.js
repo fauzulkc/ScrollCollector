@@ -21,6 +21,8 @@ const PLATFORM_ICONS = {
   'facebook.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H8v-3h2V9.5C10 7.57 11.57 6 13.5 6H16v3h-2c-.55 0-1 .45-1 1v2h3v3h-3v6.95c4.56-.93 8-4.96 8-9.75z"/></svg>`,
   'instagram.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>`,
   'medium.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M13.54 12a6.8 6.8 0 0 1-6.77 6.82A6.8 6.8 0 0 1 0 12a6.8 6.8 0 0 1 6.77-6.82A6.8 6.8 0 0 1 13.54 12zm7.42 0c0 3.54-1.51 6.42-3.38 6.42s-3.38-2.88-3.38-6.42 1.51-6.42 3.38-6.42 3.38 2.88 3.38 6.42zm3.04 0c0 3.24-.43 5.86-.96 5.86s-.96-2.62-.96-5.86.43-5.86.96-5.86.96 2.62.96 5.86z"/></svg>`,
+  'github.com': `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>`,
+  'news.ycombinator.com': `<svg viewBox="4 4 188 188" width="14" height="14" fill="currentColor"><path d="m73.2521756 45.01 22.7478244 47.39130083 22.7478244-47.39130083h19.56569631l-34.32352071 64.48661468v41.49338532h-15.98v-41.49338532l-34.32352071-64.48661468z"/></svg>`,
   'fallback': `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`
 };
 
@@ -552,6 +554,44 @@ function initDragToScroll() {
   });
 }
 
+function initFilterDropdowns() {
+  const dropdownPairs = [
+    { btn: dom.btnTagsDropdown, menu: dom.menuTagsDropdown },
+    { btn: dom.btnSitesDropdown, menu: dom.menuSitesDropdown },
+    { btn: dom.btnAuthorsDropdown, menu: dom.menuAuthorsDropdown }
+  ];
+
+  dropdownPairs.forEach(({ btn, menu }) => {
+    if (!btn || !menu) return;
+
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const isShown = menu.classList.contains('show');
+
+      // Close all first
+      dropdownPairs.forEach(p => {
+        if (p.menu) p.menu.classList.remove('show');
+        if (p.btn) p.btn.classList.remove('active');
+      });
+
+      if (!isShown) {
+        menu.classList.add('show');
+        btn.classList.add('active');
+      }
+    });
+  });
+
+  // Global click event to close dropdowns when clicking outside
+  document.addEventListener('click', () => {
+    dropdownPairs.forEach(p => {
+      if (p.menu) p.menu.classList.remove('show');
+      if (p.btn) p.btn.classList.remove('active');
+    });
+  });
+}
+
 // ---------- Keyboard Curation HUD Engine ----------
 
 function focusCard(index) {
@@ -683,6 +723,12 @@ function initKeyboardNavigation() {
             payload: { itemId: item.id, isFavorite }
           });
           item.isFavorite = isFavorite;
+
+          const cardRow = dom.streamList.querySelector(`.item-row[data-id="${item.id}"]`);
+          if (cardRow) {
+            updateFavoriteButtonUI(cardRow, isFavorite, true);
+          }
+
           renderFilterPills();
           renderFeed();
           focusCard(focusedItemIndex);
@@ -760,11 +806,32 @@ function initVirtualizer() {
   });
 }
 
+function getSearchFilteredStack() {
+  const stack = [...getActiveStack()];
+  // Always search latest to oldest
+  stack.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+  if (!searchQuery) {
+    return stack;
+  }
+
+  const q = searchQuery.toLowerCase().trim();
+  return stack.filter(i => {
+    const tagMatch = (i.assignedTag || '').toLowerCase().includes(q) || 
+                     (i.tags || []).some(t => t.name.toLowerCase().includes(q));
+    const postMatch = (i.textSnippet || '').toLowerCase().includes(q);
+    const authorMatch = (i.authorName || '').toLowerCase().includes(q) || 
+                        (i.canonicalAuthorName || '').toLowerCase().includes(q);
+    const siteMatch = (i.sourcePlatform || '').toLowerCase().includes(q);
+    return tagMatch || postMatch || authorMatch || siteMatch;
+  });
+}
+
 // ---------- Rendering: Tag Filters ----------
 
 function getFilterCategories() {
   const tags = state.configuration.trackedTags || [];
-  const list = getActiveStack();
+  const list = getSearchFilteredStack();
   const ignoredTags = (state.configuration?.ignoredTags || []).map(t => t.toLowerCase());
 
   const enabledTags = [];
@@ -796,7 +863,7 @@ function getFilterCategories() {
 
 function renderFilterPills() {
   const categories = getFilterCategories();
-  const list = getActiveStack();
+  const list = getSearchFilteredStack();
 
   const counts = { All: list.length, Favorites: list.filter(i => i.isFavorite).length };
   list.forEach(item => {
@@ -817,7 +884,17 @@ function renderFilterPills() {
   });
 
   dom.filterPills.innerHTML = '';
-  categories.forEach(cat => {
+
+  const displayCategories = categories.filter(cat => {
+    if (cat === 'All' || cat === 'Favorites') return true;
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase().trim();
+    if (cat.toLowerCase().includes(q)) return true;
+    if (counts[cat] > 0) return true;
+    return false;
+  });
+
+  displayCategories.forEach(cat => {
     const count = counts[cat] || 0;
     const pill = document.createElement('button');
     const isDyn = isTagDynamic(cat);
@@ -883,6 +960,52 @@ function renderFilterPills() {
       }
     }
   });
+
+  // Populate Tags Dropdown
+  if (dom.menuTagsDropdown) {
+    dom.menuTagsDropdown.innerHTML = '';
+    displayCategories.forEach(cat => {
+      const count = counts[cat] || 0;
+      const color = getTagColor(cat);
+
+      const btn = document.createElement('button');
+      btn.className = `filter-dropdown-item ${activeFilterTag === cat ? 'active' : ''}`;
+      btn.style.setProperty('--pill-color', color);
+      btn.style.setProperty('--pill-color-rgb', hexToRgb(color));
+      
+      let labelText = cat;
+      if (cat === 'Favorites') labelText = 'Favorites';
+      else if (cat === 'All') labelText = 'All Categories';
+
+      let dotHtml = `<span class="pill-dot" style="background: ${color}; margin-right: 6px; width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>`;
+      if (cat === 'Favorites') {
+        dotHtml = `<span style="margin-right: 6px; font-size: 11px; flex-shrink: 0; line-height: 1;">❤️</span>`;
+      } else if (cat === 'All') {
+        dotHtml = `<span class="pill-dot" style="background: var(--text-muted); opacity: 0.3; margin-right: 6px; width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>`;
+      }
+
+      btn.innerHTML = `
+        <span style="display: flex; align-items: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+          ${dotHtml}
+          <span>${escapeHTML(labelText)}</span>
+        </span>
+        <span class="filter-dropdown-item-count">${count}</span>
+      `;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        activeFilterTag = cat;
+        activeFilterAuthor = 'All'; // Reset author filter on category change
+        dom.menuTagsDropdown.classList.remove('show');
+        dom.btnTagsDropdown.classList.remove('active');
+        renderFilterPills();
+        renderSiteFilterPills();
+        renderAuthorPills();
+        renderFeed();
+      });
+      dom.menuTagsDropdown.appendChild(btn);
+    });
+  }
 }
 
 // ---------- Rendering: Site Filters ----------
@@ -894,14 +1017,14 @@ function setFilterSite(site) {
 
   // If the active tag filter is not 'All' or 'Favorites', check if any items match the activeTag + new site
   if (activeFilterTag !== 'All' && activeFilterTag !== 'Favorites' && activeFilterTag !== 'Ads') {
-    const hasItemsForTagOnSite = getActiveStack().some(item => {
+    const hasItemsForTagOnSite = getSearchFilteredStack().some(item => {
       const tagMatch = item.assignedTag === activeFilterTag;
       if (!tagMatch) return false;
       
       if (activeFilterSite === 'All') return true;
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
       if (activeFilterSite === 'Other') {
-        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
         const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
         const configuredSites = state.configuration.sites || [];
         const enabledDomains = [...defaultSites, ...customSites].filter(d => {
@@ -917,12 +1040,12 @@ function setFilterSite(site) {
       activeFilterTag = 'All';
     }
   } else if (activeFilterTag === 'Ads') {
-    const hasAdsOnSite = getActiveStack().some(item => {
+    const hasAdsOnSite = getSearchFilteredStack().some(item => {
       if (!item.isAd) return false;
       if (activeFilterSite === 'All') return true;
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
       if (activeFilterSite === 'Other') {
-        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
         return !defaultSites.some(d => rawPlatform === d || rawPlatform.endsWith('.' + d));
       }
       return rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
@@ -932,13 +1055,14 @@ function setFilterSite(site) {
     }
   }
 
+
   renderFilterPills();
   renderSiteFilterPills();
   renderFeed();
 }
 
 function renderSiteFilterPills() {
-  const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+  const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
   const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
   const configuredSites = state.configuration.sites || [];
   
@@ -959,10 +1083,11 @@ function renderSiteFilterPills() {
   });
 
   // 2. Compute counts dynamically
-  const counts = { All: getActiveStack().length };
+  const searchList = getSearchFilteredStack();
+  const counts = { All: searchList.length };
   let otherCount = 0;
 
-  getActiveStack().forEach(item => {
+  searchList.forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
     
     // Find matching site candidate
@@ -984,7 +1109,7 @@ function renderSiteFilterPills() {
 
   // 3. Sort candidate sites by recency (last item added timestamp)
   const siteTimestamps = {};
-  getActiveStack().forEach(item => {
+  searchList.forEach(item => {
     const rawPlatform = (item.sourcePlatform || '').toLowerCase();
     let matchedCandidate = null;
     for (const site of candidateSites) {
@@ -1021,7 +1146,18 @@ function renderSiteFilterPills() {
 
   dom.filterSitePills.innerHTML = '';
 
-  orderedSites.forEach(site => {
+  let displaySites = orderedSites;
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase().trim();
+    displaySites = orderedSites.filter(site => {
+      if (site === 'All' || site === 'Other') return true;
+      if (site.toLowerCase().includes(q)) return true;
+      if (counts[site] > 0) return true;
+      return false;
+    });
+  }
+
+  displaySites.forEach(site => {
     const count = counts[site] || 0;
     const pill = document.createElement('div');
     pill.dataset.site = site;
@@ -1074,12 +1210,43 @@ function renderSiteFilterPills() {
       }
     }
   });
+
+  // Populate Sites Dropdown
+  if (dom.menuSitesDropdown) {
+    dom.menuSitesDropdown.innerHTML = '';
+    displaySites.forEach(site => {
+      const count = counts[site] || 0;
+      const btn = document.createElement('button');
+      btn.className = `filter-dropdown-item ${activeFilterSite === site ? 'active' : ''}`;
+      
+      let labelText = site;
+      if (site === 'All') labelText = 'All Sites';
+
+      const iconHtml = PLATFORM_ICONS[site] || PLATFORM_ICONS['fallback'];
+
+      btn.innerHTML = `
+        <span style="display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+          <span class="pill-icon" style="display: inline-flex; align-items: center; width: 12px; height: 12px; flex-shrink: 0;">${iconHtml}</span>
+          <span>${escapeHTML(labelText)}</span>
+        </span>
+        <span class="filter-dropdown-item-count">${count}</span>
+      `;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dom.menuSitesDropdown.classList.remove('show');
+        dom.btnSitesDropdown.classList.remove('active');
+        setFilterSite(site);
+      });
+      dom.menuSitesDropdown.appendChild(btn);
+    });
+  }
 }
 
 // ---------- Rendering: Author Filters ----------
 
 function getFilterAuthors() {
-  const list = getActiveStack();
+  const list = getSearchFilteredStack();
   const counts = { All: 0 };
   
   // Count authors that match the activeTag and activeSite filters!
@@ -1099,7 +1266,7 @@ function getFilterAuthors() {
     if (activeFilterSite !== 'All') {
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
       if (activeFilterSite === 'Other') {
-        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
         const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
         const configuredSites = state.configuration.sites || [];
         const enabledDomains = [...defaultSites, ...customSites].filter(d => {
@@ -1131,6 +1298,16 @@ function getFilterAuthors() {
   let displayAuthors = authorNames.slice(0, 10);
   if (activeFilterAuthor !== 'All' && !displayAuthors.includes(activeFilterAuthor)) {
     displayAuthors.push(activeFilterAuthor);
+  }
+
+  // Filter displayAuthors by search query if present
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase().trim();
+    displayAuthors = displayAuthors.filter(auth => {
+      if (auth.toLowerCase().includes(q)) return true;
+      if (counts[auth] > 0) return true;
+      return false;
+    });
   }
 
   return {
@@ -1182,12 +1359,60 @@ function renderAuthorPills() {
 
     dom.filterAuthorPills.appendChild(pill);
   });
+
+  // Populate Authors Dropdown
+  if (dom.menuAuthorsDropdown) {
+    dom.menuAuthorsDropdown.innerHTML = '';
+    
+    // Hide dropdown trigger if there are no authors or only 'All' with 0 posts
+    if (authors.length <= 1) {
+      dom.btnAuthorsDropdown.parentElement.classList.add('hidden');
+    } else {
+      dom.btnAuthorsDropdown.parentElement.classList.remove('hidden');
+    }
+
+    authors.forEach(auth => {
+      const count = counts[auth] || 0;
+      if (auth !== 'All' && count === 0) return;
+
+      const btn = document.createElement('button');
+      btn.className = `filter-dropdown-item ${activeFilterAuthor === auth ? 'active' : ''}`;
+      
+      let labelText = auth === 'All' ? 'All Authors' : auth;
+
+      const color = '#8b5cf6'; // Violet for authors
+      let dotHtml = `<span class="pill-dot" style="background: ${color}; margin-right: 6px; width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>`;
+      if (auth === 'All') {
+        dotHtml = `<span class="pill-dot" style="background: var(--text-muted); opacity: 0.3; margin-right: 6px; width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0;"></span>`;
+      }
+
+      btn.innerHTML = `
+        <span style="display: flex; align-items: center; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+          ${dotHtml}
+          <span>${escapeHTML(labelText)}</span>
+        </span>
+        <span class="filter-dropdown-item-count">${count}</span>
+      `;
+
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        activeFilterAuthor = auth;
+        dom.menuAuthorsDropdown.classList.remove('show');
+        dom.btnAuthorsDropdown.classList.remove('active');
+        renderFilterPills();
+        renderSiteFilterPills();
+        renderAuthorPills();
+        renderFeed();
+      });
+      dom.menuAuthorsDropdown.appendChild(btn);
+    });
+  }
 }
 
 // ---------- Rendering: Feed Cards ----------
 
 function renderFeed() {
-  const stack = getActiveStack();
+  const searchResults = getSearchFilteredStack();
   const list = dom.streamList;
   
   if (virtualizerObserver) {
@@ -1198,14 +1423,15 @@ function renderFeed() {
 
   const oldFilteredStack = [...filteredStack];
 
+  filteredStack = searchResults;
+
   // Filter 1: Tag
-  filteredStack = stack;
   if (activeFilterTag === 'Favorites') {
-    filteredStack = stack.filter(i => i.isFavorite);
+    filteredStack = searchResults.filter(i => i.isFavorite);
   } else if (activeFilterTag === 'Ads') {
-    filteredStack = stack.filter(i => i.isAd);
+    filteredStack = searchResults.filter(i => i.isAd);
   } else if (activeFilterTag !== 'All') {
-    filteredStack = stack.filter(i => i.assignedTag === activeFilterTag);
+    filteredStack = searchResults.filter(i => i.assignedTag === activeFilterTag);
   }
 
   // Filter 2: Website
@@ -1213,7 +1439,7 @@ function renderFeed() {
     filteredStack = filteredStack.filter(i => {
       const rawPlatform = (i.sourcePlatform || '').toLowerCase();
       if (activeFilterSite === 'Other') {
-        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
         const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
         const configuredSites = state.configuration.sites || [];
         const enabledDomains = [...defaultSites, ...customSites].filter(d => {
@@ -1231,19 +1457,6 @@ function renderFeed() {
     filteredStack = filteredStack.filter(i => i.canonicalAuthorName === activeFilterAuthor);
   }
 
-  // Filter 4: Global Search Query
-  if (searchQuery) {
-    const q = searchQuery.toLowerCase().trim();
-    filteredStack = filteredStack.filter(i => {
-      const tagMatch = (i.assignedTag || '').toLowerCase().includes(q) || 
-                       (i.tags || []).some(t => t.name.toLowerCase().includes(q));
-      const postMatch = (i.textSnippet || '').toLowerCase().includes(q);
-      const authorMatch = (i.authorName || '').toLowerCase().includes(q) || 
-                          (i.canonicalAuthorName || '').toLowerCase().includes(q);
-      const siteMatch = (i.sourcePlatform || '').toLowerCase().includes(q);
-      return tagMatch || postMatch || authorMatch || siteMatch;
-    });
-  }
 
 
   if (filteredStack.length === 0) {
@@ -1323,6 +1536,15 @@ function renderFeed() {
         } else {
           element.classList.remove('keyboard-focused');
         }
+
+        // Update card contents if favorite status or assigned tag has changed
+        if (!element.classList.contains('is-virtualized')) {
+          const domFavorite = element.dataset.favorite === 'true';
+          const domTag = element.dataset.tag || 'Unclassified';
+          if (domFavorite !== !!entry.item.isFavorite || domTag !== (entry.item.assignedTag || 'Unclassified')) {
+            populateCardInner(element, entry.item);
+          }
+        }
       }
     }
 
@@ -1360,7 +1582,45 @@ function createDaySeparator(label, id) {
   return div;
 }
 
+function updateFavoriteButtonUI(card, isFavorite, shouldAnimate = false) {
+  const favBtn = card.querySelector('.btn-favorite');
+  if (!favBtn) return;
+
+  card.dataset.favorite = isFavorite ? 'true' : 'false';
+
+  if (isFavorite) {
+    favBtn.classList.add('favorited');
+    favBtn.title = 'Remove from favorites';
+    favBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`;
+    if (shouldAnimate) {
+      favBtn.classList.remove('animate-unpop');
+      favBtn.classList.add('animate-pop');
+      const onAnimEnd = () => {
+        favBtn.classList.remove('animate-pop');
+        favBtn.removeEventListener('animationend', onAnimEnd);
+      };
+      favBtn.addEventListener('animationend', onAnimEnd);
+    }
+  } else {
+    favBtn.classList.remove('favorited');
+    favBtn.title = 'Add to favorites';
+    favBtn.innerHTML = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
+    if (shouldAnimate) {
+      favBtn.classList.remove('animate-pop');
+      favBtn.classList.add('animate-unpop');
+      const onAnimEnd = () => {
+        favBtn.classList.remove('animate-unpop');
+        favBtn.removeEventListener('animationend', onAnimEnd);
+      };
+      favBtn.addEventListener('animationend', onAnimEnd);
+    }
+  }
+}
+
 function populateCardInner(card, item) {
+  card.dataset.favorite = item.isFavorite ? 'true' : 'false';
+  card.dataset.tag = item.assignedTag || 'Unclassified';
+
   const platform = item.sourcePlatform || 'unknown';
   const timeStr = relativeTime(item.timestamp);
   const tag = item.assignedTag || 'Unclassified';
@@ -1711,6 +1971,7 @@ function populateCardInner(card, item) {
       payload: { itemId: item.id, isFavorite }
     });
     item.isFavorite = isFavorite;
+    updateFavoriteButtonUI(card, isFavorite, true);
     renderFilterPills();
     renderFeed();
   });
@@ -2074,24 +2335,31 @@ function renderMatchPromptConfigurator() {
     }
     dom.matchPromptToggle.checked = !!cfg.isMatchPromptEnabled;
     
-    // We don't re-render the tags container from state because the tags are transient and generated on the fly.
-    // However, we can render the last saved tags from cfg.matchPromptTags.
+    // Render the tags list with weights
     if (dom.matchPromptTagsContainer) {
       dom.matchPromptTagsContainer.innerHTML = '';
       if (cfg.matchPrompt && cfg.matchPromptTags && cfg.matchPromptTags.length > 0) {
         cfg.matchPromptTags.forEach(t => {
+          const name = typeof t === 'object' ? t.name : t;
+          const weight = typeof t === 'object' ? t.weight : null;
           const span = document.createElement('span');
           span.className = 'entity-chip';
-          span.textContent = '#' + escapeHTML(t);
-          span.style.opacity = '0.6';
+          if (weight) {
+            span.innerHTML = `#${escapeHTML(name)} <span style="font-weight: 700; color: var(--accent); margin-left: 2px;">${weight}</span>`;
+            span.style.opacity = (0.4 + (weight / 5) * 0.5).toFixed(2);
+          } else {
+            span.textContent = '#' + escapeHTML(name);
+            span.style.opacity = '0.6';
+          }
           dom.matchPromptTagsContainer.appendChild(span);
         });
       }
     }
 
+    // Render the enhanced prompt if available
     if (dom.matchPromptEnhanced) {
       const enhanced = cfg.matchPromptEnhanced || '';
-      if (enhanced.trim()) {
+      if (cfg.matchPrompt && enhanced.trim()) {
         dom.matchPromptEnhanced.style.display = 'block';
         dom.matchPromptEnhanced.textContent = `Enhanced: "${enhanced}"`;
       } else {
@@ -2631,7 +2899,7 @@ function initTabChangeListener() {
 function handleTabUrlChange(url) {
   try {
     const hostname = new URL(url).hostname.replace('www.', '').toLowerCase();
-    const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com'];
+    const defaultSites = ['linkedin.com', 'x.com', 'twitter.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
     const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain.toLowerCase());
     const enabledDomains = [...defaultSites, ...customSites];
 
@@ -2698,6 +2966,12 @@ document.addEventListener('DOMContentLoaded', () => {
     filterAuthorPills: $('#filter-author-pills'), // Author filter scroller
     globalSearch: $('#global-search'), // Search input element
     searchClearBtn: $('#search-clear-btn'), // Search clear button
+    btnTagsDropdown: $('#btn-tags-dropdown'),
+    menuTagsDropdown: $('#menu-tags-dropdown'),
+    btnSitesDropdown: $('#btn-sites-dropdown'),
+    menuSitesDropdown: $('#menu-sites-dropdown'),
+    btnAuthorsDropdown: $('#btn-authors-dropdown'),
+    menuAuthorsDropdown: $('#menu-authors-dropdown'),
     tabCountStream: $('#tab-count-stream'),
     feedContainer: $('#feed-container'),
 
@@ -2756,6 +3030,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Drag to scroll pills
   initDragToScroll();
+
+  // Initialize filter dropdown menus
+  initFilterDropdowns();
 
   // Initialize virtualization observer
   initVirtualizer();
@@ -2918,13 +3195,17 @@ document.addEventListener('DOMContentLoaded', () => {
         payload: { prompt: val }
       });
       
-      // Clear container and show loading state if not empty
+      // Clear containers and show loading state if not empty
       if (dom.matchPromptTagsContainer) {
         if (!val.trim()) {
           dom.matchPromptTagsContainer.innerHTML = '';
         } else {
           dom.matchPromptTagsContainer.innerHTML = '<span style="font-size: 10px; color: var(--text-secondary);">Generating expected tags...</span>';
         }
+      }
+      if (dom.matchPromptEnhanced) {
+        dom.matchPromptEnhanced.textContent = '';
+        dom.matchPromptEnhanced.style.display = 'none';
       }
 
       // Debounce tag generation (expensive AI call)
@@ -2938,19 +3219,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }, (response) => {
           if (dom.matchPromptTagsContainer) {
             dom.matchPromptTagsContainer.innerHTML = ''; // clear loading
-            if (response && response.success && response.tags.length > 0) {
+            if (response && response.success && response.tags && response.tags.length > 0) {
               response.tags.forEach(t => {
+                const name = typeof t === 'object' ? t.name : t;
+                const weight = typeof t === 'object' ? t.weight : null;
                 const span = document.createElement('span');
                 span.className = 'entity-chip';
-                span.textContent = '#' + escapeHTML(t);
-                span.style.opacity = '0.6'; // subtly show as disabled
+                if (weight) {
+                  span.innerHTML = `#${escapeHTML(name)} <span style="font-weight: 700; color: var(--accent); margin-left: 2px;">${weight}</span>`;
+                  span.style.opacity = (0.4 + (weight / 5) * 0.5).toFixed(2);
+                } else {
+                  span.textContent = '#' + escapeHTML(name);
+                  span.style.opacity = '0.6';
+                }
                 dom.matchPromptTagsContainer.appendChild(span);
               });
             }
           }
-          if (response?.enhanced && dom.matchPromptEnhanced) {
-            dom.matchPromptEnhanced.style.display = 'block';
-            dom.matchPromptEnhanced.textContent = `Enhanced: "${response.enhanced}"`;
+          if (dom.matchPromptEnhanced) {
+            if (response?.success && response.enhanced) {
+              dom.matchPromptEnhanced.textContent = `Enhanced: "${response.enhanced}"`;
+              dom.matchPromptEnhanced.style.display = 'block';
+            } else {
+              dom.matchPromptEnhanced.textContent = '';
+              dom.matchPromptEnhanced.style.display = 'none';
+            }
           }
         });
       }, 1000); // 1s debounce
@@ -3030,12 +3323,16 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         dom.searchClearBtn.classList.add('hidden');
       }
-      activeFilterAuthor = 'All'; // Reset author filter during search for better relevance
+      // Post search works for all posts first: reset active sub-filters when searching
+      activeFilterTag = 'All';
+      activeFilterSite = 'All';
+      activeFilterAuthor = 'All';
       renderFilterPills();
       renderSiteFilterPills();
       renderAuthorPills();
       renderFeed();
     });
+
 
     dom.searchClearBtn.addEventListener('click', () => {
       dom.globalSearch.value = '';

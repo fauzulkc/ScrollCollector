@@ -96,7 +96,9 @@ func seedDefaultDatabase() {
 				{"id": "s4", "domain": "x.com", "isEnabled": true, "isCustom": false},
 				{"id": "s5", "domain": "instagram.com", "isEnabled": true, "isCustom": false},
 				{"id": "s6", "domain": "youtube.com", "isEnabled": true, "isCustom": false},
-				{"id": "s7", "domain": "medium.com", "isEnabled": true, "isCustom": false}
+				{"id": "s7", "domain": "medium.com", "isEnabled": true, "isCustom": false},
+				{"id": "s8", "domain": "github.com", "isEnabled": true, "isCustom": false},
+				{"id": "s9", "domain": "news.ycombinator.com", "isEnabled": true, "isCustom": false}
 			],
 			"ignoredKeywords": [],
 			"isTrackingPaused": false

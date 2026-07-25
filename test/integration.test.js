@@ -36,7 +36,9 @@ describe('ScrollCollector content.js Integration Tests', () => {
                   { id: 's4', domain: 'x.com', isEnabled: true },
                   { id: 's5', domain: 'medium.com', isEnabled: true },
                   { id: 's6', domain: 'instagram.com', isEnabled: true },
-                  { id: 's7', domain: 'gsmarena.com', isEnabled: true }
+                  { id: 's7', domain: 'gsmarena.com', isEnabled: true },
+                  { id: 's8', domain: 'github.com', isEnabled: true },
+                  { id: 's9', domain: 'news.ycombinator.com', isEnabled: true }
                 ],
                 isTrackingPaused: false
               }
