@@ -36,6 +36,7 @@ Compress the Chrome extension assets into a ZIP file. This zip is embedded direc
 zip -r installer/ScrollCollector.zip \
   icons/ \
   lib/ \
+  offscreen/ \
   manifest.json \
   background.js \
   content.js \

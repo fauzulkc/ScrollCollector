@@ -20,7 +20,7 @@ cp install-guide.html installer/install-guide.html
 # 2. Package extension runtime files into zip
 echo "[+] Archiving extension files to installer/ScrollCollector.zip..."
 rm -f installer/ScrollCollector.zip
-zip -r installer/ScrollCollector.zip icons/ lib/ vendor/ manifest.json background.js content.js sidepanel.css sidepanel.html sidepanel.js install-guide.html README.md -x "*.DS_Store"
+zip -r installer/ScrollCollector.zip icons/ lib/ offscreen/ manifest.json background.js content.js sidepanel.css sidepanel.html sidepanel.js install-guide.html README.md -x "*.DS_Store"
 
 if [ ! -f "installer/ScrollCollector.zip" ]; then
     echo "[!] Error generating ScrollCollector.zip archive."

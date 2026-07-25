@@ -4,7 +4,9 @@ import './lib/sanitizer.js';
 const { sanitize } = globalThis.MindstreamSanitizer;
 
 import { buildSystemPrompt, buildUserPrompt } from './lib/prompt-builder.js';
-import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch } from './lib/inference-engine.js';
+import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch, isSocialNoise, scoreRuleBasedEvalMatch, buildEvalKeywords, parseModelJson } from './lib/inference-engine.js';
+import { createRouter } from './lib/inference/router.js';
+import { getBrowserModelDisplayName } from './lib/inference/browser-detect.js';
 
 test('PII Sanitizer Tests', (t) => {
   // Test email redaction
@@ -169,6 +171,123 @@ test('Ignore List Filtering Logic Tests', (t) => {
   const filtered3 = filterFn(mockStack, config3);
   assert.strictEqual(filtered3.length, 3);
   assert.ok(!filtered3.some(i => i.id === '3'));
+});
+
+test('Eval Match - social noise rejection', (t) => {
+  assert.ok(isSocialNoise('Shihabul Islam and 2 others reacted to your post about WSL and Claude Code.'));
+  assert.ok(isSocialNoise('Hi Saquib, Amazing to be connected with you! Excited to start our journey together.'));
+  assert.ok(!isSocialNoise('A stunning Michelin-star tasting menu featured locally sourced ingredients and modern French technique.'));
+});
+
+test('Eval Match - strict rule-based scoring', (t) => {
+  const prompt = 'find me restaurant and 5 star quality food posts. I am fascinated by michelin star cooking';
+  const tags = ['Michelin', '5 Star Cooking', 'Cooking', 'Restaurant', 'Food'];
+
+  const linkedInNoise = scoreRuleBasedEvalMatch(
+    'Hi Saquib, Amazing to be connected with you! Together we can do amazing things from start to December.',
+    prompt,
+    tags
+  );
+  assert.ok(!linkedInNoise.doesMatch);
+
+  const reactionNoise = scoreRuleBasedEvalMatch(
+    'Shihabul Islam and 2 others reacted to your post.',
+    prompt,
+    tags
+  );
+  assert.ok(!reactionNoise.doesMatch);
+
+  const foodPost = scoreRuleBasedEvalMatch(
+    'We visited a Michelin star restaurant last night. The chef presented a five course tasting menu with exceptional technique.',
+    prompt,
+    tags
+  );
+  assert.ok(foodPost.doesMatch);
+
+  const keywords = buildEvalKeywords(prompt, tags);
+  assert.ok(keywords.tagKeywords.includes('michelin'));
+  assert.ok(keywords.tagKeywords.includes('restaurant'));
+});
+
+test('parseModelJson tolerates markdown fences', (t) => {
+  assert.deepStrictEqual(parseModelJson('{"matches": true}'), { matches: true });
+  assert.deepStrictEqual(
+    parseModelJson('Here is the result:\n```json\n{"matches": false}\n```'),
+    { matches: false }
+  );
+});
+
+test('Inference router — provider fallback order', async (t) => {
+  const calls = [];
+
+  const tier1 = {
+    tier: 1,
+    getDisplayName: () => 'Mock Browser SLM',
+    isAvailable: async () => true,
+    inferJson: async () => {
+      calls.push('tier1');
+      return null;
+    },
+    getEngineStatus: async () => ({ tier: 1, name: 'Mock Browser SLM', status: 'ready' })
+  };
+
+  const tier2 = {
+    tier: 2,
+    getDisplayName: () => 'Mock WebGPU',
+    isAvailable: async () => true,
+    inferJson: async () => {
+      calls.push('tier2');
+      return { tags: [{ name: 'Tech', score: 1 }] };
+    },
+    getEngineStatus: async () => ({ tier: 2, name: 'Mock WebGPU', status: 'ready' })
+  };
+
+  const keyword = {
+    tier: 3,
+    getDisplayName: () => 'Rule-based Classifier',
+    isAvailable: async () => true,
+    getEngineStatus: async () => ({ tier: 3, name: 'Rule-based Classifier', status: 'ready' })
+  };
+
+  const router = createRouter([tier1, tier2], [tier1, tier2, keyword]);
+
+  const result = await router.inferJson({
+    systemPrompt: 'test',
+    userPrompt: 'hello'
+  });
+
+  assert.deepStrictEqual(calls, ['tier1', 'tier2']);
+  assert.strictEqual(result.engine, 'Mock WebGPU');
+  assert.strictEqual(result.tier, 2);
+
+  const status = await router.checkEngineStatus();
+  assert.strictEqual(status.tier, 1);
+  assert.strictEqual(status.name, 'Mock Browser SLM');
+});
+
+test('Inference router — keyword status when no semantic provider ready', async (t) => {
+  const unavailable = {
+    tier: 1,
+    getDisplayName: () => 'Mock Browser SLM',
+    isAvailable: async () => false,
+    inferJson: async () => null,
+    getEngineStatus: async () => null
+  };
+
+  const keyword = {
+    tier: 3,
+    getDisplayName: () => 'Rule-based Classifier',
+    isAvailable: async () => true,
+    getEngineStatus: async () => ({ tier: 3, name: 'Rule-based Classifier', status: 'ready' })
+  };
+
+  const router = createRouter([unavailable], [unavailable, keyword]);
+  const status = await router.checkEngineStatus();
+  assert.strictEqual(status.tier, 3);
+});
+
+test('Browser detect — display names', (t) => {
+  assert.strictEqual(typeof getBrowserModelDisplayName(), 'string');
 });
 
 

@@ -4,12 +4,16 @@
   "description": "Deterministic web page feed tracking and categorizer using Gemini Nano.",
   "type": "module",
   "scripts": {
-    "test": "node test.mjs && vitest run"
+    "test": "node test.mjs && vitest run",
+    "vendor:ai": "mkdir -p lib/vendor && cp node_modules/@huggingface/transformers/dist/transformers.web.min.js lib/vendor/"
   },
   "author": "Fauzul Chowdhury",
   "license": "MIT",
   "devDependencies": {
     "happy-dom": "^20.10.6",
     "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.4.0"
   }
 }

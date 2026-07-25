@@ -434,15 +434,26 @@ function renderEngineStatus() {
   const es = state.engineStatus || {};
   dom.engineDot.classList.remove('active', 'fallback', 'error');
 
-  if (es.tier === 1 || es.status === 'active') {
+  const isSemanticReady = (es.tier === 1 || es.tier === 2) && es.status === 'ready';
+  const isDownloading = es.status === 'downloading';
+  const isUnavailable = es.status === 'unavailable';
+
+  if (isSemanticReady) {
     dom.engineDot.classList.add('active');
-  } else if (es.tier === 2 || es.status === 'ready') {
+    dom.engineLabel.textContent = es.name || 'On-device AI';
+  } else if (isDownloading) {
     dom.engineDot.classList.add('fallback');
+    dom.engineLabel.textContent = es.name || 'On-device AI (downloading…)';
+  } else if (isUnavailable && es.tier <= 2) {
+    dom.engineDot.classList.add('error');
+    dom.engineLabel.textContent = es.name || 'On-device AI (unavailable)';
+  } else if (es.tier === 3 || es.status === 'ready') {
+    dom.engineDot.classList.add('fallback');
+    dom.engineLabel.textContent = es.name || 'Rule-based Classifier';
   } else {
     dom.engineDot.classList.add('error');
+    dom.engineLabel.textContent = es.name || '—';
   }
-
-  dom.engineLabel.textContent = es.name || '—';
 }
 
 let visualProcessingTimeout = null;
@@ -2077,6 +2088,17 @@ function renderMatchPromptConfigurator() {
         });
       }
     }
+
+    if (dom.matchPromptEnhanced) {
+      const enhanced = cfg.matchPromptEnhanced || '';
+      if (enhanced.trim()) {
+        dom.matchPromptEnhanced.style.display = 'block';
+        dom.matchPromptEnhanced.textContent = `Enhanced: "${enhanced}"`;
+      } else {
+        dom.matchPromptEnhanced.style.display = 'none';
+        dom.matchPromptEnhanced.textContent = '';
+      }
+    }
   }
 }
 
@@ -2715,6 +2737,7 @@ document.addEventListener('DOMContentLoaded', () => {
     matchPromptToggle: $('#match-prompt-toggle'),
     matchPromptInput: $('#match-prompt-input'),
     matchPromptTagsContainer: $('#match-prompt-tags-container'),
+    matchPromptEnhanced: $('#match-prompt-enhanced'),
 
     clearStackBtn: $('#clear-stack-btn'),
     clearConfirmContainer: $('#clear-confirm-container'),
@@ -2924,6 +2947,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 dom.matchPromptTagsContainer.appendChild(span);
               });
             }
+          }
+          if (response?.enhanced && dom.matchPromptEnhanced) {
+            dom.matchPromptEnhanced.style.display = 'block';
+            dom.matchPromptEnhanced.textContent = `Enhanced: "${response.enhanced}"`;
           }
         });
       }, 1000); // 1s debounce

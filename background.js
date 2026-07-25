@@ -11,7 +11,7 @@
  *  5. Broadcasting state updates to all extension contexts
  */
 
-import { classify, checkEngineStatus, evaluateMatch, evaluateMatchWithReason, extractTagsFromPrompt, evaluateAuthorMatch, heuristicAuthorMatch } from './lib/inference-engine.js';
+import { classify, checkEngineStatus, evaluateMatch, evaluateMatchWithReason, extractTagsFromPrompt, enhanceMatchPrompt, evaluateAuthorMatch, heuristicAuthorMatch } from './lib/inference-engine.js';
 
 // ---------------------------------------------------------------------------
 // Storage Wrapper
@@ -220,6 +220,11 @@ chrome.runtime.onInstalled.addListener(async () => {
       existing.configuration.isMatchPromptEnabled = false;
       existing.configuration.matchPrompt = '';
       existing.configuration.matchPromptTags = [];
+      existing.configuration.matchPromptEnhanced = '';
+      updated = true;
+    }
+    if (existing.configuration.matchPromptEnhanced === undefined) {
+      existing.configuration.matchPromptEnhanced = '';
       updated = true;
     }
 
@@ -418,6 +423,42 @@ function getEnabledDynamicLabels(trackedTags) {
   return trackedTags.filter(t => t.isEnabled && t.isDynamic).map(t => t.label);
 }
 
+function getEvalMatchOptions(config) {
+  return {
+    matchPromptTags: config.matchPromptTags || [],
+    enhancedPrompt: config.matchPromptEnhanced || ''
+  };
+}
+
+async function runEvalMatchGate(text, sourcePlatform, config) {
+  if (!config.isMatchPromptEnabled) return { passed: true, matchInfo: null };
+
+  if (!config.matchPrompt?.trim()) {
+    return { passed: false, reason: 'eval_match_empty_prompt' };
+  }
+
+  const evalResult = await evaluateMatchWithReason(
+    text,
+    sourcePlatform,
+    config.matchPrompt,
+    getEvalMatchOptions(config)
+  );
+
+  if (!evalResult.doesMatch) {
+    return { passed: false, reason: 'eval_match_failed', evalResult };
+  }
+
+  return {
+    passed: true,
+    matchInfo: {
+      globalMatchPrompt: config.matchPrompt,
+      globalMatchedPhrases: evalResult.matchedPhrases || [],
+      globalMatchedKeywords: evalResult.matchedKeywords || [],
+      globalEngine: evalResult.engine || 'Rule-based Classifier'
+    }
+  };
+}
+
 async function refreshStackInference() {
   console.info('[background] Refreshing stack inference after prompt change...');
   const state = await storage.get(null);
@@ -434,23 +475,11 @@ async function refreshStackInference() {
   let unclassifiedCount = 0;
 
   for (const item of stack) {
-    let matchInfo = {
+    let matchInfo = item.matchInfo || {
       engine: 'Rule-based Classifier',
       globalMatchedPhrases: [],
       globalMatchedKeywords: []
     };
-
-    if (config.isMatchPromptEnabled && config.matchPrompt && config.matchPrompt.trim().length > 0) {
-      const evalResult = await evaluateMatchWithReason(item.textSnippet, item.sourcePlatform, config.matchPrompt);
-      if (!evalResult.doesMatch) {
-        // Drop items that don't match the new global eval prompt
-        continue;
-      }
-      matchInfo.globalMatchPrompt = config.matchPrompt;
-      matchInfo.globalMatchedPhrases = evalResult.matchedPhrases || [];
-      matchInfo.globalMatchedKeywords = evalResult.matchedKeywords || [];
-      matchInfo.globalEngine = evalResult.engine || 'Rule-based Classifier';
-    }
 
     let finalCategory = item.assignedTag;
     let storedTags = item.tags || [];
@@ -615,17 +644,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             };
 
             // If Match Prompt mode is enabled, evaluate it first
-            if (config.isMatchPromptEnabled && config.matchPrompt && config.matchPrompt.trim().length > 0) {
-              const evalResult = await evaluateMatchWithReason(textToClassify, normalizedPlatform, config.matchPrompt);
-              if (!evalResult.doesMatch) {
-                // Drop the item silently
-                sendResponse({ success: false, reason: 'eval_match_failed' });
+            if (config.isMatchPromptEnabled) {
+              const evalGate = await runEvalMatchGate(textToClassify, normalizedPlatform, config);
+              if (!evalGate.passed) {
+                sendResponse({ success: false, reason: evalGate.reason });
                 break;
               }
-              matchInfo.globalMatchPrompt = config.matchPrompt;
-              matchInfo.globalMatchedPhrases = evalResult.matchedPhrases || [];
-              matchInfo.globalMatchedKeywords = evalResult.matchedKeywords || [];
-              matchInfo.globalEngine = evalResult.engine || 'Rule-based Classifier';
+              if (evalGate.matchInfo) {
+                matchInfo = { ...matchInfo, ...evalGate.matchInfo };
+              }
             }
 
             // Run the inference pipeline (Tier 1 → Tier 2)
@@ -642,8 +669,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             let finalCategory = classifiedTags && classifiedTags.length > 0 ? classifiedTags[0].name : 'Unclassified';
             const updatedTags = [...trackedTags];
 
-            // Register new dynamic tag if matched
-            if (finalCategory === 'Unclassified' && dynamicTag) {
+            // Register new dynamic tag if matched (skip when eval gate is filtering collection)
+            if (finalCategory === 'Unclassified' && dynamicTag && !config.isMatchPromptEnabled) {
               const exists = updatedTags.some(t => t.label.toLowerCase() === dynamicTag.toLowerCase());
               if (!exists) {
                 const dynamicTagsCount = updatedTags.filter(t => t.isDynamic).length;
@@ -667,6 +694,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
                   finalCategory = 'Unclassified';
                 }
               }
+            }
+
+            if (finalCategory === 'Unclassified' && config.isMatchPromptEnabled && config.matchPromptTags?.length > 0) {
+              finalCategory = config.matchPromptTags[0];
             }
 
             // Guard 3: Ignore if final category is in ignoredTags
@@ -856,13 +887,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         case 'TOGGLE_MATCH_PROMPT': {
           const { isEnabled } = message.payload;
           const { configuration } = await storage.get('configuration');
-          
+
+          if (isEnabled && configuration.matchPrompt?.trim() && !configuration.matchPromptEnhanced) {
+            const tags = configuration.matchPromptTags?.length
+              ? configuration.matchPromptTags
+              : await extractTagsFromPrompt(configuration.matchPrompt);
+            configuration.matchPromptTags = tags;
+            configuration.matchPromptEnhanced = await enhanceMatchPrompt(configuration.matchPrompt, tags);
+          }
+
           await storage.set({
             configuration: { ...configuration, isMatchPromptEnabled: isEnabled }
           });
 
           await broadcastStateUpdate();
-          triggerRefreshStackInference();
           sendResponse({ success: true });
           break;
         }
@@ -879,7 +917,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           });
 
           await broadcastStateUpdate();
-          triggerRefreshStackInference();
           sendResponse({ success: true });
           break;
         }
@@ -889,16 +926,21 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         // -----------------------------------------------------------------
         case 'GENERATE_PROMPT_TAGS': {
           const { prompt } = message.payload;
-          extractTagsFromPrompt(prompt).then(async tags => {
-            const { configuration } = await storage.get('configuration');
-            configuration.matchPromptTags = tags;
-            await storage.set({ configuration });
-            await broadcastStateUpdate();
-            sendResponse({ success: true, tags });
-          }).catch(err => {
-            console.error('Error in GENERATE_PROMPT_TAGS', err);
-            sendResponse({ success: false, tags: [] });
-          });
+          (async () => {
+            try {
+              const tags = await extractTagsFromPrompt(prompt);
+              const enhanced = await enhanceMatchPrompt(prompt, tags);
+              const { configuration } = await storage.get('configuration');
+              configuration.matchPromptTags = tags;
+              configuration.matchPromptEnhanced = enhanced;
+              await storage.set({ configuration });
+              await broadcastStateUpdate();
+              sendResponse({ success: true, tags, enhanced });
+            } catch (err) {
+              console.error('Error in GENERATE_PROMPT_TAGS', err);
+              sendResponse({ success: false, tags: [], enhanced: '' });
+            }
+          })();
           return true; // Keep channel open for async response
         }
 
@@ -1515,16 +1557,12 @@ if (chrome.alarms) {
     const state = await storage.get(['configuration', 'metrics', 'stack', 'telemetry']);
     if (!state.stack || state.stack.length === 0) return;
 
-    // Find Unclassified items
     const unclassifiedItems = state.stack.filter(item => item.assignedTag === 'Unclassified');
-    if (unclassifiedItems.length === 0) return;
-
-    // Take a small batch to not overwhelm the system
     const batch = unclassifiedItems.slice(0, 5);
-    
-    if (batch.length > 0) {
-      console.info(`[background] 2nd pass evaluation: processing ${batch.length} items`);
-    }
+
+    if (batch.length === 0) return;
+
+    console.info(`[background] 2nd pass evaluation: processing ${batch.length} items`);
 
     const trackedTags = state.configuration?.trackedTags || [];
     const enabledCustom = getEnabledCustomTags(trackedTags);

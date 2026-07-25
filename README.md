@@ -8,7 +8,7 @@ It is designed as a high-performance keyboard-driven curator to capture, filter,
 
 ## Key Features
 
-- **On-Device AI Engine**: Tier-1 classification using Chrome's native **Gemini Nano** model, with a Tier-2 offline **Rule-based Classifier** engine.
+- **Progressive On-Device AI**: Semantic classification uses a provider chain — **Browser Prompt API** (Chrome Gemini Nano / Edge Phi-4-mini) → **WebGPU** (Transformers.js on Brave) → **Rule-based Classifier** (always available offline).
 - **Dynamic Tag Generation**: Automatically extracts and suggests new category tags (e.g. *Cooking*, *Space*, *Tesla*) for items that do not match existing tags.
 - **Priority Routing**: Custom and default tags always take classification priority over dynamic tags.
 - **Segmented Workspace**: A clean, modern tabbed interface (**Stream**, **Export**, **Settings**) replacing vertical collapsible widgets to optimize narrow side panels.
@@ -88,25 +88,78 @@ Run the compilation script in your shell to build the companion app and standalo
 
 ---
 
-## Enabling On-Device AI (Optional, Chrome 131+)
+## Enabling On-Device AI
 
-To unlock Tier-1 classification powered by **Gemini Nano**, you must enable the Prompt API in Chrome:
+ScrollCollector uses progressive enhancement for semantic inference:
 
-1. Open a new tab and navigate to:
+| Tier | Engine | Browsers |
+|------|--------|----------|
+| 1 | Browser Prompt API | Chrome (Gemini Nano), Edge (Phi-4-mini) |
+| 2 | WebGPU + Transformers.js | Brave and others without Prompt API |
+| 3 | Rule-based Classifier | All browsers (keyword fallback) |
+
+The header status pill shows which tier is active: **green** = semantic AI ready, **orange** = downloading or keyword fallback.
+
+### Chrome 138+
+
+ScrollCollector uses the **`LanguageModel`** global (Prompt API). No origin-trial permissions are required.
+
+1. **Chrome version**: Prompt API for extensions requires **Chrome 138+** on desktop.
+
+2. **Enable flags** (if not already on):
    ```text
    chrome://flags/#prompt-api-for-gemini-nano
    ```
-   Select **Enabled**.
+   Select **Enabled** (or **Enabled for Extension** if shown).
 
-2. Navigate to:
    ```text
    chrome://flags/#optimization-guide-on-device-model
    ```
-   Select **Enabled BypassPerfRequirement** (forces Chrome to download the model even on lower-spec hardware).
+   Select **Enabled BypassPerfRequirement**.
 
-3. **Relaunch your browser**.
-4. Check download status by navigating to `chrome://components/`. Under **Optimization Guide On Device Model**, click **Check for update** to ensure the model is downloaded.
-5. Once ready, the engine status dot in your ScrollCollector header will turn **green** 🟢. If the model is not ready, it will safely fall back to the Tier-2 keyword matching engine 🟡.
+3. **Relaunch Chrome**, verify at `chrome://on-device-internals`, then **reload the extension**.
+
+4. Header should show **Gemini Nano** with a green dot.
+
+**Hardware requirements** (Chrome enforced): 22 GB free disk, 16 GB+ RAM recommended, unmetered connection for the initial model download.
+
+### Microsoft Edge (Dev / Canary recommended)
+
+Edge uses the same **Prompt API** standard with **Phi-4-mini** as the on-device model.
+
+1. Use **Edge Dev or Canary** with the Prompt API flag enabled:
+   ```text
+   edge://flags/#prompt-api-for-gemini-nano
+   ```
+   (Edge may label this *Prompt API for on-device language model*.)
+
+2. Enable the on-device model flag (same as Chrome):
+   ```text
+   edge://flags/#optimization-guide-on-device-model
+   ```
+   Select **Enabled BypassPerfRequirement**.
+
+3. Relaunch Edge and verify at `edge://on-device-internals`.
+
+4. Reload ScrollCollector — header should show **Phi-4-mini** with a green dot.
+
+**Smoke test** (service worker console at `edge://extensions` → ScrollCollector → Service worker):
+```javascript
+await LanguageModel.availability({
+  expectedInputs: [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }]
+});
+// Expected: "available"
+```
+
+### Brave
+
+Brave does not ship Google's Gemini Nano download. ScrollCollector falls back to:
+
+1. **WebGPU (Tier 2)** — if `navigator.gpu` is available, a small Qwen model loads via Transformers.js (first use requires network to download model weights; cached afterward).
+2. **Rule-based Classifier (Tier 3)** — keyword matching if WebGPU is unavailable.
+
+No flags required for the keyword tier. WebGPU tier requires a GPU with WebGPU support and sufficient disk space for the model cache.
 
 ---
 
