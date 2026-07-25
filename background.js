@@ -12,6 +12,7 @@
  */
 
 import { classify, checkEngineStatus, evaluateMatch, evaluateMatchWithReason, extractTagsFromPrompt, enhanceMatchPrompt, evaluateAuthorMatch, heuristicAuthorMatch } from './lib/inference-engine.js';
+import { createStateLock } from './lib/state-lock.js';
 
 // ---------------------------------------------------------------------------
 // Storage Wrapper
@@ -421,6 +422,20 @@ async function limitedClassify(...args) {
   }
 }
 
+/**
+ * Serializes read-modify-write cycles over persisted state. Critical sections
+ * MUST re-read what they mutate from inside the lock — see lib/state-lock.js.
+ *
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @returns {Promise<T>}
+ */
+const stateLock = createStateLock();
+
+function withStateLock(fn) {
+  return stateLock.run(fn);
+}
+
 const MAX_STACK_ITEMS = 2000;
 
 function pruneStack(stack) {
@@ -537,7 +552,16 @@ async function runEvalMatchGate(text, sourcePlatform, config) {
   };
 }
 
+/**
+ * Rebuilds the whole stack, so it must not interleave with TEXT_EXTRACTED
+ * writes — either side would clobber the other's snapshot. Held for the full
+ * rebuild: this is a rare, user-triggered operation and parses simply queue.
+ */
 async function refreshStackInference() {
+  return withStateLock(() => rebuildStackInference());
+}
+
+async function rebuildStackInference() {
   console.info('[background] Refreshing stack inference after prompt change...');
   const state = await storage.get(null);
   const config = state.configuration;
@@ -559,14 +583,13 @@ async function refreshStackInference() {
       globalMatchedKeywords: []
     };
 
-    // Re-apply the eval gate so a changed prompt re-filters the existing stack.
-    // Uses the shared gate helper rather than calling the matcher directly.
+    // Refresh the recorded match reason against the current prompt, but NEVER
+    // drop an already-collected item. The gate can consult a non-deterministic
+    // semantic tier, so re-gating and deleting on a miss silently destroys
+    // collected posts on every transient model failure or reworded prompt.
+    // Collection-time filtering is the gate's job; this pass only re-labels.
     if (config.isMatchPromptEnabled) {
       const evalGate = await runEvalMatchGate(item.textSnippet, item.sourcePlatform, config);
-      if (!evalGate.passed) {
-        // Drop items that no longer match the global eval prompt
-        continue;
-      }
       if (evalGate.matchInfo) {
         matchInfo = { ...matchInfo, ...evalGate.matchInfo };
       }
@@ -767,6 +790,9 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             // --- Atomic state mutation ---
             let finalCategory = classifiedTags && classifiedTags.length > 0 ? classifiedTags[0].name : 'Unclassified';
             const updatedTags = [...trackedTags];
+            // Captured so the locked section can merge it into FRESH config
+            // instead of writing back this handler's stale trackedTags copy.
+            let newDynamicTagEntry = null;
 
             // Register new dynamic tag if matched (skip when eval gate is filtering collection)
             if (finalCategory === 'Unclassified' && dynamicTag && !config.isMatchPromptEnabled) {
@@ -774,13 +800,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               if (!exists) {
                 const dynamicTagsCount = updatedTags.filter(t => t.isDynamic).length;
                 if (dynamicTagsCount < 10) {
-                  updatedTags.push({
+                  newDynamicTagEntry = {
                     id: 'dt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                     label: dynamicTag,
                     isEnabled: true,
                     isDynamic: true,
                     isSticky: false
-                  });
+                  };
+                  updatedTags.push(newDynamicTagEntry);
                   finalCategory = dynamicTag;
                 } else {
                   finalCategory = 'Unclassified';
@@ -851,9 +878,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
               storedTags = [{ name: finalCategory, score: 1.0 }];
             }
 
-            let updatedStack = [...stack];
-            const counts = { ...state.metrics.counts };
-            const telemetry = state.telemetry || { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now() };
+            await withStateLock(async () => {
+            // Re-read INSIDE the lock. `stack`/`state` were captured before the
+            // eval-gate and classify awaits and are stale by now; writing back
+            // that snapshot would delete everything collected in the meantime.
+            const fresh = await storage.get(['configuration', 'metrics', 'stack', 'telemetry']);
+            let updatedStack = [...(fresh.stack || [])];
+            const counts = { ...((fresh.metrics && fresh.metrics.counts) || {}) };
+            const telemetry = fresh.telemetry || { totalProcessed: 0, classifiedCount: 0, unclassifiedCount: 0, sessionStart: Date.now() };
+            const freshConfig = fresh.configuration || {};
+
+            // Merge a newly minted dynamic tag into the CURRENT tag list rather
+            // than overwriting it with this handler's stale copy.
+            const mergedTags = [...(freshConfig.trackedTags || [])];
+            if (newDynamicTagEntry && !mergedTags.some(t => t.label.toLowerCase() === newDynamicTagEntry.label.toLowerCase())) {
+              mergedTags.push(newDynamicTagEntry);
+            }
+
+            // Re-resolve the dedup target against the fresh stack — the index
+            // computed earlier refers to the stale array.
+            let existingItemIndex = -1;
+            if (sourceUrl && sourceUrl.startsWith('http')) {
+              existingItemIndex = updatedStack.findIndex(item => item.sourceUrl === sourceUrl);
+            }
 
             if (existingItemIndex !== -1) {
               const existingItem = updatedStack[existingItemIndex];
@@ -924,13 +971,14 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             }
             telemetry.lastProcessed = Date.now();
 
-            // 4. Persist
+            // 4. Persist (still inside the lock, using the freshly-read state)
             const prunedStack = pruneStack(updatedStack);
             await storage.set({
-              configuration: { ...state.configuration, trackedTags: updatedTags },
+              configuration: { ...freshConfig, trackedTags: mergedTags },
               metrics:   { counts },
               stack:     prunedStack,
               telemetry
+            });
             });
 
             await broadcastStateUpdate();

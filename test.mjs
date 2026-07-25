@@ -7,6 +7,7 @@ import { buildSystemPrompt, buildUserPrompt } from './lib/prompt-builder.js';
 import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch, isSocialNoise, scoreRuleBasedEvalMatch, buildEvalKeywords, parseModelJson, containsEvalTerm, generateCustomKeywords } from './lib/inference-engine.js';
 import { createRouter } from './lib/inference/router.js';
 import { getBrowserModelDisplayName } from './lib/inference/browser-detect.js';
+import { createStateLock } from './lib/state-lock.js';
 
 test('PII Sanitizer Tests', (t) => {
   // Test email redaction
@@ -362,6 +363,60 @@ test('Global Search and Sub-filtering Logic Tests', (t) => {
   const subFiltered = searchResultAll.filter(i => i.sourcePlatform === 'youtube.com');
   assert.strictEqual(subFiltered.length, 1);
   assert.strictEqual(subFiltered[0].id, '3');
+});
+
+test('State lock - concurrent parses must not delete collected items', async (t) => {
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  // Models the TEXT_EXTRACTED handler: read state, await slow inference,
+  // then write. Without serialization every handler writes a snapshot taken
+  // before its await, so the last writer wipes out everything added meanwhile.
+  const makeStore = () => {
+    const store = { stack: [] };
+    return {
+      store,
+      get: async () => ({ stack: [...store.stack] }),
+      set: async (stack) => { store.stack = stack; }
+    };
+  };
+
+  // 1. Unserialized: reproduces the data loss.
+  const racy = makeStore();
+  await Promise.all(Array.from({ length: 20 }, async (_, i) => {
+    const snapshot = await racy.get();          // read BEFORE the await
+    await sleep(5);                             // inference
+    await racy.set([{ id: i }, ...snapshot.stack]);
+  }));
+  assert.ok(
+    racy.store.stack.length < 20,
+    'expected the unserialized pattern to lose items; if this passes the test no longer models the bug'
+  );
+
+  // 2. Serialized, re-reading inside the lock: nothing is lost.
+  const safe = makeStore();
+  const lock = createStateLock();
+  await Promise.all(Array.from({ length: 20 }, async (_, i) => {
+    await sleep(5);                             // inference stays concurrent
+    await lock.run(async () => {
+      const fresh = await safe.get();           // read INSIDE the lock
+      await safe.set([{ id: i }, ...fresh.stack]);
+    });
+  }));
+  assert.strictEqual(safe.store.stack.length, 20, 'every collected item must survive');
+
+  const ids = safe.store.stack.map(i => i.id).sort((a, b) => a - b);
+  assert.deepStrictEqual(ids, Array.from({ length: 20 }, (_, i) => i));
+});
+
+test('State lock - a failing section does not stall later ones', async (t) => {
+  const lock = createStateLock();
+  const order = [];
+
+  const failing = lock.run(async () => { order.push('a'); throw new Error('boom'); });
+  await assert.rejects(failing, /boom/);
+
+  await lock.run(async () => { order.push('b'); });
+  assert.deepStrictEqual(order, ['a', 'b']);
 });
 
 
