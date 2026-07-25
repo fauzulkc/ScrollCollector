@@ -11,7 +11,8 @@
     "tabs",
     "scripting",
     "alarms",
-    "offscreen"
+    "offscreen",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "<all_urls>"

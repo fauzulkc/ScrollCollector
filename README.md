@@ -49,22 +49,26 @@ ScrollCollector features a unified standalone setup installer built in Go.
 3. The installer runs a temporary local server and opens your browser to an interactive setup wizard:
    - It auto-detects browser installations (Chrome, Edge, Brave).
    - If multiple browsers are found, it presents a checkbox list to choose your targets.
-   - It extracts extension files to `%USERPROFILE%\ScrollCollector` (Windows) or `/Applications/ScrollCollector` (macOS).
-   - It extracts and launches the **ScrollCollector Companion App** in your system tray and copies the installation path to your clipboard.
+   - It extracts extension files to `%USERPROFILE%\ScrollCollector` (Windows) or `/Applications/ScrollCollector` (macOS) and copies the installation path to your clipboard.
 4. Follow the interactive guide in your browser to load the unpacked extension.
 
-### Companion Desktop App (System Tray Value-Add)
-The installer deploys a background companion app that sits in your system tray (`ScrollCollector.exe` or `ScrollCollector`):
-*   **System Tray Options (Right-click):**
-    - **Open Dashboard:** Opens a premium full-screen web dashboard in your browser to inspect collected streams, view telemetry analytics, and edit configurations.
-    - **Pause / Resume:** Instantly toggles post collection across all running browsers.
-    - **Export HTML Diary:** Generates a compiled styled HTML feed log and saves it in your Downloads folder.
-    - **Quit:** Closes the sync server.
-*   **Real-time Cross-Browser Sync:** Any items collected in Chrome, Edge, or Brave are immediately synchronized via the companion server and stored in a unified database.
-*   **Graceful Offline Fallback:** If the companion app is closed, the browser extensions automatically detect it and fall back to local browser storage (`chrome.storage.local`). Sync resumes when the companion app is launched.
+### Storage (no companion app)
+All collected items live in the browser's own `chrome.storage.local`. There is no
+background service, no sync server, and no cross-browser synchronization — each
+browser profile keeps its own independent stream.
+
+> **Note:** earlier revisions shipped a system-tray companion app that provided a
+> desktop dashboard and cross-browser sync. It was removed in commit `3416521`
+> ("refactor: remove companion app") and the extension contains no runtime
+> references to it. The Go sources remain under `companion/` unbuilt, in case the
+> feature is revived; they are not part of the extension.
+
+To keep the stream bounded, the collector caps stored items (see
+`MAX_STACK_ITEMS` in `background.js`) and evicts the oldest entries first.
+Favourited items (`<3`) are never evicted.
 
 ### Building from Source (Developers)
-Run the compilation script in your shell to build the companion app and standalone installers:
+Run the compilation script in your shell to build the standalone installers:
 ```bash
 ./build-installer.sh
 ```

@@ -4,7 +4,7 @@ import './lib/sanitizer.js';
 const { sanitize } = globalThis.MindstreamSanitizer;
 
 import { buildSystemPrompt, buildUserPrompt } from './lib/prompt-builder.js';
-import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch, isSocialNoise, scoreRuleBasedEvalMatch, buildEvalKeywords, parseModelJson } from './lib/inference-engine.js';
+import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch, isSocialNoise, scoreRuleBasedEvalMatch, buildEvalKeywords, parseModelJson, containsEvalTerm, generateCustomKeywords } from './lib/inference-engine.js';
 import { createRouter } from './lib/inference/router.js';
 import { getBrowserModelDisplayName } from './lib/inference/browser-detect.js';
 
@@ -289,5 +289,33 @@ test('Inference router — keyword status when no semantic provider ready', asyn
 test('Browser detect — display names', (t) => {
   assert.strictEqual(typeof getBrowserModelDisplayName(), 'string');
 });
+
+test('Requirement 7 — Substring match and weak keyword fallback tests', (t) => {
+  const result = keywordFallback(
+    'Lack of SOC 2 has slowed growth for so many SaaS startups. Our creator economy is great.',
+    [{ label: '5 Star Cooking', prompt: '' }, { label: 'Food', prompt: '' }]
+  );
+  assert.strictEqual(result.tags.length, 0);
+
+  assert.strictEqual(containsEvalTerm('SaaS startups', 'star'), false);
+  assert.strictEqual(containsEvalTerm('three Michelin stars', 'stars'), true);
+
+  const customKeywords5Star = generateCustomKeywords('5 Star Cooking');
+  assert.ok(!customKeywords5Star.includes('star'));
+
+  const customKeywordsRestaurant = generateCustomKeywords('Restaurant');
+  assert.ok(customKeywordsRestaurant.includes('restaurant'));
+
+  const text1 = 'Lack of SOC 2 has slowed growth for so many SaaS startups.';
+  const topic1 = extractNounTopic(text1);
+  assert.notStrictEqual(topic1, 'Soc');
+  assert.notStrictEqual(topic1, 'Starts');
+
+  const text2 = 'Right preparation and starts of gear update thing.';
+  const topic2 = extractNounTopic(text2);
+  assert.notStrictEqual(topic2, 'Right');
+  assert.notStrictEqual(topic2, 'Starts');
+});
+
 
 

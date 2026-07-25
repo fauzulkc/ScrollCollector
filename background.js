@@ -386,6 +386,51 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 // Helpers
 // ---------------------------------------------------------------------------
 
+const MAX_CONCURRENT_INFERENCES = 2;
+let activeInferences = 0;
+const inferenceQueue = [];
+
+async function limitedClassify(...args) {
+  if (activeInferences >= MAX_CONCURRENT_INFERENCES) {
+    await new Promise(resolve => inferenceQueue.push(resolve));
+  }
+  activeInferences++;
+  try {
+    return await classify(...args);
+  } finally {
+    activeInferences--;
+    if (inferenceQueue.length > 0) {
+      const next = inferenceQueue.shift();
+      next();
+    }
+  }
+}
+
+const MAX_STACK_ITEMS = 2000;
+
+function pruneStack(stack) {
+  if (!stack || stack.length <= MAX_STACK_ITEMS) {
+    return stack || [];
+  }
+  const excess = stack.length - MAX_STACK_ITEMS;
+  const nonFavorites = stack.filter(item => !item.isFavorite);
+  if (nonFavorites.length === 0) {
+    return stack;
+  }
+  const candidates = [...nonFavorites].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const toEvict = candidates.slice(0, excess);
+  if (toEvict.length === 0) {
+    return stack;
+  }
+  const evictSet = new Set(toEvict);
+  const pruned = stack.filter(item => !evictSet.has(item));
+  const droppedCount = stack.length - pruned.length;
+  if (droppedCount > 0) {
+    console.info(`[background] Pruned ${droppedCount} item(s) to stay within the ${MAX_STACK_ITEMS}-item cap (favourites exempt).`);
+  }
+  return pruned;
+}
+
 let inFlightCount = 0;
 
 function updateInFlightCount(delta) {
@@ -488,7 +533,13 @@ async function refreshStackInference() {
       // Keep manual override
       matchInfo = item.matchInfo;
     } else {
-      const classifyResult = await classify(item.textSnippet, item.sourcePlatform, enabledCustom, enabledDynamic);
+      updateInFlightCount(1);
+      let classifyResult;
+      try {
+        classifyResult = await limitedClassify(item.textSnippet, item.sourcePlatform, enabledCustom, enabledDynamic);
+      } finally {
+        updateInFlightCount(-1);
+      }
       storedTags = classifyResult.tags || [];
       finalCategory = storedTags.length > 0 ? storedTags[0].name : 'Unclassified';
       
@@ -519,23 +570,25 @@ async function refreshStackInference() {
     }
   }
 
+  const prunedStack = pruneStack(newStack);
+
   // Update state
   const updatedTelemetry = {
     ...state.telemetry,
-    totalProcessed: newStack.length,
+    totalProcessed: prunedStack.length,
     classifiedCount,
     unclassifiedCount,
     lastProcessed: Date.now()
   };
 
   await storage.set({
-    stack: newStack,
+    stack: prunedStack,
     metrics: { counts },
     telemetry: updatedTelemetry
   });
 
   await broadcastStateUpdate();
-  console.info(`[background] Refresh complete. Updated stack size: ${newStack.length}`);
+  console.info(`[background] Refresh complete. Updated stack size: ${prunedStack.length}`);
 }
 
 let refreshDebounceTimeout = null;
@@ -656,7 +709,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             }
 
             // Run the inference pipeline (Tier 1 → Tier 2)
-            const classifyResult = await classify(textToClassify, normalizedPlatform, enabledCustom, enabledDynamic);
+            const classifyResult = await limitedClassify(textToClassify, normalizedPlatform, enabledCustom, enabledDynamic);
             const { tags: classifiedTags, dynamicTag } = classifyResult;
 
             matchInfo.engine = classifyResult.engine || 'Rule-based Classifier';
@@ -826,10 +879,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
             telemetry.lastProcessed = Date.now();
 
             // 4. Persist
+            const prunedStack = pruneStack(updatedStack);
             await storage.set({
               configuration: { ...state.configuration, trackedTags: updatedTags },
               metrics:   { counts },
-              stack:     updatedStack,
+              stack:     prunedStack,
               telemetry
             });
 
@@ -1578,7 +1632,7 @@ if (chrome.alarms) {
       updateInFlightCount(1);
       
       try {
-        const { tags: classifiedTags, dynamicTag } = await classify(
+        const { tags: classifiedTags, dynamicTag } = await limitedClassify(
           item.textSnippet, 
           item.sourcePlatform, 
           enabledCustom, 

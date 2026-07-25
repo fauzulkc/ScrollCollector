@@ -75,3 +75,34 @@ To create a clean zip file ready to share with friends and family:
    zip -j dist/ScrollCollector-Setup.zip dist/ScrollCollectorInstaller.exe
    ```
 3. Share the `ScrollCollector-Setup.zip` file with your target audience!
+
+---
+
+## 🧠 Where inference runs
+
+The Prompt API is **document-scoped**. It is exposed as the `LanguageModel`
+global, and its availability differs by execution context, so the extension does
+not assume a single home for inference:
+
+1. `lib/inference/router.js` walks providers in priority order —
+   `browser-prompt` (Chrome Gemini Nano / Edge Phi-4-mini) → `webgpu` → `cloud`
+   — falling back to the offline keyword engine when none is ready.
+2. `lib/inference/providers/browser-prompt.js` probes for the `LanguageModel`
+   global first, and only then the retired `chrome.aiOriginTrial` / `self.ai`
+   namespaces.
+3. When that global is **not** reachable from the MV3 service worker, the
+   extension creates an offscreen document (`offscreen/offscreen.html` +
+   `offscreen.js`) and relays inference through it. This is the standard MV3
+   escape hatch for document-only APIs, and is why `manifest.json` declares the
+   `offscreen` permission.
+
+**This is the single fact the inference architecture depends on.** If Chrome
+changes where the Prompt API is exposed, re-check it by evaluating
+`typeof LanguageModel` and `await LanguageModel.availability()` in all three
+contexts — service worker, side panel, and offscreen document — before changing
+the routing.
+
+Sessions are cached per system prompt and cloned per call, with `resetSessions()`
+to clear them. Do not reintroduce a create-and-destroy-per-item pattern: session
+construction dominates on-device latency and makes classification unusable at
+scroll speed.
