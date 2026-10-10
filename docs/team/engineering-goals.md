@@ -66,7 +66,7 @@ date, never written over.
 8. **Migration:** `SCHEMA_VERSION` 2 → 3. Configuration: existing user-added tags get `isLens: true` (rule 1:
    not a built-in label, not dynamic, not pseudo, not Ads) and **`collects` = whether the master gate was on**
    (`isGateOn` at migration time): an upgrade never starts filtering for a user who was collecting everything. New
-   tags from `TAG_ADDED` get `collects: true` (the owner's default). For 🧭 CEO / owner review. Stack: posts without `decision.lenses` are marked
+   tags from `TAG_ADDED` get `collects: true` (the owner's default). Ruled as built: DEC-6 02:58 addendum. Stack: posts without `decision.lenses` are marked
    for a lens backfill and re-scored by the existing re-decide job under the state lock, System 1 only, no
    escalation, no cloud. Idempotent.
 9. **Re-decide on prompt change:** adding, removing, enabling, renaming or editing a lens's prompt changes
@@ -205,3 +205,6 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   in `5090b29` ~~"`isLens` tags leave tag classification"~~ → user tags label exactly as before ENG-1. Rule 8: migration
   sets `collects` from the master gate so an upgrade starts no filtering (for CEO/owner review); new tags default on.
   Rule 10: `userLenses` entries carry `collects`. Gates added.
+- 2026-10-11 03:00 +0600 · 🧭 CEO ruled (DEC-6 02:58 addendum): the collect switch stays as built in `1b9bdfd`. A
+  collecting tag filters with the master switch off (the master prompt is one prompt with one switch); migration keeps
+  `collects` = the old gate state. Reopens if the owner's local trial surprises them.
