@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ScrollCollector",
   "description": "Privacy-first, zero-latency content categorization powered by on-device AI. Tracks your mindstream across social feeds in real time.",
-  "version": "0.6.0",
+  "version": "0.9.0",
   "permissions": [
     "storage",
     "activeTab",
@@ -10,7 +10,9 @@
     "favicon",
     "tabs",
     "scripting",
-    "alarms"
+    "alarms",
+    "offscreen",
+    "unlimitedStorage"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -48,5 +50,11 @@
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "cross_origin_embedder_policy": {
+    "value": "require-corp"
+  },
+  "cross_origin_opener_policy": {
+    "value": "same-origin"
   }
 }

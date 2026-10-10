@@ -1,0 +1,30 @@
+{
+  "note": "Snapshot of the 25 default tags and their descriptions (defaultPrompts in background.js ensureInitialized). Keep in sync if the defaults change.",
+  "tags": [
+    { "label": "Health", "description": "Identify posts related to health, medicine, doctors, hospitals, fitness, wellness, or nutrition." },
+    { "label": "Jobs", "description": "Identify posts related to job postings, career opportunities, hiring, recruitment, resumes, or interviews." },
+    { "label": "Politics", "description": "Identify posts related to government, elections, political parties, public policy, or legislation." },
+    { "label": "Tech/AI", "description": "Identify posts related to software, technology, programming, developer tools, artificial intelligence, or machine learning." },
+    { "label": "Weather", "description": "Identify posts related to weather forecasts, storms, climate, temperatures, sunny, rain, or snow." },
+    { "label": "Ad", "description": "Identify advertisements, sponsored content, products for sale, or promotional codes." },
+    { "label": "News", "description": "Identify breaking news updates, media reports, journalism, headlines, or press coverage." },
+    { "label": "Entertainment", "description": "Identify posts related to movies, television, music, concerts, gaming, or celebrity culture." },
+    { "label": "Promotion", "description": "Identify giveaways, special offers, discounts, brand campaigns, or sales promotions." },
+    { "label": "Personal Opinion", "description": "Identify personal viewpoints, personal updates, opinions, thoughts, or editorial reflections." },
+    { "label": "Portfolio", "description": "Identify project showcases, personal portfolios, designs, case studies, or displays of professional work." },
+    { "label": "Product Showcase", "description": "Identify product launches, demonstrations, features, release highlights, or new tools." },
+    { "label": "Immigration", "description": "Identify posts related to immigration processes, visas, passports, citizenship, or green cards." },
+    { "label": "Migration", "description": "Identify posts related to relocation, moving to another region or country, expats, or emigration." },
+    { "label": "Study", "description": "Identify posts related to academic studies, university, learning resources, college courses, or scholarships." },
+    { "label": "International News", "description": "Identify news about international events, global affairs, foreign relations, or world news." },
+    { "label": "Sports", "description": "Identify posts related to athletic sports, games, leagues, matches, players, championships, or coaches." },
+    { "label": "Events", "description": "Identify posts related to upcoming events, conferences, webinars, meetups, festivals, or workshops." },
+    { "label": "Blog", "description": "Identify references to blog articles, long-form posts, reading materials, or updates for written sites." },
+    { "label": "Vlog", "description": "Identify video logs, YouTube clips, vlog updates, or video content updates." },
+    { "label": "Culture", "description": "Identify posts related to cultural heritage, traditions, societal customs, art, or historical celebrations." },
+    { "label": "NGO", "description": "Identify posts related to non-governmental organizations, charities, volunteering, non-profits, or donations." },
+    { "label": "Policy", "description": "Identify posts related to policy changes, company guidelines, compliance rules, or regulatory frameworks." },
+    { "label": "Release", "description": "Identify software releases, product versions, changelogs, updates, or patch notes." },
+    { "label": "History", "description": "Identify posts related to historical events, ancient civilizations, timelines, archives, or heritage." }
+  ]
+}

@@ -8,3 +8,7 @@ releases/
 ScrollCollector.zip
 *.exe
 *.lnk
+eval/.cache/
+eval/golden/*.private.*
+test-results/
+playwright-report/

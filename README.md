@@ -8,7 +8,7 @@ It is designed as a high-performance keyboard-driven curator to capture, filter,
 
 ## Key Features
 
-- **On-Device AI Engine**: Tier-1 classification using Chrome's native **Gemini Nano** model, with a Tier-2 offline **Rule-based Classifier** engine.
+- **On-Device AI, no model downloads**: Semantic classification uses the browser's built-in **Prompt API** (Chrome Gemini Nano / Edge Phi-4-mini) and falls back to the **Rule-based Classifier** (always available offline). The extension never downloads a generative model of its own.
 - **Dynamic Tag Generation**: Automatically extracts and suggests new category tags (e.g. *Cooking*, *Space*, *Tesla*) for items that do not match existing tags.
 - **Priority Routing**: Custom and default tags always take classification priority over dynamic tags.
 - **Segmented Workspace**: A clean, modern tabbed interface (**Stream**, **Export**, **Settings**) replacing vertical collapsible widgets to optimize narrow side panels.
@@ -49,22 +49,26 @@ ScrollCollector features a unified standalone setup installer built in Go.
 3. The installer runs a temporary local server and opens your browser to an interactive setup wizard:
    - It auto-detects browser installations (Chrome, Edge, Brave).
    - If multiple browsers are found, it presents a checkbox list to choose your targets.
-   - It extracts extension files to `%USERPROFILE%\ScrollCollector` (Windows) or `/Applications/ScrollCollector` (macOS).
-   - It extracts and launches the **ScrollCollector Companion App** in your system tray and copies the installation path to your clipboard.
+   - It extracts extension files to `%USERPROFILE%\ScrollCollector` (Windows) or `/Applications/ScrollCollector` (macOS) and copies the installation path to your clipboard.
 4. Follow the interactive guide in your browser to load the unpacked extension.
 
-### Companion Desktop App (System Tray Value-Add)
-The installer deploys a background companion app that sits in your system tray (`ScrollCollector.exe` or `ScrollCollector`):
-*   **System Tray Options (Right-click):**
-    - **Open Dashboard:** Opens a premium full-screen web dashboard in your browser to inspect collected streams, view telemetry analytics, and edit configurations.
-    - **Pause / Resume:** Instantly toggles post collection across all running browsers.
-    - **Export HTML Diary:** Generates a compiled styled HTML feed log and saves it in your Downloads folder.
-    - **Quit:** Closes the sync server.
-*   **Real-time Cross-Browser Sync:** Any items collected in Chrome, Edge, or Brave are immediately synchronized via the companion server and stored in a unified database.
-*   **Graceful Offline Fallback:** If the companion app is closed, the browser extensions automatically detect it and fall back to local browser storage (`chrome.storage.local`). Sync resumes when the companion app is launched.
+### Storage (no companion app)
+All collected items live in the browser's own `chrome.storage.local`. There is no
+background service, no sync server, and no cross-browser synchronization — each
+browser profile keeps its own independent stream.
+
+> **Note:** earlier revisions shipped a system-tray companion app that provided a
+> desktop dashboard and cross-browser sync. It was removed in commit `3416521`
+> ("refactor: remove companion app") and the extension contains no runtime
+> references to it. The Go sources remain under `companion/` unbuilt, in case the
+> feature is revived; they are not part of the extension.
+
+To keep the stream bounded, the collector caps stored items (see
+`MAX_STACK_ITEMS` in `background.js`) and evicts the oldest entries first.
+Favourited items (`<3`) are never evicted.
 
 ### Building from Source (Developers)
-Run the compilation script in your shell to build the companion app and standalone installers:
+Run the compilation script in your shell to build the standalone installers:
 ```bash
 ./build-installer.sh
 ```
@@ -88,25 +92,74 @@ Run the compilation script in your shell to build the companion app and standalo
 
 ---
 
-## Enabling On-Device AI (Optional, Chrome 131+)
+## Enabling On-Device AI
 
-To unlock Tier-1 classification powered by **Gemini Nano**, you must enable the Prompt API in Chrome:
+ScrollCollector uses progressive enhancement for semantic inference:
 
-1. Open a new tab and navigate to:
+| Tier | Engine | Browsers |
+|------|--------|----------|
+| 1 | Browser Prompt API (built-in model) | Chrome (Gemini Nano), Edge (Phi-4-mini) |
+| 3 | Rule-based Classifier | All browsers (keyword fallback) |
+
+The header status pill shows which tier is active: **green** = semantic AI ready, **orange** = downloading or keyword fallback.
+
+### Chrome 138+
+
+ScrollCollector uses the **`LanguageModel`** global (Prompt API). No origin-trial permissions are required.
+
+1. **Chrome version**: Prompt API for extensions requires **Chrome 138+** on desktop.
+
+2. **Enable flags** (if not already on):
    ```text
    chrome://flags/#prompt-api-for-gemini-nano
    ```
-   Select **Enabled**.
+   Select **Enabled** (or **Enabled for Extension** if shown).
 
-2. Navigate to:
    ```text
    chrome://flags/#optimization-guide-on-device-model
    ```
-   Select **Enabled BypassPerfRequirement** (forces Chrome to download the model even on lower-spec hardware).
+   Select **Enabled BypassPerfRequirement**.
 
-3. **Relaunch your browser**.
-4. Check download status by navigating to `chrome://components/`. Under **Optimization Guide On Device Model**, click **Check for update** to ensure the model is downloaded.
-5. Once ready, the engine status dot in your ScrollCollector header will turn **green** 🟢. If the model is not ready, it will safely fall back to the Tier-2 keyword matching engine 🟡.
+3. **Relaunch Chrome**, verify at `chrome://on-device-internals`, then **reload the extension**.
+
+4. Header should show **Gemini Nano** with a green dot.
+
+**Hardware requirements** (Chrome enforced): 22 GB free disk, 16 GB+ RAM recommended, unmetered connection for the initial model download.
+
+### Microsoft Edge (Dev / Canary recommended)
+
+Edge uses the same **Prompt API** standard with **Phi-4-mini** as the on-device model.
+
+1. Use **Edge Dev or Canary** with the Prompt API flag enabled:
+   ```text
+   edge://flags/#prompt-api-for-gemini-nano
+   ```
+   (Edge may label this *Prompt API for on-device language model*.)
+
+2. Enable the on-device model flag (same as Chrome):
+   ```text
+   edge://flags/#optimization-guide-on-device-model
+   ```
+   Select **Enabled BypassPerfRequirement**.
+
+3. Relaunch Edge and verify at `edge://on-device-internals`.
+
+4. Reload ScrollCollector — header should show **Phi-4-mini** with a green dot.
+
+**Smoke test** (service worker console at `edge://extensions` → ScrollCollector → Service worker):
+```javascript
+await LanguageModel.availability({
+  expectedInputs: [{ type: 'text', languages: ['en'] }],
+  expectedOutputs: [{ type: 'text', languages: ['en'] }]
+});
+// Expected: "available"
+```
+
+### Brave
+
+Brave does not ship Google's Gemini Nano download, so ScrollCollector uses the **Rule-based
+Classifier** there (keyword matching, no flags required). It does not download a replacement
+language model.
 
 ---
 

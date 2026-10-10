@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home / X (ScrollCollector fixture)</title>
+  <!--
+    Synthetic fixture modelled on the X home timeline DOM: article[data-testid=tweet] cells
+    with a User-Name block (profile links + time permalink), tweetText, an analytics link,
+    a quote tweet embedding another tweet, and a promoted tweet carrying the lone "Ad"
+    label. All names and texts are invented.
+    Used by test/unit/content-identity.test.js (served as https://x.com/home).
+  -->
+</head>
+<body>
+  <div id="react-root">
+    <header role="banner">
+      <nav aria-label="Primary">
+        <a href="/home">Home</a>
+        <a href="/explore">Explore</a>
+        <a href="/search?q=vector%20databases">Search</a>
+      </nav>
+    </header>
+    <main role="main">
+      <div aria-label="Timeline: Your Home Timeline">
+
+        <!-- Tweet 1: plain tweet -->
+        <div data-testid="cellInnerDiv">
+          <article data-testid="tweet" role="article" tabindex="0">
+            <div class="r-1iusvr4">
+              <div data-testid="User-Name">
+                <div><a href="/nasa_jpl" role="link"><span>NASA JPL</span></a></div>
+                <div>
+                  <a href="/nasa_jpl" role="link" tabindex="-1"><span>@nasa_jpl</span></a>
+                  <span aria-hidden="true">·</span>
+                  <a href="/nasa_jpl/status/1890000000000000001" role="link" aria-label="2 hours ago"><time datetime="2026-10-09T10:00:00.000Z">2h</time></a>
+                </div>
+              </div>
+              <div data-testid="tweetText" lang="en" dir="auto"><span>The rover's new autonomous navigation software let it drive 300 meters in a single day across the crater floor.</span></div>
+              <div role="group" aria-label="12 replies, 85 reposts, 1204 likes">
+                <button data-testid="reply" type="button"><span>12</span></button>
+                <button data-testid="retweet" type="button"><span>85</span></button>
+                <button data-testid="like" type="button"><span>1204</span></button>
+              </div>
+              <a href="/nasa_jpl/status/1890000000000000001/analytics" aria-label="View post analytics"><span>31K</span></a>
+            </div>
+          </article>
+        </div>
+
+        <!-- Tweet 2: quote tweet; the quoted tweet is embedded as div[role=link] -->
+        <div data-testid="cellInnerDiv">
+          <article data-testid="tweet" role="article" tabindex="0">
+            <div data-testid="User-Name">
+              <div><a href="/dwhitfield" role="link"><span>Dana Whitfield</span></a></div>
+              <div>
+                <a href="/dwhitfield" role="link" tabindex="-1"><span>@dwhitfield</span></a>
+                <span aria-hidden="true">·</span>
+                <a href="/dwhitfield/status/1890000000000000002" role="link"><time datetime="2026-10-09T09:00:00.000Z">3h</time></a>
+              </div>
+            </div>
+            <div data-testid="tweetText" lang="en" dir="auto"><span>This is the most practical explanation of vector databases I have read. Bookmarking it for the whole team.</span></div>
+            <div role="link" tabindex="0" aria-labelledby="quoted-1">
+              <div data-testid="User-Name" id="quoted-1">
+                <div><span>Vector Weekly</span></div>
+                <div><span>@vectorweekly</span><span aria-hidden="true">·</span><time datetime="2026-10-08T08:00:00.000Z">Oct 8</time></div>
+              </div>
+              <div data-testid="tweetText" lang="en" dir="auto"><span>Vector databases explained in five diagrams: indexing, filtering, hybrid search, sharding and cost.</span></div>
+            </div>
+            <div role="group">
+              <button data-testid="reply" type="button"><span>3</span></button>
+            </div>
+          </article>
+        </div>
+
+        <!-- Tweet 3: promoted tweet with the "Ad" label in the header -->
+        <div data-testid="cellInnerDiv">
+          <article data-testid="tweet" role="article" tabindex="0">
+            <div data-testid="User-Name">
+              <div><a href="/acmeanalytics" role="link"><span>Acme Analytics</span></a></div>
+              <div><a href="/acmeanalytics" role="link" tabindex="-1"><span>@acmeanalytics</span></a></div>
+            </div>
+            <div class="r-header-right"><span>Ad</span><button aria-label="More" type="button"><span>…</span></button></div>
+            <div data-testid="tweetText" lang="en" dir="auto"><span>Dashboards your whole team actually understands. Try Acme Analytics free for 30 days, no credit card needed.</span></div>
+            <div data-testid="card.wrapper">
+              <a href="/acmeanalytics/status/1890000000000000003" role="link"><span>acme-analytics.example</span></a>
+            </div>
+          </article>
+        </div>
+
+      </div>
+    </main>
+  </div>
+</body>
+</html>
