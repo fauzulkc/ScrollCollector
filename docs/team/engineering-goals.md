@@ -9,7 +9,7 @@ date, never written over.
 |---|---|---|
 | **ENG-1** · lenses data model | DEC-6 | green 2026-10-11: `5090b29` + `1b9bdfd` + `2da7ff5` (schema v3) on `feat/prompt-lenses`, unit 836/836, e2e 42/42 (my runs); awaits ⚖️ Bar Raiser; merge after the store submission |
 | **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | draft plan; queued after ENG-1 (DEC-8) |
-| **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | probe done 2026-10-11: gates hold red; no honest change found yet (see Record) |
+| **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | parked 2026-10-11: probe + pre-registered genre cues failed; gates stay red (see Record) |
 
 ---
 
@@ -326,3 +326,19 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
     does not fall; (A) top-1 and top-3 do not fall and tag ECE rises by no more than 0.01; every match gate row is
     unchanged. Otherwise not adopted. Whether DEC-9's gates turn green is reported separately and is **not** the adoption
     bar. Re-hash the genre set (`38aedfac470c8e655607da1d21633a70dcf60795fdf1e81d6998d0252ade76c8`) before reading it.
+- 2026-10-11 (after `5293ccc`) · **RESULT, genre cues (hypothesis 1): NOT ADOPTED.** Research tier, log
+  `scratchpad/team/runs/engineering/2026-10-11-eng3-genre-cues.md`; I re-hashed the genre set (`38aedfac…76c8`, match),
+  recounted (B) from the per-post rows and read (A) from the saved gate outputs: both match. Baseline reproduced the
+  2026-10-10 report exactly.
+  | Model | (A) golden 5-fold CV top-1 / top-3 / tag ECE, before → after | (B) genre set top-1 / top-3 of 37, before → after |
+  |---|---|---|
+  | minilm | 52 → 55 / 69 → 70 / 0.067 → **0.082** | 22 → 23 / 34 → 33 |
+  | bge-small | 49 → 46 / 67 → 66 / 0.083 → **0.114** | 20 → 19 / 33 → 34 |
+  Fails on both models: (B) needs +4, got +1 / −1; minilm ECE +0.015 (limit +0.01); bge falls on (A). Match rows
+  unchanged. Under the cues minilm would pass top-1 and top-3 but fail ECE; bge fails all three. β chosen per fold
+  (full-set β halved on both: 0.1945 → 0.0973, 0.0543 → 0.0271). Deviation, recorded: the run copied
+  `posts.private.jsonl` so the "private max p" match row could reproduce; it feeds no tag number.
+  **State of ENG-3's tag gates:** four honest System 1 variants and one pre-registered cue list have failed; the minilm
+  gain (3 posts) sits inside the ±0.105 band at n = 77. Remaining levers are outside the embedding (Nano's re-ask of
+  uncertain tags, unmeasured here without the Prompt API) or the gate's definition (Testing's register: the "any
+  listed tag" row already reads 0.792 / 0.779). Parked pending 🧭 CEO.
