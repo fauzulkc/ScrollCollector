@@ -1,7 +1,7 @@
 {
   "name": "scrollcollector",
   "version": "0.11.0",
-  "description": "Deterministic web page feed tracking and categorizer using Gemini Nano.",
+  "description": "Collects posts from social feeds that match your own prompts, decided on your device by a bundled sentence-embedding model; the browser's built-in model helps with uncertain posts.",
   "type": "module",
   "scripts": {
     "test": "node test.mjs && vitest run",
