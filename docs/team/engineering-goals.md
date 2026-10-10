@@ -208,3 +208,16 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
 - 2026-10-11 03:00 +0600 · 🧭 CEO ruled (DEC-6 02:58 addendum): the collect switch stays as built in `1b9bdfd`. A
   collecting tag filters with the master switch off (the master prompt is one prompt with one switch); migration keeps
   `collects` = the old gate state. Reopens if the owner's local trial surprises them.
+- 2026-10-11 03:50 +0600 · **ENG-3 defect: label and lens score contradict on a user prompt** (seen in the owner trial
+  build, `d68d5c0`, Chrome for Testing, real System 1; log `scratchpad/team/runs/engineering/2026-10-11-owner-trial-build.md`).
+  A user tag "Food" with prompt "restaurant and fine dining posts": synthetic posts food-02 and food-17 were **labelled
+  Food** by the tag classifier (`assignedTag`) while the Food lens scored them **0.09 / 0.08**; switching Food to
+  collect then hid them (any-collecting-prompt gate, threshold 0.5). Same text as the master prompt (the 0.10.0 path)
+  scores 0.09 / 0.08 too, so the lens path is not at fault; the two signals come from different calibrations (ENG-1
+  rule 3 vs the tag softmax), as rule 7 predicted. **Question for evidence (CEO, DEC-6 if users see a change):** should
+  a user prompt that is also a tag label from its own lens score (label when score ≥ the shared threshold) instead of
+  the tag softmax? **Measurement, fixed before running:** the 5 eval prompts (restaurant, coding, jobs, immigration,
+  climate) each added as a user tag beside the 25 built-ins; on the golden posts with that prompt's yes/no labels
+  (borderline excluded, as the eval does), compare (a) tag classifier assigns that tag vs (b) lens score ≥ 0.5, by
+  precision, recall and disagreement rate, both models, leave-one-prompt-out as the eval's match numbers are. No
+  calibration refit; no prompt wording tuned on the result.
