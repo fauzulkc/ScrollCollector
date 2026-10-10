@@ -15,6 +15,12 @@ re-verified against the store's current pages when written; the extension seat c
 | 6 | Review of the release commit and the listing | ⚖️ Bar Raiser | PASS in `docs/briefs/` |
 | 7 | Merge `feat/decision-cascade` into `main`, push, tag the version | 🧭 CEO | origin/main at the release commit |
 
+**Part A state, 2026-10-11 01:35 +0600: done.** Rows 1-4 in `11e5261` (+ `9ba02eb`); row 5 green except the eval's tag
+gates, shipped red by DEC-9; row 6 PASS by the ⚖️ Bar Raiser team (`docs/briefs/2026-10-11-release-0.10.0-review.md`;
+the seat confirms on return); row 7: `origin/main` = `c1fbd92`, tag `v0.10.0`. The upload file, built from the tag:
+`releases/ScrollCollector-0.10.0-store.zip` (46 MB; Windows: `\\wsl.localhost\Ubuntu-24.04\home\fauzul\code\ScrollCollector\releases\`).
+Waiting on the owner: approving the wording in `docs/STORE-LISTING.md` and `docs/PRIVACY.md`, and a contact address.
+
 ## Part B · The owner (after Part A)
 1. **Developer account** (one time): sign in at the Chrome Web Store developer dashboard
    (`chrome.google.com/webstore/devconsole`), pay the one-time registration fee (_check_ the amount), verify

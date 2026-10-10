@@ -9,7 +9,8 @@ place and appends the record. Only Design edits the operative text; others propo
 D-5 (the prompt spec for DEC-6 as amended, the preview spec for DEC-7, the card time in the release).
 Open with ⚙️ Engineering (as of 01:40): whether user-added prompts stay in tag classification (D-1), and
 the measured image size (D-4). Answered: the user-prompt data (D-1) and the score's unit (D-3).
-Next free numbers: **P-4, D-6**.
+Next free numbers: **P-4, D-8** (D-6 is the Design team's draft, awaiting adoption; D-7, the wide panel,
+was ruled 2026-10-11).
 
 ## How these were measured (2026-10-11, at `9bfb189`, `dist/ext` built 2026-10-10 22:24 after the last source edit)
 
@@ -94,6 +95,10 @@ this. **New, from the same re-read:** ENG-1 rule 7 leaves `assignedTag` and `dec
 `isLens` tag can still be a post's tag. That would show one object as both kinds. The form half is taken
 above (the `isLens` paragraph). Whether lens tags should stay in tag classification is ⚙️ Engineering's,
 and it is sent to them.
+
+**Record, 2026-10-11 (Design team, DRAFT).** The `isLens` paragraph above is superseded by the owner's
+collect switch (DEC-6 02:27): user tags label again. See D-6 (draft); the seat is to fix the operative
+paragraph in place when it adopts D-6.
 
 ### D-2 · The prompt row and the prompt view (2026-10-11, amended 01:20)
 **Ruling.** The prompts get **their own row, above the tag row** (`#filter-pills`). It holds one pill per
@@ -214,6 +219,138 @@ matches the source). Re-measured by Design with `node scratchpad/design/render-p
 measured **7.24:1 dark (161,161,170 on 19,19,22) and 4.83:1 light (113,113,122 on 255,255,255)** at 320, 400
 and 560 px. The image was read: `card-light-320.png` shows the time at body-text weight. **Still open:** the
 real-browser pin, which 🧪 Testing owns, and the live look in the owner's Chrome.
+
+### D-6 · The collect switch (DEC-6, owner 02:27 and 02:58) (2026-10-11 DRAFT, PROPOSAL: written by the 📐 Design team while Design is away; not binding until the seat adopts it)
+**Ruling (draft).**
+1. **Where it lives: Settings only, on the prompt's own row; never in the prompt bar.** Each user prompt
+   (an `isLens` tag) is a `.tag-row` in `#tag-list` (Settings, "Tracked Categories"). Its row header gets a
+   second switch beside the existing "Track" toggle: a visible text label **"Collect"** (the owner's own
+   word), then the same `.tag-toggle` / `.toggle-track` control and an On/Off state in the `.filter-state`
+   pattern of `#match-prompt-state`. On by default; sends `MSG.TAG_COLLECTS_TOGGLED { tag, collects }`. It is
+   **not** hidden inside the collapsed editor (`.tag-prompt-container`): the state is a claim and is read
+   without opening anything. Built-in tags (D-1) get **no** collect switch. The prompt bar's pills (D-2)
+   stay toggles for *selecting*; a second meaning on the same control would let one stray tap change what
+   is collected. When "Track" is off the prompt is no lens (no pill, no chip) and its collect switch is
+   `disabled` with its value kept; its On/Off text keeps full contrast (P-1), no opacity. **The master
+   prompt is one prompt like the others** (DEC-6, 02:58): its existing `#match-prompt-toggle` is its collect
+   switch, same On/Off pattern; it is the only one whose row is the "Prompt filter" section, and its label
+   wording is for the owner (below).
+2. **How a non-collecting prompt reads.** One mark, in two places, nothing else differs: the pill and the
+   chip of a user prompt whose collect is Off carry a trailing text marker (recommended wording **"labels
+   only"**). A prompt that collects carries none, because collecting is the default and only the exception
+   is marked. Everything else is identical: same dot, name, count (D-2), score and bar (D-3), outline and
+   position (list order, P-3). The marker is `--text-secondary` or darker at **at least 4.5:1** on its
+   actual ground in both themes (P-1: no opacity, no dashed border, no lighter token to say "weaker"); it
+   does not shrink or truncate, so at 320 px the **name** gives way first (ellipsis, full text in the title,
+   D-1); its full sentence goes in the element title. A selected non-collecting prompt sorts by its score
+   like any other (DEC-6). Its count is P-2 as ever, the posts in the list it opens; those are posts
+   collected by other prompts (or by the gate-off state) that it also matched, so it can read 0, and the 0 is
+   shown (the pill is neither hidden nor disabled). **The master prompt never carries the marker**: while
+   its switch is Off it is not scored (`scoredLenses`), so it has no pill and no chip, like a disabled prompt
+   (the "main prompt with no score while the match switch is off" empty state). A post with no
+   `decision.lenses` (manual override, or awaiting the backfill) has no chip row and is counted by no prompt
+   pill (D-3 already; no "0", no placeholder).
+   **Which prompts are collecting, shown wherever filtering applies (CEO 02:58).** Filtering is on whenever
+   at least one prompt collects, even with the master switch Off, so a user who adds a tag and sees the feed
+   narrow must be able to see why. Two places, one rule: (i) **Stream**, a single status line
+   (`#collect-summary`, `role="status"`) directly under the prompt row, shown **only while filtering is
+   on**, listing the collecting prompts by name (the master by its text cut per D-1), `--text-secondary` or
+   darker at 4.5:1, wrapping, with no pills or colours so it cannot be mistaken for a control; (ii)
+   **Settings**, the same list in the existing `.prompt-hint` (`role="status"`) above the prompts. The
+   list is `userLenses(cfg)` filtered to `collects`; one function feeds both and the pill markers, so they
+   cannot disagree. With no collecting prompt the line is absent in Stream (nothing is filtered) and the
+   Settings line takes the all-off form in 3.
+   **User tags label again (supersedes D-1's `isLens` paragraph; ⚙️ Engineering's FYI of the same day).** A
+   user prompt is one object in two roles: as a **tag** it can be a post's footer label and a tag-row pill
+   (classification, no number); as a **prompt** it is a pill in the prompt row and a chip (matched by
+   score). The two can disagree on one card (filed under Food, no Food chip, or the reverse). Both are true
+   answers to different questions; **neither is hidden to look consistent** (a hidden claim is a deleted
+   one), and the footer label never carries a number or the marker.
+3. **Every collect Off, master included.** With no collecting prompt nothing is filtered
+   (`lib/decision/lenses.js`), so **every post is collected**, as today with no prompt. The prompt pills
+   stay (each enabled user prompt, each marked "labels only") with their P-2 counts; "All" is the whole
+   collection, newest first with day dividers (D-2); "Hidden by prompt" is absent at count 0 (existing).
+   **The empty states do not change**: `emptyFeedMessage()` ("No items collected yet. Start scrolling
+   feeds!" for an empty collection; "No posts match these filters." when filters empty a list) are both
+   true here; a selected pill with 0 shows the second. **One new line in Settings** (the `.prompt-hint`
+   above) in this state only: no prompt is set to collect, so every post is collected, because "off" is
+   otherwise read as "collects nothing", the opposite of what happens. Wording is words (below).
+**Measured / checked.** At `1b9bdfd` of `feat/prompt-lenses`: `sidepanel.html:244-253` is the master
+switch (label "Prompt filter", `#match-prompt-toggle`, help "When the filter is on, only posts that match
+this prompt are collected."); user-prompt rows are built in `sidepanel.js` (`.tag-row` template near lines
+2170-2215: dot, `.tag-label`, `.btn-expand-prompt`, one `.tag-toggle` "Tracking", delete); the panel has
+**no prompt row or chips yet** (the extension seat's slice), so nothing here is rendered.
+`lib/decision/lenses.js`: entries carry `collects`; an `isLens` tag collects unless `collects === false`;
+`main` collects, and is scored, only while its switch is on; with no collecting lens nothing is filtered.
+`--text-secondary` on the card measured 7.24:1 dark and 4.83:1 light (D-5), a floor for the marker on the
+card; its ratio on the pill's ground is **UNVERIFIED** (gradient ground, see "How these were measured").
+**No render was made for this draft.**
+**Defect found in passing (⚙️/🧷, not Design's to fix):** `sidepanel.js` ~2452-2453 `gate_off_with_prompt`
+says "The filter is off, so every post is collected." With a collecting user prompt the gate is on while the
+master switch is off, so that sentence is false; the master help line "only posts that match this prompt
+are collected" is also wrong for any-prompt collection. Both need re-wording.
+**Escalation test.** Placement, marker form, ordering, contrast, the summary line's form and the
+empty-state behaviour are form: taken. **Not taken, handed up:** (a) *the words*: "Collect" is the owner's
+word and recommended; **"labels only"**, the marker's title sentence, the switch's accessible name, the
+Stream and Settings collecting-line wording, the all-off line and the re-worded master label/help/hint are
+words for 🧭 CEO / the owner (no copy seat is seated), PROPOSAL; D-1 says users read "prompts". (b) Whether
+the master switch should override collecting tags is the owner's open review in the CEO's inbox
+(`1b9bdfd`); this draft follows `lenses.js` as built and holds either way except that the master's row
+wording changes. (c) Whether posts hidden by an earlier gate return when the gate turns off is ⚙️
+Engineering's re-decide.
+**Pin (for 🧪 Testing, real browser).** On the built panel: a user prompt with `collects: false` shows the
+marker on its pill and chip, one with `collects !== false` none; the marker resolves to at least 4.5:1 in
+both themes; a labels-only pill's count equals the cards listed when selected (P-2), including 0;
+`#collect-summary` is present exactly when at least one prompt collects and lists exactly those prompts;
+with every collect Off and the master Off, "All" equals the collection size and the all-off line shows,
+and it is gone once any switch is On. Weak pin: a test that reads the stylesheet for the marker, or checks
+only that the switch exists.
+**Done when** the built `dist/ext` panel is rendered at 320, 400 and 560 px in both themes with one
+collecting and one labels-only prompt, the image read, and the marker's contrast measured on both grounds.
+
+### D-7 · The panel fills any width it is given (2026-10-11, owner's ask)
+**Ruling.**
+1. **The panel uses the whole width Chrome gives it.** Lift `body { max-width: 500px }` (`sidepanel.css`
+   `body`; keep `min-width: 280px`). The header, tabs, search, filter rows and footer span the full width.
+2. **The stream becomes a grid of cards** (`#stream-list`): `grid-template-columns:
+   repeat(auto-fill, minmax(min(300px, 100%), 1fr))`, `gap: 12px`, `align-items: start`. At most widths
+   that keeps cards between 300 and about 480 px wide. Measured columns: 2 at 640 px, 3 at 1100, 4 at 1500.
+   Below about 636 px it stays one column, as today.
+3. **Reading order is left to right, then down (row by row), never column by column.** In a selected
+   prompt's view the list is a ranking (D-2), and in "All" it is newest first. A masonry or CSS-columns
+   flow would read ranks and times out of order. Short cards leave a gap below them, and that is accepted
+   (`align-items: start`).
+4. **Anything in the list that is not a card spans the full row** (`grid-column: 1 / -1`): the day
+   dividers, empty states and status lines (D-6's `#collect-summary` included). A divider never sits in
+   one cell beside cards.
+5. **Settings and Export do not stretch.** Their content is held at `max-width: 560px`, left-aligned under
+   the tabs. Forms and help text stay at the width they were written for.
+6. **Nothing else changes with width:** no type sizes by breakpoint, no hidden controls, and no horizontal
+   page scroll at any width. The filter rows keep scrolling sideways and show more pills as width grows.
+   D-4's grown preview stays `min(240px, panel width − 48px)`, anchored to its card.
+**Measured.** The owner's screenshot (2026-10-11) shows a panel about 770 px wide, with content ending
+near 500 px and an empty band to its right. Reproduced with `node scratchpad/design/proto-wide.mjs` (8
+seeded posts, Chrome for Testing, dark). **As is:** the body is 500 px at both 770 and 1100 px, one column
+of 476 px cards, about 84 characters per line. **Prototype** (this ruling's CSS injected): the body fills
+the panel; 640 px → 2 columns of 302 px (51 characters per line); 770 → 2 of 367 (63); 1100 → 3 of 351
+(60); 1500 → 4 of 360 (62); `scrollWidth` equals the viewport at every width. Renders:
+`wide-asis-770.png`, `wide-wide-770.png`, `wide-wide-1100.png` (stream, read: time order 1m, 8m, 15m, 22m,
+29m runs left to right; the day divider spans the row) and `wide-settings-770.png` (Settings held at
+560 px). **Not measured:** the widest single-column card, at just under 636 px, is about 600 px, which
+works out to about 105 characters per line from the measured rate. That narrow band is accepted. Light
+theme not rendered: this ruling changes no colour.
+**Escalation test.** Form: taken. **Handed to 🧭 CEO:** which branch and release this rides is queue
+order. The store release ships as it stands (DEC-8), so by default it lands with prompts on
+`feat/prompt-lenses`. A separate "open in a full tab" mode would be new scope and is not ruled here. With
+this ruling, the page already works at any width if it is opened in a tab. **Handed to the 🧷 extension
+seat (clear it with ⚙️ Engineering):** the list virtualiser (`initVirtualizer`, `is-virtualized` with a
+`minHeight`) must keep each card in its grid cell. A card that drops out of view must not reflow its row.
+**Pin (for 🧪 Testing, real browser).** At 1100 px the body width equals the viewport, there are 3 card
+columns, the first three cards' `top` values are equal and their `left` values increase, a day divider
+spans the full row, and `scrollWidth` equals the viewport. At 400 px there is one column. Weak pin: a test
+that reads the stylesheet for `max-width`.
+**Done when** the built `dist/ext` panel is re-rendered at 400, 770 and 1100 px with the image read, the
+pin is green, and the owner sees it fill the panel in their own Chrome.
 
 ## Observed, not ruled (read from source 2026-10-10 at `44f04d3`; rendered 2026-10-11 at `9bfb189`)
 

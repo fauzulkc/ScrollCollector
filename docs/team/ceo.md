@@ -73,6 +73,9 @@ _(measured 2026-10-10 unless marked)_
   `D:\Projects\scrollcollector` cannot run `/seat-*` or spawn `<team>-worker`, so the work runs on generic agents at
   the session's own model. Open or move seats to `\\wsl.localhost\Ubuntu-24.04\home\fauzul\code\ScrollCollector`
   (the app's change-directory tool rejects the `D:\code` symlink; moving a session there loads the skills and workers).
+- **A ruling's timestamp is read from the clock, never estimated** (2026-10-11): two addenda were stamped 05:20 and
+  04:40 while the clock read 04:05 and 04:28. Run `date "+%Y-%m-%d %H:%M %z"` in the same script that writes the
+  row. Edit the register from WSL (python or sed); the Edit tool over `\\wsl.localhost` failed with EPERM mid-write.
 - **Peers commit mid-run:** a release test leg on a moving HEAD proves nothing. Pin the leg to a commit in a detached
   worktree, and merge that commit, not HEAD (0.10.0: `ee68247`).
 - **Windows git:** shows spurious exec-bit diffs on `.sh` files and its credential helper hangs; use WSL git (setup-facts).

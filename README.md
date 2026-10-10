@@ -42,7 +42,7 @@ It is designed as a high-performance keyboard-driven curator to capture, filter,
 
 ## How to Install (Local unpacked)
 
-ScrollCollector runs 100% locally. To load it into any Chromium-based browser (Chrome, Edge, Brave, Arc, Opera):
+ScrollCollector runs locally by default (post text leaves your device only if you turn on a cloud provider). To load it into any Chromium-based browser (Chrome, Edge, Brave, Arc, Opera):
 
 ### Standalone Installer (1-Click Setup)
 ScrollCollector features a unified standalone setup installer built in Go.
@@ -87,6 +87,7 @@ Run the compilation script in your shell to build the standalone installers:
    - Enable **Developer Mode** (toggle in the top-right corner).
    - Click the **Load unpacked** button in the top-left.
    - Select the built `dist/ext/` folder (run `npm run fetch:models`, then `npm run build:ext`; see `BUILD.md`). The source folder has no bundled model weights, so System 1 cannot start from it.
+     On Windows with the repo in WSL, run `npm run sync:win` and load `D:\code\ScrollCollector-dev` instead: Chrome is unreliable loading from `\\wsl.localhost`. Or unzip `releases/ScrollCollector-<version>-store.zip` from `npm run package:store`.
 
 3. **Open the App**:
    - Click the extension puzzle icon in the toolbar.
