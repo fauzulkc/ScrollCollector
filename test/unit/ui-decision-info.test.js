@@ -58,6 +58,17 @@ describe('tooltip', () => {
     expect(text).toContain('Hidden: no longer matches the prompt.');
   });
 
+  test('master off, a collecting user prompt: never says the filter is off (F1)', () => {
+    const cfg = { isMatchPromptEnabled: false, matchPrompt: '', trackedTags: [{ id: 't_u1', label: 'Cats', isLens: true, collects: true }, { id: 't_u2', label: 'Chess', isLens: true, collects: true }] };
+    const base = { ...decision, path: ['system1'], provider: 'system1', pMatch: null, matchConfidence: null, escalated: false };
+    const hit = decisionTooltip({ decision: { ...base, lenses: { t_u1: 0.9, t_u2: 0.8 } } }, cfg);
+    expect(hit).toContain('Collected: matches Cats · Chess');
+    expect(hit).not.toMatch(/off/i);
+    expect(decisionTooltip({ decision: { ...base, lenses: { t_u1: 0.1 } } }, cfg)).toContain('Collected: matches no prompt');
+    expect(decisionTooltip({ decision: { ...base, lenses: { t_u1: 0.9 } } }, { ...cfg, trackedTags: [] })).toContain('Prompt filter: off');
+    expect(decisionTooltip({ decision: { ...base, lenses: { t_u1: 0.9 } } })).not.toMatch(/off/i);
+  });
+
   test('legacy matchInfo fallback', () => {
     const text = decisionTooltip({ matchInfo: { engine: 'Gemini Nano', globalMatchPrompt: 'ramen', globalMatchedKeywords: ['ramen'], matchedKeywords: ['food'] } });
     expect(text).toContain('Classified using: Gemini Nano');

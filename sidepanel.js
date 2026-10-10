@@ -2072,7 +2072,7 @@ function populateCardInner(card, item) {
   // Decision details (path, provider, p(match), confidences, latency, reason, escalation); items
   // collected before the decision cascade fall back to their legacy matchInfo.
   let infoTooltipHtml = '';
-  const tooltipText = decisionTooltip(item);
+  const tooltipText = decisionTooltip(item, state.configuration);
   if (tooltipText) {
     const escalated = !!(item.decision && item.decision.escalated);
     infoTooltipHtml = `
