@@ -581,6 +581,10 @@ function linkedInCardIdentity(card) {
     const found = bridged ? LI_URN_RE.exec(bridged) : null;
     if (found) urn = found[0];
   } catch { /* bridge missing: fall back to an in-card permalink */ }
+  if (!urn && /FeedType_FEED_DETAIL/.test(key)) {
+    // The post's own page (/feed/update/<urn>/): the detail card IS that post.
+    urn = linkedInUrnFromHref(window.location.pathname);
+  }
   if (!urn) {
     const link = card.querySelector('a[href*="/feed/update/urn:li:"]');
     urn = link ? linkedInUrnFromHref(link.getAttribute('href')) : null;

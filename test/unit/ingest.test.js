@@ -432,6 +432,44 @@ describe('ingest pipeline', () => {
     expect(last).toMatchObject({ status: 'collected', reason: 'duplicate' });
   });
 
+  test('the same post under a weak card key and its URN key is one item that keeps the URN and link', async () => {
+    const body = 'Post by: Jean Lee\n\nAI Engineer job postings are sending a clear signal: knowing how to call an LLM is not enough. The strongest roles want people who can build and operate complete AI systems.';
+    const { fake, ingest } = setup();
+    // Seen in the feed with its URN…
+    await ingest.enqueue(post(20, { text: body, authorName: 'Jean Lee' }), TAB);
+    await ingest.drain();
+    // …then on the post's own page, where the card token differs and (without the bridge) no URN.
+    await ingest.enqueue(post(20, { text: body, authorName: 'Jean Lee', postKey: 'li:card:DetailToken123', postUrl: '' }), TAB);
+    await ingest.drain();
+    let { stack } = await fake.storage.local.get('stack');
+    expect(stack).toHaveLength(1);
+    expect(stack[0].postKey).toBe('li:urn:li:activity:1020');
+    expect(stack[0].sourceUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:1020/');
+
+    // Reverse order: a link-less card first, then the URN copy upgrades it in place.
+    await ingest.enqueue(post(21, { text: body.replace('Jean Lee', 'Ana Ruiz'), authorName: 'Ana Ruiz', postKey: 'li:card:Tok', postUrl: '' }), TAB);
+    await ingest.drain();
+    await ingest.enqueue(post(21, { text: body.replace('Jean Lee', 'Ana Ruiz'), authorName: 'Ana Ruiz' }), TAB);
+    await ingest.drain();
+    ({ stack } = await fake.storage.local.get('stack'));
+    const ana = stack.filter(i => i.authorName === 'Ana Ruiz');
+    expect(ana).toHaveLength(1);
+    expect(ana[0].postKey).toBe('li:urn:li:activity:1021');
+    expect(ana[0].sourceUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:1021/');
+  });
+
+  test('content matching never merges different authors or two posts that both have strong keys', async () => {
+    const body = 'Post by: X\n\nWe are hiring three senior machine learning engineers to work on retrieval, evaluation and agent infrastructure.';
+    const { fake, ingest } = setup();
+    await ingest.enqueue(post(30, { text: body, authorName: 'A Person', postKey: 'li:card:T1', postUrl: '' }), TAB);
+    await ingest.enqueue(post(31, { text: body, authorName: 'B Person', postKey: 'li:card:T2', postUrl: '' }), TAB);
+    await ingest.enqueue(post(32, { text: body, authorName: 'C Person' }), TAB);
+    await ingest.enqueue(post(33, { text: body, authorName: 'C Person' }), TAB);
+    await ingest.drain();
+    const { stack } = await fake.storage.local.get('stack');
+    expect(stack).toHaveLength(4);
+  });
+
   test('decideMany failure stores without a verdict when no gate filters', async () => {
     const decideMany = async () => { throw new Error('model crashed'); };
     const { fake, ingest } = setup({ decideMany });

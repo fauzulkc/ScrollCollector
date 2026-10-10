@@ -372,6 +372,18 @@ describe('content.js on the 2026 LinkedIn feed and jobs layout', () => {
     expect(document.querySelector('[data-sc-urn]')).toBeNull();
   });
 
+  test("on a post's own page the detail card takes the URN from the address", async () => {
+    teardownContentScript();
+    const html = linkedIn2026Card('DetailTok9', 'Jean Lee',
+      'AI Engineer job postings are sending a clear signal: knowing how to call an LLM is not enough anymore.')
+      .replace('FeedType_MAIN_FEED_RELEVANCE', 'FeedType_FEED_DETAIL');
+    const page = loadPage('https://www.linkedin.com/feed/update/urn:li:activity:7513953899620352001/', html);
+    await waitFor(() => page.extracted().length >= 1);
+    const [p] = page.extracted();
+    expect(p.postKey).toBe('li:urn:li:activity:7513953899620352001');
+    expect(p.postUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:7513953899620352001/');
+  });
+
   test('"… more" expansion of a componentkey card re-dispatches the same postKey', async () => {
     teardownContentScript();
     const page = loadPage('https://www.linkedin.com/feed/foryou/', linkedIn2026Card('AbC123xyz', 'Ana Ruiz',
