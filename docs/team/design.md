@@ -74,6 +74,14 @@ CEO
 - **Branded Chrome ignores `--load-extension` since 137** (`e2e/helpers/launch.mjs`): renders come from
   Chrome for Testing or the owner's Chrome; Chrome loading from `\\wsl.localhost` is flaky (use `sync:win`).
 - **MV3 forbids remote code** (e0c0df6): no CDN fonts, icon fonts or remote images in a spec; vendor everything.
+- **Windows-side writes can turn the register into CRLF** (2026-10-11: `190b69d`, a Design team draft, converted
+  all of `docs/DESIGN.md`; later edits kept the style; fixed in `7d1e6a9`). Before every commit, run
+  `grep -c $'\r' docs/DESIGN.md` and expect 0. A worker's contract says so too.
+- **`node` can be missing in `wsl.exe bash -l`** (2026-10-11: fnm's multishell directory errors out). Put
+  `$HOME/.local/share/fnm/node-versions/v24.14.0/installation/bin` first on `PATH` in the render script.
+- **A render seeded before the service worker finishes startup gets overwritten**: wait about 3 s after
+  `schemaVersion` appears, then seed (`scratchpad/design/proto-wide.mjs`). The panel also remembers the last
+  tab across pages: click `[data-tab="stream"]` before you screenshot the stream.
 
 ## Done means here
 A ruling in `docs/DESIGN.md` carrying the measurement that forced it, a render of the surface in Chrome
