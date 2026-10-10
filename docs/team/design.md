@@ -38,8 +38,8 @@ CEO
   and live in the owner's Chrome via Claude-in-Chrome; the owner types API keys.
 
 ## Project facts this seat relies on
-- **Repo:** WSL `/home/fauzul/code/ScrollCollector`, branch `feat/decision-cascade`, HEAD `44f04d3`
-  (measured 2026-10-10). git / npm / node from WSL only.
+- **Repo:** WSL `/home/fauzul/code/ScrollCollector`, branch `feat/decision-cascade`, HEAD `9bfb189`
+  (measured 2026-10-11); lenses build on `feat/prompt-lenses` (DEC-8). git / npm / node from WSL only.
 - **Surfaces** (measured 2026-10-10): the Chrome side panel `sidepanel.html` (+ `sidepanel.css`, 58 KB,
   and `sidepanel.js`), with UI modules in `ui/` (`decision-info.js`, `diagnostics.js`,
   `engine-badge.js`, `export.js`, `intelligence.js`, `toast.js`, `util.js`). Diagnostics is not a
@@ -52,11 +52,16 @@ CEO
   "design system": no ruling backs that yet.
 - **How to see it:** `npm run build:ext` then either the E2E harness on Chrome for Testing
   (`e2e/ui.spec.mjs`, `e2e/helpers/launch.mjs`; `HEADED=1` to watch) or the owner's Chrome via
-  Claude-in-Chrome after `npm run sync:win`. The side panel's rendered widths are UNVERIFIED.
+  Claude-in-Chrome after `npm run sync:win`. **Render sweep (2026-10-11):** `node
+  scratchpad/design/render-panel.mjs` seeds posts and renders the panel as a tab at 320/400/560 px, both
+  themes, with resolved contrast in `scratchpad/design/renders/measure.json` (the scratchpad is not
+  committed; if the script is gone, its method is in `docs/DESIGN.md` "How these were measured"). Cards are
+  `[data-sig]`, not `.card`. The real side panel's width range is still UNVERIFIED.
 - **Tests that touch form:** `test/unit/ui-*.test.js` run in happy-dom (no real layout or cascade
   resolution); `e2e/ui.spec.mjs` and `e2e/badge.spec.mjs` run in a real browser. Suite state
   measured 2026-10-10: unit 706/707 pass (1 fail, content identity, not UI); E2E UNVERIFIED.
-- **No rendered screenshot or contrast measurement exists yet:** every visual claim is UNVERIFIED until rendered.
+- **First renders and contrast measurements: 2026-10-11 at `9bfb189`** (see `docs/DESIGN.md`). A visual
+  claim not covered there is still UNVERIFIED until rendered.
 
 ## Traps paid for
 - **The side panel has been reworked many times without a register** (b963f09 settings, engine badge,
