@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feed | LinkedIn (ScrollCollector fixture)</title>
+  <!--
+    Synthetic fixture modelled on the LinkedIn feed DOM: per-post data-id wrappers around
+    div.feed-shared-update-v2[role=article][data-urn], actor blocks whose links point at
+    /in/<person> or /company/<x>/posts/ (the link that used to become every post's URL),
+    "…more" toggles, a reshare with an embedded mini update, a comment thread and a
+    promoted post. All names and texts are invented.
+    Used by test/unit/content-identity.test.js (served as https://www.linkedin.com/feed/).
+  -->
+</head>
+<body>
+  <header class="global-nav">
+    <nav class="global-nav__nav" aria-label="Primary Navigation">
+      <a class="global-nav__primary-link" href="https://www.linkedin.com/feed/">Home</a>
+      <a class="global-nav__primary-link" href="https://www.linkedin.com/mynetwork/">My Network</a>
+      <a class="global-nav__primary-link" href="https://www.linkedin.com/jobs/">Jobs</a>
+    </nav>
+  </header>
+
+  <div class="application-outlet">
+    <div class="scaffold-layout scaffold-layout--breakpoint-xl">
+      <aside class="scaffold-layout__sidebar" aria-label="Side Bar">
+        <div class="artdeco-card">
+          <a href="https://www.linkedin.com/company/northwind-labs/">Northwind Labs</a>
+          <a href="https://www.linkedin.com/company/northwind-labs/posts/">Recent posts from pages you follow</a>
+        </div>
+      </aside>
+
+      <main class="scaffold-layout__main" aria-label="Main Feed" id="main">
+        <div class="scaffold-finite-scroll scaffold-finite-scroll--infinite">
+          <div class="scaffold-finite-scroll__content" data-finite-scroll-hotkey-context="FEED">
+
+            <!-- Post 1: person, "…more" truncated commentary -->
+            <div>
+              <div class="relative" data-id="urn:li:activity:7301000000000000001" data-finite-scroll-hotkey-item="0">
+                <div class="full-height">
+                  <div class="feed-shared-update-v2 feed-shared-update-v2--minimal-padding full-height relative artdeco-card" role="article" data-urn="urn:li:activity:7301000000000000001">
+                    <h2 class="visually-hidden">Feed post number 1</h2>
+                    <div class="update-components-actor display-flex update-components-actor--with-control-menu">
+                      <div class="update-components-actor__container display-flex">
+                        <a class="update-components-actor__image relative" href="https://www.linkedin.com/in/amelie-durand?miniProfileUrn=urn%3Ali%3Afsd_profile%3AACoAAB1" aria-label="View: Amélie Durand">
+                          <img class="ivm-view-attr__img--centered" alt="" width="48" height="48" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+                        </a>
+                        <div class="update-components-actor__meta relative">
+                          <a class="update-components-actor__meta-link" href="https://www.linkedin.com/in/amelie-durand?miniProfileUrn=urn%3Ali%3Afsd_profile%3AACoAAB1" aria-label="View: Amélie Durand • 2nd Chef &amp; food writer">
+                            <span class="update-components-actor__title">
+                              <span class="update-components-actor__single-line-truncate t-black t-bold">
+                                <span class="hoverable-link-text t-14 t-bold text-body-medium-bold white-space-nowrap">
+                                  <span dir="ltr"><span aria-hidden="true"><!---->Amélie Durand<!----></span><span class="visually-hidden"><!---->Amélie Durand<!----></span></span>
+                                </span>
+                              </span>
+                              <span class="update-components-actor__supplementary-actor-info t-14 t-black--light">
+                                <span aria-hidden="true"> • 2nd</span><span class="visually-hidden">Second degree connection</span>
+                              </span>
+                            </span>
+                            <span class="update-components-actor__description text-body-xsmall t-black--light">
+                              <span aria-hidden="true"><!---->Chef &amp; food writer<!----></span><span class="visually-hidden"><!---->Chef &amp; food writer<!----></span>
+                            </span>
+                            <span class="update-components-actor__sub-description text-body-xsmall t-black--light">
+                              <span aria-hidden="true">3h • </span><span class="visually-hidden">3 hours ago</span>
+                            </span>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="feed-shared-update-v2__description-wrapper">
+                      <div class="feed-shared-inline-show-more-text feed-shared-update-v2__description feed-shared-inline-show-more-text--minimal-padding" tabindex="-1">
+                        <div class="update-components-text relative update-components-update-v2__commentary" dir="ltr">
+                          <span class="break-words tvm-parent-container">
+                            <span dir="ltr">Dinner at Maison Aubergine last night, two days after it received its second Michelin star.<br><br>The langoustine with brown butter and the 24-month comté soufflé were the highlights of the tasting menu</span>
+                          </span>
+                        </div>
+                        <button class="feed-shared-inline-show-more-text__see-more-less-toggle see-more t-14 artdeco-button artdeco-button--tertiary artdeco-button--muted" aria-label="see more, visually reveals content which is already detected by screen readers" type="button">
+                          <span class="artdeco-button__text">…more</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="update-v2-social-activity">
+                      <div class="social-details-social-counts">
+                        <span class="social-details-social-counts__reactions-count">128</span>
+                        <button class="social-details-social-counts__comments" type="button"><span>14 comments</span></button>
+                      </div>
+                      <div class="feed-shared-social-action-bar">
+                        <button type="button"><span class="artdeco-button__text">Like</span></button>
+                        <button type="button"><span class="artdeco-button__text">Comment</span></button>
+                        <button type="button"><span class="artdeco-button__text">Repost</span></button>
+                        <button type="button"><span class="artdeco-button__text">Send</span></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Post 2: company page post (actor link = /company/<x>/posts/), math-bold text, hashtags, a comment -->
+            <div>
+              <div class="relative" data-id="urn:li:activity:7301000000000000002" data-finite-scroll-hotkey-item="1">
+                <div class="full-height">
+                  <div class="feed-shared-update-v2 feed-shared-update-v2--minimal-padding full-height relative artdeco-card" role="article" data-urn="urn:li:activity:7301000000000000002">
+                    <h2 class="visually-hidden">Feed post number 2</h2>
+                    <div class="update-components-header">
+                      <a class="app-aware-link" href="https://www.linkedin.com/in/jordan-pike/">Jordan Pike</a>
+                      <span>likes this</span>
+                    </div>
+                    <div class="update-components-actor display-flex">
+                      <div class="update-components-actor__container display-flex">
+                        <a class="update-components-actor__image relative" href="https://www.linkedin.com/company/northwind-labs/posts/" aria-label="Northwind Labs, graphic.">
+                          <img alt="" width="48" height="48" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+                        </a>
+                        <div class="update-components-actor__meta relative">
+                          <a class="update-components-actor__meta-link" href="https://www.linkedin.com/company/northwind-labs/posts/" aria-label="Northwind Labs, graphic.">
+                            <span class="update-components-actor__title">
+                              <span class="update-components-actor__single-line-truncate t-black t-bold">
+                                <span class="hoverable-link-text t-14 t-bold">
+                                  <span dir="ltr"><span aria-hidden="true"><!---->Northwind Labs<!----></span><span class="visually-hidden"><!---->Northwind Labs<!----></span></span>
+                                </span>
+                              </span>
+                            </span>
+                            <span class="update-components-actor__description text-body-xsmall t-black--light">
+                              <span aria-hidden="true"><!---->8,412 followers<!----></span><span class="visually-hidden"><!---->8,412 followers<!----></span>
+                            </span>
+                            <span class="update-components-actor__sub-description text-body-xsmall t-black--light">
+                              <span aria-hidden="true">1d • Edited • </span><span class="visually-hidden">1 day ago</span>
+                            </span>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="feed-shared-update-v2__description-wrapper">
+                      <div class="feed-shared-inline-show-more-text feed-shared-update-v2__description" tabindex="-1">
+                        <div class="update-components-text relative update-components-update-v2__commentary" dir="ltr">
+                          <span class="break-words tvm-parent-container">
+                            <span dir="ltr">𝗦𝗢𝗖 𝟮 𝗶𝗻 𝟯𝟬 𝗱𝗮𝘆𝘀, 𝗻𝗼𝘁 𝟲 𝗺𝗼𝗻𝘁𝗵𝘀.<br><br>Enterprise buyers keep asking for a SOC 2 report before they sign. Our compliance autopilot collects the evidence from your cloud accounts automatically.<br><br><a class="app-aware-link" href="https://www.linkedin.com/feed/hashtag/?keywords=soc2"><span class="visually-hidden">hashtag</span>#SOC2</a> <a class="app-aware-link" href="https://www.linkedin.com/feed/hashtag/?keywords=compliance"><span class="visually-hidden">hashtag</span>#Compliance</a></span>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="update-v2-social-activity">
+                      <div class="social-details-social-counts">
+                        <span class="social-details-social-counts__reactions-count">57</span>
+                        <button class="social-details-social-counts__comments" type="button"><span>1 comment</span></button>
+                      </div>
+                    </div>
+
+                    <div class="feed-shared-update-v2__comments-container">
+                      <div class="comments-comments-list">
+                        <article class="comments-comment-entity" data-id="urn:li:comment:(urn:li:activity:7301000000000000002,7301000000000000555)">
+                          <div class="comments-comment-meta__container">
+                            <a class="comments-comment-meta__image-link" href="https://www.linkedin.com/in/sam-okafor/">Sam Okafor</a>
+                          </div>
+                          <span class="comments-comment-item__main-content">
+                            <div class="update-components-text relative" dir="ltr"><span dir="ltr">Does the autopilot cover ISO 27001 audits as well, or only SOC 2?</span></div>
+                          </span>
+                        </article>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Post 3: reshare with commentary; the original is an embedded mini update with its own data-urn -->
+            <div>
+              <div class="relative" data-id="urn:li:activity:7301000000000000003" data-finite-scroll-hotkey-item="2">
+                <div class="full-height">
+                  <div class="feed-shared-update-v2 feed-shared-update-v2--minimal-padding full-height relative artdeco-card" role="article" data-urn="urn:li:activity:7301000000000000003">
+                    <h2 class="visually-hidden">Feed post number 3</h2>
+                    <div class="update-components-actor display-flex">
+                      <div class="update-components-actor__container display-flex">
+                        <a class="update-components-actor__image relative" href="https://www.linkedin.com/in/priya-raman?miniProfileUrn=urn%3Ali%3Afsd_profile%3AACoAAB3">
+                          <img alt="" width="48" height="48" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+                        </a>
+                        <div class="update-components-actor__meta relative">
+                          <a class="update-components-actor__meta-link" href="https://www.linkedin.com/in/priya-raman?miniProfileUrn=urn%3Ali%3Afsd_profile%3AACoAAB3">
+                            <span class="update-components-actor__title">
+                              <span class="update-components-actor__single-line-truncate t-black t-bold">
+                                <span class="hoverable-link-text t-14 t-bold">
+                                  <span dir="ltr"><span aria-hidden="true"><!---->Priya Raman<!----></span><span class="visually-hidden"><!---->Priya Raman<!----></span></span>
+                                </span>
+                              </span>
+                              <span class="update-components-actor__supplementary-actor-info t-14 t-black--light">
+                                <span aria-hidden="true"> • 1st</span><span class="visually-hidden">First degree connection</span>
+                              </span>
+                            </span>
+                            <span class="update-components-actor__description text-body-xsmall t-black--light">
+                              <span aria-hidden="true"><!---->Language teacher | EdTech<!----></span><span class="visually-hidden"><!---->Language teacher | EdTech<!----></span>
+                            </span>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="feed-shared-update-v2__description-wrapper">
+                      <div class="feed-shared-inline-show-more-text feed-shared-update-v2__description" tabindex="-1">
+                        <div class="update-components-text relative update-components-update-v2__commentary" dir="ltr">
+                          <span class="break-words tvm-parent-container"><span dir="ltr">Sharing this because my students ask me every week whether it is too late to start.</span></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="feed-shared-update-v2__content">
+                      <div class="update-components-mini-update-v2" data-urn="urn:li:activity:7299000000000000099">
+                        <div class="update-components-actor display-flex">
+                          <div class="update-components-actor__container display-flex">
+                            <div class="update-components-actor__meta relative">
+                              <a class="update-components-actor__meta-link" href="https://www.linkedin.com/company/polyglot-research/posts/">
+                                <span class="update-components-actor__title">
+                                  <span class="hoverable-link-text t-14 t-bold">
+                                    <span dir="ltr"><span aria-hidden="true">Polyglot Research Institute</span><span class="visually-hidden">Polyglot Research Institute</span></span>
+                                  </span>
+                                </span>
+                                <span class="update-components-actor__description text-body-xsmall t-black--light">
+                                  <span aria-hidden="true">23,950 followers</span><span class="visually-hidden">23,950 followers</span>
+                                </span>
+                              </a>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="feed-shared-inline-show-more-text">
+                          <div class="update-components-text relative" dir="ltr">
+                            <span class="break-words tvm-parent-container"><span dir="ltr">Is it ever too late to pick up a new language? Our ten-year study of 4,000 learners found that adults who practise twenty minutes a day reach conversational fluency faster than teenagers.</span></span>
+                          </div>
+                        </div>
+                        <a class="update-components-mini-update-v2__link-to-details-page" href="https://www.linkedin.com/feed/update/urn:li:activity:7299000000000000099/">
+                          <span class="visually-hidden">View the original post</span>
+                        </a>
+                      </div>
+                    </div>
+
+                    <div class="update-v2-social-activity">
+                      <div class="feed-shared-social-action-bar">
+                        <button type="button"><span class="artdeco-button__text">Like</span></button>
+                        <button type="button"><span class="artdeco-button__text">Repost</span></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Post 4: promoted company post (sponsored URN wrapping a ugcPost) -->
+            <div>
+              <div class="relative" data-finite-scroll-hotkey-item="3">
+                <div class="full-height">
+                  <div class="feed-shared-update-v2 feed-shared-update-v2--minimal-padding full-height relative artdeco-card" role="article" data-urn="urn:li:sponsoredContentV2:(urn:li:ugcPost:7301000000000000444,urn:li:sponsoredCreative:98765)">
+                    <h2 class="visually-hidden">Feed post number 4</h2>
+                    <div class="update-components-actor display-flex">
+                      <div class="update-components-actor__container display-flex">
+                        <a class="update-components-actor__image relative" href="https://www.linkedin.com/company/contoso-cloud/">
+                          <img alt="" width="48" height="48" src="data:image/gif;base64,R0lGODlhAQABAAAAACw=">
+                        </a>
+                        <div class="update-components-actor__meta relative">
+                          <a class="update-components-actor__meta-link" href="https://www.linkedin.com/company/contoso-cloud/">
+                            <span class="update-components-actor__title">
+                              <span class="hoverable-link-text t-14 t-bold">
+                                <span dir="ltr"><span aria-hidden="true"><!---->Contoso Cloud<!----></span><span class="visually-hidden"><!---->Contoso Cloud<!----></span></span>
+                              </span>
+                            </span>
+                            <span class="update-components-actor__description text-body-xsmall t-black--light">
+                              <span aria-hidden="true"><!---->52,108 followers<!----></span><span class="visually-hidden"><!---->52,108 followers<!----></span>
+                            </span>
+                            <span class="update-components-actor__sub-description text-body-xsmall t-black--light">
+                              <span aria-hidden="true">Promoted</span><span class="visually-hidden">Promoted</span>
+                            </span>
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="feed-shared-update-v2__description-wrapper">
+                      <div class="feed-shared-inline-show-more-text feed-shared-update-v2__description" tabindex="-1">
+                        <div class="update-components-text relative update-components-update-v2__commentary" dir="ltr">
+                          <span class="break-words tvm-parent-container"><span dir="ltr">Cut your cloud bill by a third. Contoso Cloud right-sizes idle instances automatically and shows the savings in one dashboard.</span></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="update-components-article">
+                      <a class="update-components-article__meta" href="https://contoso.example/cloud-savings">
+                        <span class="update-components-article__title">Contoso Cloud cost report</span>
+                      </a>
+                      <button class="update-components-button" type="button"><span>Learn more</span></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </main>
+
+      <aside class="scaffold-layout__aside" aria-label="LinkedIn News">
+        <div class="artdeco-card">
+          <article class="news-module__story">
+            <a href="https://www.linkedin.com/news/story/restaurant-openings-surge-in-paris-1234/">Restaurant openings surge in Paris</a>
+            <p class="news-module__subtext">Top news · 4,812 readers. Chefs cite tourism and new tasting-menu formats as the reason.</p>
+          </article>
+          <article class="news-module__story">
+            <a href="https://www.linkedin.com/news/story/cloud-spending-slows-5678/">Cloud spending slows for the first time</a>
+            <p class="news-module__subtext">1d ago · 2,210 readers. Finance teams push back on idle compute and long contracts.</p>
+          </article>
+        </div>
+      </aside>
+    </div>
+  </div>
+</body>
+</html>

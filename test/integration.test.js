@@ -7,55 +7,59 @@ import vm from 'vm';
 // Load content.js source code once
 const contentJsCode = fs.readFileSync(path.resolve(__dirname, '../content.js'), 'utf8');
 
+// Content scripts cannot read storage.local (TRUSTED_CONTEXTS); they ask the service worker.
+const contentConfig = {
+  sites: [
+    { id: 's1', domain: 'facebook.com', isEnabled: true },
+    { id: 's2', domain: 'youtube.com', isEnabled: true },
+    { id: 's3', domain: 'linkedin.com', isEnabled: true },
+    { id: 's4', domain: 'x.com', isEnabled: true },
+    { id: 's5', domain: 'medium.com', isEnabled: true },
+    { id: 's6', domain: 'instagram.com', isEnabled: true },
+    { id: 's7', domain: 'gsmarena.com', isEnabled: true },
+    { id: 's8', domain: 'github.com', isEnabled: true },
+    { id: 's9', domain: 'news.ycombinator.com', isEnabled: true }
+  ],
+  isTrackingPaused: false,
+  ignoredDomains: [],
+  debugAnnotate: false
+};
+
+/** Runs content.js and lets the GET_CONTENT_CONFIG reply and the initial scan settle. */
+async function runContentScript() {
+  vm.runInThisContext(contentJsCode);
+  await new Promise(resolve => setTimeout(resolve, 0));
+}
+
 describe('ScrollCollector content.js Integration Tests', () => {
   let sendMessageMock;
 
   beforeEach(() => {
     vi.restoreAllMocks();
+    // Retire the previous test's instance (the double-injection guard would skip the re-run)
+    const previous = globalThis.__scrollCollectorLoaded;
+    if (previous && typeof previous.teardown === 'function') previous.teardown();
+    delete globalThis.__scrollCollectorLoaded;
     document.body.innerHTML = '';
-    
-    sendMessageMock = vi.fn();
-    
-    // Mock the Chrome extension runtime and local storage APIs
+
+    sendMessageMock = vi.fn((message) => Promise.resolve(
+      message.type === 'GET_CONTENT_CONFIG' ? JSON.parse(JSON.stringify(contentConfig)) : { status: 'queued' }
+    ));
+
+    // Mock the Chrome extension runtime (no storage: config arrives by message)
     globalThis.chrome = {
       runtime: {
+        id: 'test-extension',
         sendMessage: sendMessageMock,
         onMessage: {
-          addListener: vi.fn()
-        }
-      },
-      storage: {
-        local: {
-          get: vi.fn((key, cb) => {
-            const data = {
-              configuration: {
-                sites: [
-                  { id: 's1', domain: 'facebook.com', isEnabled: true },
-                  { id: 's2', domain: 'youtube.com', isEnabled: true },
-                  { id: 's3', domain: 'linkedin.com', isEnabled: true },
-                  { id: 's4', domain: 'x.com', isEnabled: true },
-                  { id: 's5', domain: 'medium.com', isEnabled: true },
-                  { id: 's6', domain: 'instagram.com', isEnabled: true },
-                  { id: 's7', domain: 'gsmarena.com', isEnabled: true },
-                  { id: 's8', domain: 'github.com', isEnabled: true },
-                  { id: 's9', domain: 'news.ycombinator.com', isEnabled: true }
-                ],
-                isTrackingPaused: false
-              }
-            };
-            if (cb) cb(data);
-            return Promise.resolve(data);
-          }),
-          set: vi.fn()
-        },
-        onChanged: {
-          addListener: vi.fn()
+          addListener: vi.fn(),
+          removeListener: vi.fn()
         }
       }
     };
   });
 
-  test('YouTube integration parses video cards correctly', () => {
+  test('YouTube integration parses video cards correctly', async () => {
     // Mock location URL
     delete globalThis.location;
     globalThis.location = new URL('https://www.youtube.com/feed/subscriptions');
@@ -80,7 +84,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
     `;
 
     // Execute the content script under simulated sandbox environment
-    vm.runInThisContext(contentJsCode);
+    await runContentScript();
 
     expect(sendMessageMock).toHaveBeenCalled();
     const calls = sendMessageMock.mock.calls;
@@ -91,7 +95,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
     expect(postCall[0].payload.sourcePlatform).toContain('youtube.com');
   });
 
-  test('Facebook integration parses standard homepage posts', () => {
+  test('Facebook integration parses standard homepage posts', async () => {
     delete globalThis.location;
     globalThis.location = new URL('https://www.facebook.com/');
 
@@ -106,7 +110,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
       </div>
     `;
 
-    vm.runInThisContext(contentJsCode);
+    await runContentScript();
 
     expect(sendMessageMock).toHaveBeenCalled();
     const calls = sendMessageMock.mock.calls;
@@ -116,7 +120,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
     expect(postCall[0].payload.sourcePlatform).toContain('facebook.com');
   });
 
-  test('LinkedIn integration parses posts', () => {
+  test('LinkedIn integration parses posts', async () => {
     delete globalThis.location;
     globalThis.location = new URL('https://www.linkedin.com/feed/');
 
@@ -128,7 +132,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
       </div>
     `;
 
-    vm.runInThisContext(contentJsCode);
+    await runContentScript();
 
     expect(sendMessageMock).toHaveBeenCalled();
     const calls = sendMessageMock.mock.calls;
@@ -139,7 +143,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
     expect(postCall[0].payload.sourcePlatform).toContain('linkedin.com');
   });
 
-  test('Twitter/X integration parses tweets', () => {
+  test('Twitter/X integration parses tweets', async () => {
     delete globalThis.location;
     globalThis.location = new URL('https://x.com/home');
 
@@ -150,7 +154,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
       </article>
     `;
 
-    vm.runInThisContext(contentJsCode);
+    await runContentScript();
 
     expect(sendMessageMock).toHaveBeenCalled();
     const calls = sendMessageMock.mock.calls;
@@ -161,7 +165,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
     expect(postCall[0].payload.sourcePlatform).toContain('x.com');
   });
 
-  test('Medium integration parses article cards correctly', () => {
+  test('Medium integration parses article cards correctly', async () => {
     delete globalThis.location;
     globalThis.location = new URL('https://medium.com/');
 
@@ -177,7 +181,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
       </article>
     `;
 
-    vm.runInThisContext(contentJsCode);
+    await runContentScript();
 
     expect(sendMessageMock).toHaveBeenCalled();
     const calls = sendMessageMock.mock.calls;
@@ -185,11 +189,13 @@ describe('ScrollCollector content.js Integration Tests', () => {
     expect(postCall).toBeDefined();
     expect(postCall[0].payload.text).toContain('The Obvious Ways To Spot Someone Secretly Writing With AI');
     expect(postCall[0].payload.text).toContain('The biggest giveaways');
-    expect(postCall[0].payload.text).toContain('Matt Lillywhite');
+    // The author is metadata (authorName), not post text: cloud providers only get it when allowed.
+    expect(postCall[0].payload.text).not.toContain('Matt Lillywhite');
+    expect(postCall[0].payload.authorName).toBe('Matt Lillywhite');
     expect(postCall[0].payload.sourcePlatform).toContain('medium.com');
   });
 
-  test('Instagram integration parses posts correctly', () => {
+  test('Instagram integration parses posts correctly', async () => {
     delete globalThis.location;
     globalThis.location = new URL('https://www.instagram.com/');
 
@@ -211,7 +217,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
       </article>
     `;
 
-    vm.runInThisContext(contentJsCode);
+    await runContentScript();
 
     expect(sendMessageMock).toHaveBeenCalled();
     const calls = sendMessageMock.mock.calls;
@@ -224,7 +230,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
     expect(postCall[0].payload.sourcePlatform).toContain('instagram.com');
   });
 
-  test('Custom site (GSMArena) heuristic parses feed cards correctly', () => {
+  test('Custom site (GSMArena) heuristic parses feed cards correctly', async () => {
     delete globalThis.location;
     globalThis.location = new URL('https://www.gsmarena.com/');
 
@@ -238,7 +244,7 @@ describe('ScrollCollector content.js Integration Tests', () => {
       </div>
     `;
 
-    vm.runInThisContext(contentJsCode);
+    await runContentScript();
 
     expect(sendMessageMock).toHaveBeenCalled();
     const calls = sendMessageMock.mock.calls;
