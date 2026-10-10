@@ -9,6 +9,7 @@ import {
   waitForSystem1, pageErrors, collectConsole, RESTAURANT_PROMPT
 } from './helpers/ext.mjs';
 import { linkedinFeedHtml, goldenText } from './helpers/feeds.mjs';
+import { SCHEMA_VERSION } from '../lib/storage/schema.js';
 
 const URN = (n) => `urn:li:activity:700000000000000000${n}`;
 const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
@@ -23,7 +24,8 @@ function v1Profile() {
     configuration: {
       trackedTags: [
         ...labels.map((label, i) => ({ id: `t${i + 1}`, label, isEnabled: true, prompt: `Identify posts related to ${label}.` })),
-        { id: 't_ads', label: 'Ads', isEnabled: true }
+        { id: 't_ads', label: 'Ads', isEnabled: true },
+        { id: 'u_ramen', label: 'Ramen', isEnabled: true, prompt: 'Find posts about ramen.' } // a tag the user wrote
       ],
       sites: [
         { id: 's1', domain: 'linkedin.com', isEnabled: true, isCustom: false },
@@ -85,7 +87,7 @@ test('a v1 profile migrates intact on restart, renders, and heals when its posts
     // Restart: the service worker migrates on startup.
     ext = await relaunch(ext);
     const sw = ext.serviceWorker;
-    await swPoll(sw, async () => (await chrome.storage.local.get('schemaVersion')).schemaVersion === 2, null, 60000);
+    await swPoll(sw, async (v) => (await chrome.storage.local.get('schemaVersion')).schemaVersion === v, SCHEMA_VERSION, 60000);
     let stack = await readStack(sw);
     console.log('[migration] migrated', JSON.stringify(stack.map((i) => ({ id: i.id, key: i.postKey, legacy: i.legacy, merged: i.suspectMerged, fav: i.isFavorite, len: i.textSnippet.length }))));
 
@@ -106,6 +108,10 @@ test('a v1 profile migrates intact on restart, renders, and heals when its posts
     expect(cfg.matchPromptTags).toEqual(['Restaurants', 'Michelin']);
     expect(cfg.promptVersion).toBe(0);
     expect(cfg.trackedTags.find((t) => t.label === 'Ads')).toMatchObject({ isPseudo: true });
+    // v2 -> v3: the tag the user wrote becomes a prompt that collects (the master gate was on, so nobody's feed changes);
+    // built-in tags are never prompts (DEC-6)
+    expect(cfg.trackedTags.find((t) => t.label === 'Ramen')).toMatchObject({ isLens: true, collects: true });
+    expect(cfg.trackedTags.filter((t) => t.isLens !== undefined || t.collects !== undefined).map((t) => t.label)).toEqual(['Ramen']);
     expect(cfg.ignoredKeywords).toEqual(['crypto']);
     expect(cfg.intelligence).toBeUndefined();
     expect(cfg.sites.some((s) => s.domain === 'twitter.com')).toBe(false);

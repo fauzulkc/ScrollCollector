@@ -6,6 +6,7 @@ import path from 'node:path';
 import { test, expect } from '@playwright/test';
 import { launchWithExtension, collectConsole, ROOT } from './helpers/launch.mjs';
 import { waitDecided, pageVisibleDecisions } from './helpers/ext.mjs';
+import { SCHEMA_VERSION } from '../lib/storage/schema.js';
 
 const FIXTURE = fs.readFileSync(path.join(ROOT, 'test/fixtures/linkedin-feed.html'), 'utf8');
 const POST_KEYS = [
@@ -26,14 +27,14 @@ async function swPoll(sw, fn, arg, timeout = 30000) {
   }
 }
 
-test('service worker migrates storage to schema v2 and the side panel gets whitelisted state', async () => {
+test('service worker migrates storage to the current schema and the side panel gets whitelisted state', async () => {
   const ext = await launchWithExtension();
   try {
     const sw = ext.serviceWorker;
-    const stored = await swPoll(sw, async () => {
+    const stored = await swPoll(sw, async (v) => {
       const s = await chrome.storage.local.get(['schemaVersion', 'configuration']);
-      return s.schemaVersion === 2 ? s : null;
-    });
+      return s.schemaVersion === v ? s : null;
+    }, SCHEMA_VERSION);
     // Only the user's explicit intelligence settings are stored (none on a fresh profile); the
     // defaults (cloud providers off, Nano as the escalator) are merged in when read.
     expect(stored.configuration.intelligence).toBeUndefined();
@@ -79,7 +80,7 @@ test('a LinkedIn feed is collected end to end with URN keys and in-page annotati
       return route.fulfill({ status: 404, body: '' });
     });
     // Startup (and the migration) must be done before the page asks for its configuration.
-    await swPoll(ext.serviceWorker, async () => (await chrome.storage.local.get('schemaVersion')).schemaVersion === 2);
+    await swPoll(ext.serviceWorker, async (v) => (await chrome.storage.local.get('schemaVersion')).schemaVersion === v, SCHEMA_VERSION);
 
     const page = await ext.context.newPage();
     await page.goto('https://www.linkedin.com/feed/');
