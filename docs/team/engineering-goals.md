@@ -269,3 +269,8 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   beside it and does not decide. (2) is judged with the calibration switching by expansion presence (D when the
   expansion exists, the deployed B when it is missing, equal to the baseline by construction); "D calibration
   everywhere" is reported beside it and does not decide.
+- 2026-10-11 (commit `0833c13`, 04:08:05 +0600) · **Correction to this Record's times:** the clock times written on the
+  Record lines from "01:30" onward were typed by hand and ran ahead of the real clock (the "05:20" freeze line was
+  committed at 04:08:05). **The commit timestamps are authoritative** (`git log --format='%h %cI %s' --
+  docs/team/engineering-goals.md`). In particular, the candidate (2) freeze is `0833c13` at 04:08:05 +0600, and the
+  held-out set is opened only after it. Lines left as written; this line corrects them.
