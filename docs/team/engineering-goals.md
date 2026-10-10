@@ -221,3 +221,21 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   (borderline excluded, as the eval does), compare (a) tag classifier assigns that tag vs (b) lens score ≥ 0.5, by
   precision, recall and disagreement rate, both models, leave-one-prompt-out as the eval's match numbers are. No
   calibration refit; no prompt wording tuned on the result.
+- 2026-10-11 04:30 +0600 · **Result of the pre-registered label-vs-lens measurement** (research tier; log
+  `scratchpad/team/runs/engineering/2026-10-11-eng3-label-vs-lens.md`; pooled totals re-derived by me from its saved
+  results with its `analyze.py`: n = 701 post × prompt pairs, 52 yes, minilm disagreements 31, label right 17, lens 14).
+  Proxy: golden yes/no, synthetic + 7 held-out posts, borderline excluded, System 1 only.
+  | Model | Label path (tag classifier) P/R/F1 | Lens path (≥ 0.5) P/R/F1 |
+  |---|---|---|
+  | minilm | 0.71 / 0.90 / **0.80** | 0.76 / 0.71 / **0.73** (deployed = LOPO) |
+  | bge-small | 0.76 / 0.92 / **0.83** | 0.77 / 0.69 / **0.73** deployed; 0.66 / 0.67 / 0.67 LOPO |
+  **Ruling: labels stay with the tag classifier** (no change to what users see). The trial's Food posts are restaurant
+  = yes: the label was right and the lens wrong. **The real defect is lens recall under prompt wording:** the same two
+  posts score 0.09 / 0.08 with "restaurant and fine dining posts" and 0.9995 / 0.9886 with the eval's restaurant prompt,
+  and the lens path recalls 0.69-0.71 against the label's 0.90-0.92, so a briefly worded *collecting* prompt hides
+  relevant posts. Caveat: the tag calibration was fitted on these synthetic posts (built-in tags only), so the label
+  path may be flattered; 7-8 yes posts per prompt except restaurant (23); no intervals.
+  **Candidates (each to be pre-registered before any run; each changes what users see, so 🧭 CEO's under DEC-6):**
+  (1) a collecting prompt also collects posts the tag classifier files under it (gate = lens OR label); (2) expand each
+  user prompt like the master prompt's `matchPromptExpansion` (eval recipe D, best when an expansion exists) via the
+  built-in model only (DEC-4); (3) prompt-writing guidance in the panel (words: CEO, form: Design).
