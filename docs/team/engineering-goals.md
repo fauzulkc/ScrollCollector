@@ -376,3 +376,13 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
     host-access justification gains "fetches the post's preview image from the site's own image server", the
     `unlimitedStorage` line gains thumbnails, and the data-use "Website content" row gains "a small preview image".
     That widens what the listing says ⇒ 🧭 CEO before it lands; edited in `docs/STORE-LISTING.md` in the same commit.
+- 2026-10-11 (after `54c1d6b`) · **ENG-2 M1 amended by 🧭 CEO ruling** (the owner had approved a download; the CEO ruled
+  none, and the owner was told). ~~"a corpus of photo-like post images (source to be approved by the owner before
+  download)"~~ → **M1 runs with M2 on the trial build in the owner's Chrome, from feed images the browser loads
+  anyway.** For every captured image the trial records, on the device, the WebP bytes at **480 px and 320 px** for each
+  ladder quality (0.8 … 0.4), plus the site host and source dimensions (no image bytes, no URL path). The edge and
+  quality are then chosen by the **unchanged** byte-cap rule. Until then the trial stores 480 px, walking the ladder
+  down, then 320 px, under the **hard 32 KB ceiling**; over it at 320 / 0.4 ⇒ no thumbnail. Unit tests use synthetic
+  images generated locally (no network). Listing widening approved by the CEO as worded (+ the same sentence in
+  PRIVACY.md), landing only in the release that ships previews, on that release's branch: `docs/STORE-LISTING.md` and
+  `docs/PRIVACY.md` on main stay as 0.11.0 ships.
