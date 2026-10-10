@@ -9,7 +9,7 @@ date, never written over.
 |---|---|---|
 | **ENG-1** · lenses data model | DEC-6 | built `5090b29` on `feat/prompt-lenses`; not green: e2e `tags.spec.mjs:25` and the schema-version pins wait on 🧪 Testing |
 | **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | draft plan; queued after ENG-1 (DEC-8) |
-| **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | opened 2026-10-11; first probe after ENG-1 returns |
+| **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | probe done 2026-10-11: gates hold red; no honest change found yet (see Record) |
 
 ---
 
@@ -178,3 +178,16 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   `decision.tag`, `assignedTag` keep their meaning … No current reader changes in this slice."~~ → lens tags leave tag
   classification, so a post is never filed under a prompt and shown with no footer tag. Rule 10 added (`userLenses`
   shape). The build worker was steered with the change mid-run.
+- 2026-10-11 02:40 +0600 · ENG-3 probe (research tier, read-only; log `scratchpad/team/runs/engineering/2026-10-11-eng3-probe.md`,
+  per-post dumps of ids and labels only in `…/engineering/eng3/`). Its own eval re-run at `14cfa23` reproduces Testing's
+  opening exactly (minilm top-1 52/77, top-3 69/77; calibrations identical). Short by 2 / 1 posts (minilm) and 5 / 3
+  (bge-small). **Cause:** 22 of 77 gate posts have a genre primary (News, Ad, Opinion…): top-1 0.455 on both models
+  there, against 0.764 / 0.709 on the 55 subject-primary posts. The embedding ranks what a post is about, not what kind
+  of post it is. **Tried under the same 5 folds, none moves top-3:** config chosen on topic posts, cue-style descriptions
+  for the 5 worst genre tags, fold-trained prototypes, no lexical boost. Fitting `none` on prefilter-passing posts: +2
+  top-1 each, top-3 flat, minilm ECE 0.087 FAIL; refused alone (premise holds only with the gate on, `cascade.js:679`).
+  **Next, untested:** a genre cue signal outside the embedding, cues committed before any run, weight chosen inside each
+  training fold, also tested on a fresh tag-coverage set by another author; refused if cues come from golden post text.
+  **For Testing (findings, not softening):** strict top-1 marks a listed second tag wrong with no written primary rule;
+  one post = 1.3 points and the 95 % interval is ±0.105 (checked: `sqrt(.675·.325/77)·1.96`), so the gate cannot tell a
+  2-3 point gain from fold noise. DEC-9 stands: the gates stay red and nothing outward claims tag accuracy.
