@@ -8,6 +8,7 @@ import { describe, test, expect } from 'vitest';
 import {
   userLenses,
   scoredLenses,
+  collectingLenses,
   lensThreshold,
   isLensMatch,
   matchedLenses,
@@ -24,23 +25,23 @@ import { defaultTrackedTags, DEFAULT_TAG_LABELS } from '../../lib/bg/defaults.js
 const tag = (id, label, extra = {}) => ({ id, label, prompt: `Find posts about ${label}.`, isEnabled: true, isLens: true, ...extra });
 
 describe('userLenses', () => {
-  test('one ordered array: main first, then enabled isLens tags in configured order, each { id, label, text }', () => {
+  test('one ordered array: main first, then enabled isLens tags in configured order, each { id, label, text, collects }', () => {
     const cfg = {
       matchPrompt: '  michelin star restaurants ',
       isMatchPromptEnabled: true,
       trackedTags: [...defaultTrackedTags(), tag('t_b', 'Bravo'), tag('t_a', 'Alpha')]
     };
     expect(userLenses(cfg)).toEqual([
-      { id: 'main', label: null, text: 'michelin star restaurants' },
-      { id: 't_b', label: 'Bravo', text: 'Find posts about Bravo.' },
-      { id: 't_a', label: 'Alpha', text: 'Find posts about Alpha.' }
+      { id: 'main', label: null, text: 'michelin star restaurants', collects: true },
+      { id: 't_b', label: 'Bravo', text: 'Find posts about Bravo.', collects: true },
+      { id: 't_a', label: 'Alpha', text: 'Find posts about Alpha.', collects: true }
     ]);
   });
 
   test('no colour field, no extra fields', () => {
     const [main, t] = userLenses({ matchPrompt: 'p', trackedTags: [tag('t1x', 'X')] });
-    expect(Object.keys(main).sort()).toEqual(['id', 'label', 'text']);
-    expect(Object.keys(t).sort()).toEqual(['id', 'label', 'text']);
+    expect(Object.keys(main).sort()).toEqual(['collects', 'id', 'label', 'text']);
+    expect(Object.keys(t).sort()).toEqual(['collects', 'id', 'label', 'text']);
   });
 
   test('main is listed whenever the match prompt is non-empty (the switch does not remove it)', () => {
@@ -49,7 +50,7 @@ describe('userLenses', () => {
   });
 
   test('a tag with a blank prompt uses the stored default text', () => {
-    expect(userLenses({ trackedTags: [tag('t_z', 'Zen', { prompt: '  ' })] })).toEqual([{ id: 't_z', label: 'Zen', text: 'Find posts related to Zen.' }]);
+    expect(userLenses({ trackedTags: [tag('t_z', 'Zen', { prompt: '  ' })] })).toEqual([{ id: 't_z', label: 'Zen', text: 'Find posts related to Zen.', collects: true }]);
     expect(userLenses({ trackedTags: [tag('t_z', 'Zen', { prompt: undefined })] })[0].text).toBe('Find posts related to Zen.');
   });
 
@@ -74,6 +75,14 @@ describe('userLenses', () => {
     expect(userLenses({ trackedTags: defaultTrackedTags() })).toEqual([]);
     expect(defaultTrackedTags()).toHaveLength(25);
     expect(DEFAULT_TAG_LABELS).toHaveLength(25);
+  });
+
+  test('collects: a tag collects unless collects === false (absent = true); main collects while its switch is on', () => {
+    const cfg = { matchPrompt: 'p', isMatchPromptEnabled: true, trackedTags: [tag('t_a', 'A'), tag('t_b', 'B', { collects: false }), tag('t_c', 'C', { collects: true })] };
+    expect(userLenses(cfg).map((l) => [l.id, l.collects])).toEqual([['main', true], ['t_a', true], ['t_b', false], ['t_c', true]]);
+    expect(collectingLenses(cfg).map((l) => l.id)).toEqual(['main', 't_a', 't_c']);
+    expect(userLenses({ ...cfg, isMatchPromptEnabled: false }).find((l) => l.id === 'main').collects).toBe(false);
+    expect(collectingLenses({ ...cfg, isMatchPromptEnabled: false }).map((l) => l.id)).toEqual(['t_a', 't_c']);
   });
 
   test('scoredLenses drops main while the match-prompt switch is off', () => {
@@ -169,7 +178,10 @@ describe('isLensGateOn', () => {
     ['switch on + prompt', { isMatchPromptEnabled: true, matchPrompt: 'p' }, true],
     ['switch on + lens tag, no prompt', { isMatchPromptEnabled: true, matchPrompt: '', trackedTags: [tag('t_a', 'A')] }, true],
     ['switch on, nothing to match', { isMatchPromptEnabled: true, matchPrompt: '', trackedTags: defaultTrackedTags() }, false],
-    ['switch off + prompt + lens', { isMatchPromptEnabled: false, matchPrompt: 'p', trackedTags: [tag('t_a', 'A')] }, false],
+    ['switch off + prompt + collecting lens tag', { isMatchPromptEnabled: false, matchPrompt: 'p', trackedTags: [tag('t_a', 'A')] }, true],
+    ['switch off + prompt + sort-only lens tag', { isMatchPromptEnabled: false, matchPrompt: 'p', trackedTags: [tag('t_a', 'A', { collects: false })] }, false],
+    ['switch on, prompt, only a sort-only tag: main still collects', { isMatchPromptEnabled: true, matchPrompt: 'p', trackedTags: [tag('t_a', 'A', { collects: false })] }, true],
+    ['switch on, no prompt, only a sort-only tag', { isMatchPromptEnabled: true, matchPrompt: '', trackedTags: [tag('t_a', 'A', { collects: false })] }, false],
     ['null', null, false]
   ])('%s -> %s', (_n, cfg, want) => {
     expect(isLensGateOn(cfg)).toBe(want);

@@ -2,9 +2,10 @@
  * Drafted by Engineering for 🧪 Testing review (ENG-1, prompt lenses; docs/team/engineering-goals.md).
  *
  * The cascade side of lenses: decision.lenses holds the score of every enabled lens on every decided
- * post; the gate collects a post when ANY lens matches; the built-in tags never gate; lens tags left
- * tag classification; lens questions escalate in the post's one call (gate on only, at most 10); the
- * backfill context never escalates; providers accept several noul questions.
+ * post; the gate collects a post when ANY COLLECTING lens matches (a lens tag with `collects: false` is
+ * scored and labels but never collects); the built-in tags never gate; a lens tag is still a tag (it
+ * labels exactly as before ENG-1); collecting lens questions escalate in the post's one call (gate on
+ * only, at most 10); the backfill context never escalates; providers accept several noul questions.
  *
  * Every test here imports only modules that exist on the parent commit (562d77a), so each guard is
  * seen failing on the parent by behaviour, not by a missing import.
@@ -33,7 +34,9 @@ const BUILT_INS = [
   { id: 't2', label: 'Jobs', isEnabled: true, prompt: 'Identify posts related to hiring, careers, or job postings.' },
   { id: 't_ads', label: 'Ads', isEnabled: true, isPseudo: true }
 ];
-const lensTag = (id, label, prompt) => ({ id, label, prompt, isEnabled: true, isLens: true });
+const lensTag = (id, label, prompt, extra = {}) => ({ id, label, prompt, isEnabled: true, isLens: true, ...extra });
+/** The same lens with its collect switch off: scored, sorts, never collects. */
+const sortOnly = (tag) => ({ ...tag, collects: false });
 const RAMEN = lensTag('t_ramen', 'Ramen', 'Find posts about ramen shops and noodle broth.');
 const CLIMBING = lensTag('t_climb', 'Climbing', 'Find posts about rock climbing and bouldering.');
 const CHESS = lensTag('t_chess', 'Chess', 'Find posts about chess openings and tournaments.');
@@ -161,9 +164,9 @@ describe('decision.lenses: every enabled lens on every decided post', () => {
     expect(d.lenses).toEqual({ main: 0.1235, t_ramen: 0.6543 });
   });
 
-  test('gate off: the user-tag lenses are still scored, main is not a lens, nothing escalates', async () => {
+  test('switch off, lens tag with collects:false: scored, main is not a lens, nothing escalates, everything collected', async () => {
     const { cascade, nano } = setup();
-    const d = await decide(cascade, config({ enabled: false, lenses: [RAMEN], intelligence: ESCALATE }), 'A post. [lens:t_ramen=0.55]');
+    const d = await decide(cascade, config({ enabled: false, lenses: [sortOnly(RAMEN)], intelligence: ESCALATE }), 'A post. [lens:t_ramen=0.55]');
     expect(d.lenses).toEqual({ t_ramen: 0.55 });
     expect(d.pMatch).toBeNull();
     expect(d.collect).toBe(true);
@@ -234,10 +237,18 @@ describe('the any-lens gate', () => {
     expect(d.lenses).toEqual({});
   });
 
-  test('gate off: everything is collected whatever the lens scores', async () => {
+  test('switch off and no collecting lens: everything is collected whatever the lens scores', async () => {
     const { cascade } = setup();
-    const d = await decide(cascade, config({ enabled: false, lenses: [RAMEN] }), 'A post. [lens:t_ramen=0.01]');
+    const d = await decide(cascade, config({ enabled: false, lenses: [sortOnly(RAMEN)] }), 'A post. [lens:t_ramen=0.01]');
     expect(d.collect).toBe(true);
+  });
+
+  test('switch off but a lens tag collects: the gate is on and only that lens collects', async () => {
+    const { cascade } = setup();
+    const cfg = config({ enabled: false, lenses: [RAMEN] });
+    expect(isGateOn(cfg)).toBe(true);
+    expect((await decide(cascade, cfg, 'A post. [lens:t_ramen=0.95]')).collect).toBe(true);
+    expect((await decide(cascade, cfg, 'Another post. [main=0.95] [lens:t_ramen=0.05]')).collect).toBe(false);
   });
 
   test.each(['strict', 'balanced', 'lenient'])('the threshold is the strictness threshold (%s), and it is the one function', async (strictness) => {
@@ -267,33 +278,30 @@ describe('the any-lens gate', () => {
   });
 });
 
-describe('lens tags left tag classification (ENG-1 rule 7)', () => {
-  test('a post that matched a user tag as its category now gets a built-in tag, and the lens carries the score', async () => {
+describe('a lens tag is still a tag (DEC-6, owner 02:27: label and lens)', () => {
+  test('a post that matches a user tag as its category keeps the user tag, and the lens carries the score', async () => {
     const { cascade, system1 } = setup();
     const cfg = config({ lenses: [RAMEN] });
     const d = await decide(cascade, cfg, 'Best bowl of the year. [tag=Ramen] [main=0.05] [lens:t_ramen=0.93]');
-    expect(d.tag).not.toBe('Ramen');
-    expect(['Food', 'Jobs', 'Unclassified']).toContain(d.tag);
-    expect(d.tags.map((t) => t.name)).not.toContain('Ramen');
+    expect(d.tag).toBe('Ramen');
+    expect(d.tags.map((t) => t.name)).toContain('Ramen');
     expect(d.lenses.t_ramen).toBe(0.93);
-    const tagQuestion = system1.calls[0].questions.primary_tag;
-    expect(Object.keys(tagQuestion.criteria)).toEqual(expect.arrayContaining(['Food', 'Jobs', 'none']));
-    expect(Object.keys(tagQuestion.criteria)).not.toContain('Ramen');
+    expect(Object.keys(system1.calls[0].questions.primary_tag.criteria)).toEqual(expect.arrayContaining(['Food', 'Jobs', 'Ramen', 'none']));
   });
 
-  test('with only lens tags the tag question is not asked at all (the post stays Unclassified)', async () => {
-    const { cascade, system1 } = setup();
-    const cfg = config({ builtIns: [BUILT_INS[2]], lenses: [RAMEN] });
-    const d = await decide(cascade, cfg, 'Best bowl of the year. [tag=Ramen] [lens:t_ramen=0.93] [main=0.05]');
-    expect(system1.calls[0].questions.primary_tag).toBeUndefined();
-    expect(d.tag).toBe('Unclassified');
+  test.each([['collects', {}], ['sort-only', { collects: false }]])('the label does not depend on collects (%s)', async (_n, extra) => {
+    const { cascade } = setup();
+    const cfg = config({ lenses: [{ ...RAMEN, ...extra }] });
+    const d = await decide(cascade, cfg, 'Best bowl of the year. [tag=Ramen] [main=0.95] [lens:t_ramen=0.93]');
+    expect(d.tag).toBe('Ramen');
+    expect(d.tags.map((t) => t.name)).toContain('Ramen');
   });
 
-  test('classifiableTags and the dynamic-tag matcher leave lens tags out', () => {
-    expect(classifiableTags([...BUILT_INS, RAMEN]).map((t) => t.label)).toEqual(['Food', 'Jobs']);
+  test('classifiableTags and the dynamic-tag matcher treat a lens tag like any tag', () => {
+    expect(classifiableTags([...BUILT_INS, RAMEN]).map((t) => t.label)).toEqual(['Food', 'Jobs', 'Ramen']);
     const out = resolveDynamicTag([...BUILT_INS, RAMEN], { tag: 'Unclassified', meta: { dynamicTag: 'ramen' } },
       { intelligence: { dynamicTags: true } }, false, () => 'dt_1');
-    expect(out).toEqual({ tag: 'Unclassified', newTag: null });
+    expect(out).toEqual({ tag: 'Ramen', newTag: null });
   });
 
   test('built-in tags classify exactly as before', async () => {
@@ -302,7 +310,61 @@ describe('lens tags left tag classification (ENG-1 rule 7)', () => {
     const without = await decide(cascade, config(), 'Dinner. [tag=Jobs] [main=0.9]');
     expect(withLens.tag).toBe('Jobs');
     expect(withLens.tag).toBe(without.tag);
-    expect(withLens.tags).toEqual(without.tags);
+  });
+});
+
+describe('collects: the per-prompt collect switch (DEC-6, owner 02:27)', () => {
+  test('absent collects means true', async () => {
+    const { cascade } = setup();
+    const { collects: _c, ...bare } = RAMEN;
+    expect((await decide(cascade, config({ lenses: [bare] }), 'A post. [main=0.05] [lens:t_ramen=0.95]')).collect).toBe(true);
+  });
+
+  test('a lens with collects:false is scored but a match on it alone does not collect (gate on through main)', async () => {
+    const { cascade } = setup();
+    const cfg = config({ lenses: [sortOnly(RAMEN)] });
+    const d = await decide(cascade, cfg, 'A post. [main=0.05] [lens:t_ramen=0.95]');
+    expect(d.lenses).toEqual({ main: 0.05, t_ramen: 0.95 });
+    expect(d.collect).toBe(false);
+  });
+
+  test('main and a collecting lens still collect while another lens is sort-only', async () => {
+    const { cascade } = setup();
+    const cfg = config({ lenses: [sortOnly(RAMEN), CHESS] });
+    expect((await decide(cascade, cfg, 'A post. [main=0.05] [lens:t_ramen=0.05] [lens:t_chess=0.95]')).collect).toBe(true);
+    expect((await decide(cascade, cfg, 'A post. [main=0.95] [lens:t_ramen=0.05] [lens:t_chess=0.05]')).collect).toBe(true);
+    expect((await decide(cascade, cfg, 'A post. [main=0.05] [lens:t_ramen=0.95] [lens:t_chess=0.05]')).collect).toBe(false);
+  });
+
+  test('no collecting lens (empty match prompt, only a sort-only tag): nothing is filtered', async () => {
+    const { cascade } = setup();
+    const cfg = config({ main: '', lenses: [sortOnly(RAMEN)] });
+    expect(isGateOn(cfg)).toBe(false);
+    const d = await decide(cascade, cfg, 'A post. [lens:t_ramen=0.01]');
+    expect(d.collect).toBe(true);
+    expect(d.lenses).toEqual({ t_ramen: 0.01 });
+  });
+
+  test('a sort-only lens question is never escalated', async () => {
+    const { cascade, nano } = setup();
+    await decide(cascade, config({ lenses: [sortOnly(RAMEN), CHESS], intelligence: ESCALATE }), 'A post. [main=0.97] [lens:t_ramen=0.55] [lens:t_chess=0.55]');
+    const asked = Object.keys(nano.decide.mock.calls[0][0].questions);
+    expect(asked).toContain('lens:t_chess');
+    expect(asked).not.toContain('lens:t_ramen');
+  });
+
+  test('flipping collects changes the fingerprint (and so re-decides); the spec hash keeps its cache keys', () => {
+    const on = config({ lenses: [RAMEN] });
+    const off = config({ lenses: [sortOnly(RAMEN)] });
+    expect(decisionFingerprint(on)).not.toBe(decisionFingerprint(off));
+    const spec = (c) => buildDecisionSpec(buildDecideContext(c), resolvePolicy(c), { calibrationId: 'c' });
+    expect(spec(on).specHash).toBe(spec(off).specHash);
+  });
+
+  test('hiding follows the gate: a post only a sort-only lens matched is hidden once a collecting lens exists', () => {
+    const item = { id: 'x', decision: { collect: false, promptVersion: 1, path: ['system1'] } };
+    expect(shouldHideByPrompt(item, config({ lenses: [sortOnly(RAMEN)] }))).toBe(true);
+    expect(shouldHideByPrompt(item, config({ main: '', lenses: [sortOnly(RAMEN)] }))).toBe(false);
   });
 });
 
@@ -364,9 +426,9 @@ describe('escalation: the post\'s one call to the one primary provider', () => {
     expect(d.lenses.t_ramen).toBe(0.02);
   });
 
-  test('gate off: lens questions never escalate', async () => {
+  test('gate off (no collecting lens): lens questions never escalate', async () => {
     const { cascade, nano } = setup();
-    await decide(cascade, config({ enabled: false, lenses: [RAMEN], intelligence: ESCALATE }), 'A post. [lens:t_ramen=0.55]');
+    await decide(cascade, config({ enabled: false, lenses: [sortOnly(RAMEN)], intelligence: ESCALATE }), 'A post. [lens:t_ramen=0.55]');
     expect(nano.decide).not.toHaveBeenCalled();
   });
 
@@ -429,6 +491,7 @@ describe('decisionFingerprint: adding, removing, enabling, renaming a lens or ed
   test.each([
     ['add a lens', (c) => ({ ...c, trackedTags: [...c.trackedTags, CHESS] })],
     ['remove a lens', (c) => ({ ...c, trackedTags: c.trackedTags.filter((t) => t.id !== 't_ramen') })],
+    ['flip a lens\'s collect switch', (c) => ({ ...c, trackedTags: c.trackedTags.map((t) => (t.id === 't_ramen' ? { ...t, collects: false } : t)) })],
     ['disable a lens', (c) => ({ ...c, trackedTags: c.trackedTags.map((t) => (t.id === 't_ramen' ? { ...t, isEnabled: false } : t)) })],
     ['rename a lens', (c) => ({ ...c, trackedTags: c.trackedTags.map((t) => (t.id === 't_ramen' ? { ...t, label: 'Noodles' } : t)) })],
     ['edit a lens prompt', (c) => ({ ...c, trackedTags: c.trackedTags.map((t) => (t.id === 't_ramen' ? { ...t, prompt: 'Find posts about udon.' } : t)) })]

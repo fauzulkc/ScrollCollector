@@ -17,10 +17,12 @@ import { migrateState } from '../../lib/storage/migrations.js';
 import { createRedecider, isRedecideTarget } from '../../lib/pipeline/redecide.js';
 import { createRefiner, refineSpec } from '../../lib/pipeline/refine.js';
 import { createCascade, buildDecideContext } from '../../lib/decision/cascade.js';
+import { decisionFingerprint } from '../../lib/pipeline/apply-decision.js';
 import { createRulesProvider } from '../../lib/decision/providers/rules.js';
 import { noulAnswer, Q } from '../../lib/decision/types.js';
 import { choiceConfidence } from '../../lib/decision/confidence.js';
 import { MSG } from '../../lib/messages.js';
+import { isGateOn } from '../../lib/pipeline/apply-decision.js';
 
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 const lensTag = (id, label, prompt) => ({ id, label, prompt, isEnabled: true, isLens: true });
@@ -98,7 +100,7 @@ function stored(id, text, over = {}) {
   };
 }
 
-describe('TAG_ADDED', () => {
+describe('TAG_ADDED / TAG_COLLECTS_TOGGLED / CONFIG_CHANGED', () => {
   function handlerSetup() {
     const fake = createFakeChrome({ local: { configuration: defaultConfiguration(), stack: [], metrics: { counts: {} }, telemetry: emptyTelemetry(0) } });
     const store = createStore({ area: fake.storage.local });
@@ -118,11 +120,48 @@ describe('TAG_ADDED', () => {
     const { handlers, cfg, calls } = handlerSetup();
     expect(await handlers[MSG.TAG_ADDED]({ tag: 'Ramen', prompt: '' })).toEqual({ success: true });
     const added = cfg().trackedTags.find((t) => t.label === 'Ramen');
-    expect(added).toMatchObject({ isLens: true, isEnabled: true });
+    expect(added).toMatchObject({ isLens: true, collects: true, isEnabled: true });
     expect(added.id).toMatch(/^t_/);
     expect(cfg().trackedTags.filter((t) => t.isLens === true)).toHaveLength(1);
     expect(cfg().trackedTags.filter((t) => /^t\d+$/.test(t.id))).toHaveLength(25);
     expect(calls.map((c) => c.scope)).toEqual(['all']);
+  });
+
+  test('TAG_COLLECTS_TOGGLED sets collects on a lens tag and re-decides; built-in tags and no-ops do nothing', async () => {
+    const { handlers, cfg, calls } = handlerSetup();
+    await handlers[MSG.TAG_ADDED]({ tag: 'Ramen', prompt: '' });
+    calls.length = 0;
+    expect(await handlers[MSG.TAG_COLLECTS_TOGGLED]({ tag: 'Ramen', collects: false })).toEqual({ success: true });
+    expect(cfg().trackedTags.find((t) => t.label === 'Ramen').collects).toBe(false);
+    expect(calls.map((c) => c.scope)).toEqual(['all']);
+    // already off: nothing written, nothing scheduled
+    await handlers[MSG.TAG_COLLECTS_TOGGLED]({ tag: 'Ramen', collects: false });
+    expect(calls).toHaveLength(1);
+    await handlers[MSG.TAG_COLLECTS_TOGGLED]({ tag: 'Ramen', collects: true });
+    expect(cfg().trackedTags.find((t) => t.label === 'Ramen').collects).toBe(true);
+    expect(calls).toHaveLength(2);
+    // a built-in tag is not a lens: untouched
+    await handlers[MSG.TAG_COLLECTS_TOGGLED]({ tag: 'Health', collects: false });
+    expect(cfg().trackedTags.find((t) => t.label === 'Health').collects).toBeUndefined();
+    expect(calls).toHaveLength(2);
+  });
+
+  test('flipping collects changes decisionFingerprint', async () => {
+    const { handlers, cfg } = handlerSetup();
+    await handlers[MSG.TAG_ADDED]({ tag: 'Ramen', prompt: '' });
+    const before = decisionFingerprint(cfg());
+    await handlers[MSG.TAG_COLLECTS_TOGGLED]({ tag: 'Ramen', collects: false });
+    expect(decisionFingerprint(cfg())).not.toBe(before);
+  });
+
+  test('a bulk tag replace keeps isLens and collects of a tag the caller did not know about', async () => {
+    const { handlers, cfg } = handlerSetup();
+    await handlers[MSG.TAG_ADDED]({ tag: 'Ramen', prompt: '' });
+    await handlers[MSG.TAG_COLLECTS_TOGGLED]({ tag: 'Ramen', collects: false });
+    const sent = cfg().trackedTags.map(({ isLens: _l, collects: _c, ...t }) => t);
+    await handlers[MSG.CONFIG_CHANGED]({ trackedTags: sent });
+    expect(cfg().trackedTags.find((t) => t.label === 'Ramen')).toMatchObject({ isLens: true, collects: false });
+    expect(cfg().trackedTags.find((t) => t.label === 'Health').isLens).toBeUndefined();
   });
 });
 
@@ -153,8 +192,30 @@ describe('migration to lenses (migrateState)', () => {
     expect(changed).toBe(true);
     const flagged = state.configuration.trackedTags.filter((t) => t.isLens === true).map((t) => t.label);
     expect(flagged).toEqual(['Ramen', 'Chess']);
+    // the master gate was on (switch on, prompt set): the flagged tags collect
+    expect(state.configuration.trackedTags.filter((t) => t.isLens === true).map((t) => t.collects)).toEqual([true, true]);
+    expect(state.configuration.trackedTags.find((t) => t.label === 'Kept off').collects).toBeUndefined();
     expect(state.configuration.trackedTags.find((t) => t.label === 'Kept off').isLens).toBe(false);
     expect(state.configuration.trackedTags.filter((t) => /^t\d+$/.test(t.id)).every((t) => t.isLens === undefined)).toBe(true);
+  });
+
+  test('collects = whether the master gate was on before the migration (an upgrade never starts filtering)', () => {
+    const off = v2();
+    off.configuration.isMatchPromptEnabled = false;
+    const a = migrateState(off).state.configuration.trackedTags.filter((t) => t.isLens === true);
+    expect(a.map((t) => t.collects)).toEqual([false, false]);
+    const noPrompt = v2();
+    noPrompt.configuration.matchPrompt = '  ';
+    expect(migrateState(noPrompt).state.configuration.trackedTags.filter((t) => t.isLens === true).map((t) => t.collects)).toEqual([false, false]);
+    // and the gate that results is off: collect everything, as before
+    expect(isGateOn(migrateState(off).state.configuration)).toBe(false);
+    expect(isGateOn(migrateState(v2()).state.configuration)).toBe(true);
+  });
+
+  test('a tag that already carries collects keeps it', () => {
+    const input = v2();
+    input.configuration.trackedTags.find((t) => t.label === 'Ramen').collects = false;
+    expect(migrateState(input).state.configuration.trackedTags.find((t) => t.label === 'Ramen').collects).toBe(false);
   });
 
   test('stack: decided posts without lenses are marked for backfill; scores are never derived from stored tags', () => {
@@ -162,7 +223,7 @@ describe('migration to lenses (migrateState)', () => {
     const byId = Object.fromEntries(state.stack.map((i) => [i.id, i]));
     expect(byId.a.lensBackfill).toBe(true);
     expect(byId.a.decision.lenses).toBeUndefined();
-    // filed under a lens tag: marked, and its stored tag score 0.9 did not become a lens score
+    // filed under a user tag: marked like any decided post, and its stored tag score 0.9 did not become a lens score
     expect(byId.b.lensBackfill).toBe(true);
     expect(byId.b.decision.lenses).toBeUndefined();
     // a post without a decision is not a decided post
@@ -250,7 +311,7 @@ describe('lens backfill (re-decide job, System 1 only)', () => {
     expect(byId.d.decision.lenses.main).toBe(0.9);
   });
 
-  test('a post filed under a lens tag is re-filed to a built-in tag or Unclassified, with the lens score; a manual override keeps its tag', async () => {
+  test('a post filed under a user tag keeps that tag and gains the lens score; a manual override is never touched', async () => {
     const stack = [
       stored('b', TEXTS.b, { extra: { assignedTag: 'Ramen', tags: [{ name: 'Ramen', score: 0.9 }], lensBackfill: true } }),
       stored('m', TEXTS.b, { extra: { assignedTag: 'Ramen', tags: [{ name: 'Ramen', score: 1 }], lensBackfill: true, matchInfo: { manual: true } } })
@@ -258,8 +319,8 @@ describe('lens backfill (re-decide job, System 1 only)', () => {
     const { redecide, stackNow } = backfillSetup({ stack });
     await redecide.wait(redecide.start({ scope: 'rules-only', reason: 'system1_ready' }));
     const byId = Object.fromEntries(stackNow().map((i) => [i.id, i]));
-    expect(byId.b.assignedTag).not.toBe('Ramen');
-    expect(byId.b.tags.map((t) => t.name)).not.toContain('Ramen');
+    expect(byId.b.assignedTag).toBe('Ramen');
+    expect(byId.b.tags.map((t) => t.name)).toContain('Ramen');
     expect(byId.b.decision.lenses.t_ramen).toBe(0.9);
     expect(byId.b.lensBackfill).toBeUndefined();
     // manual overrides are never re-decided
