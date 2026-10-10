@@ -3,7 +3,21 @@
    Ambient tabbed navigation, inline horizontal filters with drag-to-scroll,
    favorites (<3), popover overrides, master paused status banner,
    ignored keyword settings, keyboard hotkey HUD, and list virtualization.
+
+   ES module. Feature modules live in ui/: intelligence settings, diagnostics,
+   engine badge, toasts, exports and decision tooltips. Works in the side
+   panel and when opened as a tab (chrome-extension://<id>/sidepanel.html).
    ========================================================================== */
+
+import { MSG } from './lib/messages.js';
+import { isExtensionPageSender } from './lib/bg/sender.js';
+import { escapeHTML, safeHttpUrl, sendMessage, debounce, isTextEntry } from './ui/util.js';
+import { createToaster } from './ui/toast.js';
+import { badgeView, renderBadge, engineDisplayName, createEnginePoller } from './ui/engine-badge.js';
+import { decisionTooltip } from './ui/decision-info.js';
+import { toCsv, toJson, toHtmlExport, downloadText, exportFilename, EXPORT_MIME } from './ui/export.js';
+import { mountIntelligence } from './ui/intelligence.js';
+import { mountDiagnostics } from './ui/diagnostics.js';
 
 // ---------- Constants & Assets ----------
 
@@ -39,14 +53,21 @@ let state = {
     sessionStart: 0,
     lastProcessed: null
   },
-  engineStatus: { tier: 2, name: 'Rule-based Classifier', status: 'ready' }
+  // Unknown until the service worker answers: the badge starts grey ('checking'), never green.
+  engineStatus: null
 };
 
-function getActiveStack() {
+/** True for items hidden because they no longer match the prompt (never deleted). */
+function isHiddenByPrompt(item) {
+  return !!(item && item.hiddenByPrompt && !item.isFavorite && !(item.matchInfo && item.matchInfo.manual));
+}
+
+/** Items not filtered by the ignore lists (hidden-by-prompt items included). */
+function getUnignoredStack() {
   const stack = state.stack || [];
-  const ignoredTags = (state.configuration?.ignoredTags || []).map(t => t.toLowerCase());
+  const ignoredTags = (state.configuration?.ignoredTags || []).map(t => String(t).toLowerCase());
   const ignoredLinks = state.configuration?.ignoredLinks || [];
-  const ignoredDomains = (state.configuration?.ignoredDomains || []).map(d => d.toLowerCase());
+  const ignoredDomains = (state.configuration?.ignoredDomains || []).map(d => String(d).toLowerCase());
 
   return stack.filter(i => {
     if (ignoredTags.includes((i.assignedTag || '').toLowerCase())) return false;
@@ -57,6 +78,27 @@ function getActiveStack() {
   });
 }
 
+/** Items shown in the feed: hidden-by-prompt items only while "Hidden by prompt" is toggled on. */
+function getActiveStack() {
+  const list = getUnignoredStack();
+  return showHiddenByPrompt ? list : list.filter(i => !isHiddenByPrompt(i));
+}
+
+function countHiddenByPrompt() {
+  return getUnignoredStack().filter(isHiddenByPrompt).length;
+}
+
+/** Ads: flagged by the content script (isAd) or tagged 'Ads' by an older version. */
+function isAdItem(item) {
+  return !!(item && (item.isAd || item.assignedTag === 'Ads'));
+}
+
+/** The key the author filter, its counts and the card's author pill all use. */
+function authorKey(item) {
+  return (item && (item.canonicalAuthorName || item.authorName)) || '';
+}
+
+let showHiddenByPrompt = false; // "Hidden by prompt (N)" pill state
 let activeFilterTag = 'All'; // Horizontal category tag filter
 let activeFilterSite = 'All'; // Horizontal website filter
 let activeFilterAuthor = 'All'; // Global active author filter
@@ -71,6 +113,28 @@ let filteredStack = []; // Cache of currently rendered filtered items
 // Virtualizer Observer Instance
 let virtualizerObserver = null;
 
+// Settings › Tracked Categories: rows whose prompt editor is open, and a re-render that was
+// skipped because the user was typing in that list.
+const expandedTagPrompts = new Set();
+let tagListDirty = false;
+
+// Feature modules (mounted on DOMContentLoaded)
+let toaster = null;
+let intelligence = null;
+let diagnostics = null;
+let enginePoller = null;
+let lastRedecide = null;
+
+/** Shows a toast (falls back to the console before the toaster exists). */
+function notify(level, text, key) {
+  if (toaster) toaster.show({ level, text, key });
+  else console.warn(`[sidepanel] ${text}`);
+}
+
+function send(type, payload) {
+  return sendMessage(type, payload);
+}
+
 // ---------- DOM References ----------
 
 const $ = (sel) => document.querySelector(sel);
@@ -80,21 +144,40 @@ let dom = {};
 
 // ---------- Initialization ----------
 
+/** localStorage holds per-viewer conveniences only (theme, last tab); it may be unavailable. */
+function readPref(key, fallback) {
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writePref(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* not persisted */
+  }
+}
+
+const TAB_NAMES = ['stream', 'export', 'settings'];
+
 function initTheme() {
-  const saved = localStorage.getItem('scrollcollector-theme') || 'dark';
-  document.documentElement.setAttribute('data-theme', saved);
+  const saved = readPref('scrollcollector-theme', 'dark');
+  document.documentElement.setAttribute('data-theme', saved === 'light' ? 'light' : 'dark');
 }
 
 function toggleTheme() {
   const current = document.documentElement.getAttribute('data-theme');
   const next = current === 'dark' ? 'light' : 'dark';
   document.documentElement.setAttribute('data-theme', next);
-  localStorage.setItem('scrollcollector-theme', next);
+  writePref('scrollcollector-theme', next);
 }
 
 function initTabs() {
-  const savedTab = localStorage.getItem('scrollcollector-active-tab') || 'stream';
-  switchTab(savedTab);
+  const savedTab = readPref('scrollcollector-active-tab', 'stream');
+  switchTab(TAB_NAMES.includes(savedTab) ? savedTab : 'stream');
 
   $$('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -106,7 +189,9 @@ function initTabs() {
 
 function switchTab(tabName) {
   $$('.tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabName);
+    const active = btn.dataset.tab === tabName;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
   });
 
   $$('.tab-panel').forEach(panel => {
@@ -114,16 +199,18 @@ function switchTab(tabName) {
     panel.classList.toggle('active', isTarget);
   });
 
-  localStorage.setItem('scrollcollector-active-tab', tabName);
+  // Card keyboard focus belongs to the Stream tab.
+  if (tabName !== 'stream' && focusedItemIndex !== -1 && dom.streamList) clearCardFocus();
+
+  writePref('scrollcollector-active-tab', tabName);
+}
+
+function isStreamTabActive() {
+  const panel = document.getElementById('panel-stream');
+  return !!(panel && panel.classList.contains('active'));
 }
 
 // ---------- Helpers ----------
-
-function escapeHTML(str) {
-  if (!str) return '';
-  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-  return str.replace(/[&<>"']/g, (c) => map[c]);
-}
 
 function relativeTime(ts) {
   if (!ts) return '';
@@ -180,9 +267,17 @@ function isTagDynamic(tag) {
   if (tag === 'All' || tag === 'Favorites' || tag === 'Ads' || tag === 'Unclassified') {
     return false;
   }
-  const trackedTags = state.configuration?.trackedTags || [];
-  const tagCfg = trackedTags.find(t => t.label.toLowerCase() === tag.toLowerCase());
+  const tagCfg = findTagConfig(tag);
   return tagCfg ? !!tagCfg.isDynamic : true;
+}
+
+/** Tracked-tag entry (object) for a label, case-insensitively; tolerates plain-string tags. */
+function findTagConfig(tag) {
+  const wanted = String(tag || '').toLowerCase();
+  const trackedTags = state.configuration?.trackedTags || [];
+  const found = trackedTags.find(t => String(typeof t === 'string' ? t : (t && t.label) || '').toLowerCase() === wanted);
+  if (!found) return null;
+  return typeof found === 'string' ? { label: found, isEnabled: true } : found;
 }
 
 function handleTagTrackToggle(tag) {
@@ -192,10 +287,7 @@ function handleTagTrackToggle(tag) {
   const isDynamic = isTagDynamic(tag);
   if (isDynamic) {
     // Dynamic -> Tracked (Solid)
-    chrome.runtime.sendMessage({
-      type: 'TAG_PROMOTED',
-      payload: { tag }
-    });
+    send(MSG.TAG_PROMOTED, { tag });
   } else {
     // Tracked -> Untracked (Dynamic/Remove)
     showUntrackConfirmation(tag);
@@ -235,10 +327,7 @@ function showUntrackConfirmation(tag) {
   
   okBtn.addEventListener('click', (e) => {
     e.stopPropagation();
-    chrome.runtime.sendMessage({
-      type: 'TAG_REMOVED',
-      payload: { tag }
-    });
+    send(MSG.TAG_REMOVED, { tag });
     closeDialog();
   });
   
@@ -423,39 +512,35 @@ function renderTelemetry() {
   const total = tel.totalProcessed || 0;
   const classified = tel.classifiedCount || 0;
   const rate = total > 0 ? Math.round((classified / total) * 100) : 0;
-  const engineName = (state.engineStatus && state.engineStatus.name) || '—';
 
   dom.tabCountStream.textContent = getActiveStack().length;
 
   dom.telTotal.textContent = total;
   dom.telRate.textContent = rate + '%';
-  dom.telEngine.textContent = engineName;
+  dom.telEngine.textContent = engineDisplayName(state.engineStatus);
+  dom.telEngine.title = dom.telEngine.textContent;
 }
 
+/** Header badge from the last EngineStatus (grey 'checking' until the service worker answers). */
 function renderEngineStatus() {
-  const es = state.engineStatus || {};
-  dom.engineDot.classList.remove('active', 'fallback', 'error');
+  const view = badgeView(state.engineStatus);
+  renderBadge({ root: dom.engineBadge, dot: dom.engineDot, label: dom.engineLabel }, view);
+  if (enginePoller) enginePoller.sync(view);
+}
 
-  const isSemanticReady = (es.tier === 1 || es.tier === 2) && es.status === 'ready';
-  const isDownloading = es.status === 'downloading';
-  const isUnavailable = es.status === 'unavailable';
+/** Accepts an ENGINE_STATUS push or a GET_ENGINE_STATUS reply. */
+function applyEngineStatus(status) {
+  if (!status || typeof status !== 'object' || status.success === false) return;
+  state.engineStatus = status;
+  renderEngineStatus();
+  renderTelemetry();
+  renderPromptStatus();
+  if (intelligence) intelligence.update({ engineStatus: status });
+}
 
-  if (isSemanticReady) {
-    dom.engineDot.classList.add('active');
-    dom.engineLabel.textContent = es.name || 'On-device AI';
-  } else if (isDownloading) {
-    dom.engineDot.classList.add('fallback');
-    dom.engineLabel.textContent = es.name || 'On-device AI (downloading…)';
-  } else if (isUnavailable && es.tier <= 2) {
-    dom.engineDot.classList.add('error');
-    dom.engineLabel.textContent = es.name || 'On-device AI (unavailable)';
-  } else if (es.tier === 3 || es.status === 'ready') {
-    dom.engineDot.classList.add('fallback');
-    dom.engineLabel.textContent = es.name || 'Rule-based Classifier';
-  } else {
-    dom.engineDot.classList.add('error');
-    dom.engineLabel.textContent = es.name || '—';
-  }
+async function fetchEngineStatus() {
+  const reply = await send(MSG.GET_ENGINE_STATUS);
+  applyEngineStatus(reply);
 }
 
 let visualProcessingTimeout = null;
@@ -493,6 +578,17 @@ function renderProcessingStatus() {
   }
 }
 
+/** configuration.trackingPausedAt as "14:03" (today) or "Oct 9, 14:03". */
+function formatPausedAt(pausedAt) {
+  const ts = Number(pausedAt);
+  if (!Number.isFinite(ts) || ts <= 0) return '—';
+  const d = new Date(ts);
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const sameDay = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  return sameDay ? time : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${time}`;
+}
+
 function renderPauseStatus() {
   const config = state.configuration || {};
   const isPaused = !!config.isTrackingPaused;
@@ -506,12 +602,7 @@ function renderPauseStatus() {
     dom.pauseToggle.title = 'Resume tracking';
     
     dom.pauseBanner.classList.remove('hidden');
-    if (pausedAt) {
-      const timeStr = new Date(pausedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-      dom.pauseTime.textContent = timeStr;
-    } else {
-      dom.pauseTime.textContent = '—';
-    }
+    dom.pauseTime.textContent = formatPausedAt(pausedAt);
   } else {
     dom.pauseIcon.classList.remove('hidden');
     dom.playIcon.classList.add('hidden');
@@ -594,6 +685,17 @@ function initFilterDropdowns() {
 
 // ---------- Keyboard Curation HUD Engine ----------
 
+/** The feed row of an item (ids come from storage: escape them for the selector). */
+function rowForItem(id) {
+  if (!dom.streamList || id === undefined || id === null) return null;
+  return dom.streamList.querySelector(`.item-row[data-id="${CSS.escape(String(id))}"]`);
+}
+
+function clearCardFocus() {
+  focusedItemIndex = -1;
+  dom.streamList.querySelectorAll('.item-row.keyboard-focused').forEach(row => row.classList.remove('keyboard-focused'));
+}
+
 function focusCard(index) {
   if (filteredStack.length === 0) {
     focusedItemIndex = -1;
@@ -606,43 +708,79 @@ function focusCard(index) {
   focusedItemIndex = index;
   const item = filteredStack[focusedItemIndex];
 
-  dom.streamList.querySelectorAll('.item-row').forEach(row => {
+  dom.streamList.querySelectorAll('.item-row.keyboard-focused').forEach(row => {
     row.classList.remove('keyboard-focused');
   });
 
-  const targetRow = dom.streamList.querySelector(`.item-row[data-id="${item.id}"]`);
+  const targetRow = rowForItem(item.id);
   if (targetRow) {
     targetRow.classList.add('keyboard-focused');
     targetRow.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    // Cards take focus (tabindex=-1) so the shortcuts keep working after a click elsewhere.
+    if (document.activeElement !== targetRow) targetRow.focus({ preventScroll: true });
   }
 }
 
-function rotateFocusedCardTag(direction) {
-  if (focusedItemIndex === -1 || filteredStack.length === 0) return;
-  
-  const item = filteredStack[focusedItemIndex];
+/** Tags a card can be re-tagged to: tracked labels (not the Ads pseudo-tag) + Unclassified. */
+function retagOptions() {
   const tags = state.configuration.trackedTags || [];
-  const tagLabels = tags.map(t => typeof t === 'string' ? t : t.label).filter(l => l !== 'Ads').concat(['Unclassified']);
-  
+  const labels = tags
+    .filter(t => typeof t === 'string' || (t && t.label && !t.isPseudo))
+    .map(t => (typeof t === 'string' ? t : t.label))
+    .filter(l => l && l !== 'Ads' && l !== 'Unclassified');
+  return [...new Set(labels), 'Unclassified'];
+}
+
+/**
+ * ←/→ on a focused card: moves its tag to the previous/next tag (a manual override).
+ * @returns {boolean} false when no card is focused
+ */
+function rotateFocusedCardTag(direction) {
+  if (focusedItemIndex === -1 || filteredStack.length === 0) return false;
+  const item = filteredStack[focusedItemIndex];
+  if (!item) return false;
+
+  const tagLabels = retagOptions();
   const currentTag = item.assignedTag || 'Unclassified';
   let idx = tagLabels.indexOf(currentTag);
   if (idx === -1) idx = tagLabels.length - 1;
-
-  idx += direction;
-  if (idx < 0) idx = tagLabels.length - 1;
-  if (idx >= tagLabels.length) idx = 0;
-
+  idx = (idx + direction + tagLabels.length) % tagLabels.length;
   const newTag = tagLabels[idx];
+  if (newTag === currentTag) return true;
 
-  chrome.runtime.sendMessage({
-    type: 'ITEM_RETAGGED',
-    payload: { itemId: item.id, newTag }
-  });
-
+  send(MSG.ITEM_RETAGGED, { itemId: item.id, newTag });
   item.assignedTag = newTag;
-  renderAll();
-  
-  focusCard(focusedItemIndex);
+  item.matchInfo = { engine: 'Manual Override', manual: true };
+
+  const previousIndex = focusedItemIndex;
+  renderFilterPills();
+  renderAuthorPills();
+  renderFeed();
+  // Stay on the same post; if the active filter dropped it, stay at the same position.
+  const nextIndex = filteredStack.findIndex(i => i.id === item.id);
+  if (filteredStack.length === 0) focusedItemIndex = -1;
+  else focusCard(nextIndex !== -1 ? nextIndex : Math.min(previousIndex, filteredStack.length - 1));
+  return true;
+}
+
+/** ←/→ with no focused card: previous/next category filter. */
+function cycleFilterTag(direction) {
+  const categories = getFilterCategories();
+  let idx = categories.indexOf(activeFilterTag);
+  if (idx === -1) idx = 0;
+  activeFilterTag = categories[(idx + direction + categories.length) % categories.length];
+  activeFilterAuthor = 'All';
+  applyFilterChange();
+  scrollActivePillIntoView();
+}
+
+/** A filter changed: the clear confirmation no longer applies, so it resets; everything re-renders. */
+function applyFilterChange() {
+  resetClearConfirmation();
+  renderFilterPills();
+  renderSiteFilterPills();
+  renderAuthorPills();
+  renderFeed();
 }
 
 function scrollActivePillIntoView() {
@@ -652,51 +790,42 @@ function scrollActivePillIntoView() {
   }
 }
 
+/** Elements that own their keys: typing, buttons, links, selects. Shortcuts never act there. */
+const SHORTCUT_EXCLUDED_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A', 'SUMMARY', 'OPTION']);
+
+/**
+ * Whether a keydown may trigger a Stream shortcut: Stream tab active, no dialog open, focus not in
+ * an input/textarea/select/button/link, no browser-shortcut modifiers. Tab is never handled.
+ */
+function shortcutsAllowed(e) {
+  if (e.defaultPrevented || e.isComposing || e.altKey) return false;
+  if (e.key === 'Tab') return false;
+  if ((e.ctrlKey || e.metaKey) && e.key !== 'Enter') return false;
+  if (!isStreamTabActive()) return false;
+  if (document.querySelector('.confirm-overlay')) return false;
+  const activeEl = document.activeElement;
+  if (activeEl && (SHORTCUT_EXCLUDED_TAGS.has(activeEl.tagName) || isTextEntry(activeEl) || activeEl.isContentEditable)) return false;
+  return true;
+}
+
 function initKeyboardNavigation() {
   document.addEventListener('keydown', (e) => {
-    const activeEl = document.activeElement;
-    if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
-      return;
-    }
+    if (!shortcutsAllowed(e)) return;
 
     switch (e.key) {
-      case 'ArrowRight': {
-        e.preventDefault();
-        const categories = getFilterCategories();
-        const currentIndex = categories.indexOf(activeFilterTag);
-        if (currentIndex !== -1) {
-          const nextIndex = (currentIndex + 1) % categories.length;
-          activeFilterTag = categories[nextIndex];
-          
-          renderFilterPills();
-          renderSiteFilterPills();
-          renderFeed();
-          scrollActivePillIntoView();
-        }
-        break;
-      }
-
+      case 'ArrowRight':
       case 'ArrowLeft': {
         e.preventDefault();
-        const categories = getFilterCategories();
-        const currentIndex = categories.indexOf(activeFilterTag);
-        if (currentIndex !== -1) {
-          const prevIndex = (currentIndex - 1 + categories.length) % categories.length;
-          activeFilterTag = categories[prevIndex];
-          
-          renderFilterPills();
-          renderSiteFilterPills();
-          renderFeed();
-          scrollActivePillIntoView();
-        }
+        const direction = e.key === 'ArrowRight' ? 1 : -1;
+        // A focused card is re-tagged; otherwise the category filter moves.
+        if (!rotateFocusedCardTag(direction)) cycleFilterTag(direction);
         break;
       }
 
-      case 'Tab':
-        if (filteredStack.length === 0) return;
-        if (!e.shiftKey) {
+      case 'Escape':
+        if (focusedItemIndex !== -1) {
           e.preventDefault();
-          focusCard(focusedItemIndex + 1);
+          clearCardFocus();
         }
         break;
 
@@ -718,13 +847,10 @@ function initKeyboardNavigation() {
         if (focusedItemIndex !== -1) {
           const item = filteredStack[focusedItemIndex];
           const isFavorite = !item.isFavorite;
-          chrome.runtime.sendMessage({
-            type: 'FAVORITE_TOGGLED',
-            payload: { itemId: item.id, isFavorite }
-          });
+          send(MSG.FAVORITE_TOGGLED, { itemId: item.id, isFavorite });
           item.isFavorite = isFavorite;
 
-          const cardRow = dom.streamList.querySelector(`.item-row[data-id="${item.id}"]`);
+          const cardRow = rowForItem(item.id);
           if (cardRow) {
             updateFavoriteButtonUI(cardRow, isFavorite, true);
           }
@@ -739,15 +865,13 @@ function initKeyboardNavigation() {
         if (filteredStack.length === 0) return;
         if (focusedItemIndex !== -1) {
           const item = filteredStack[focusedItemIndex];
-          
+
           if (e.shiftKey || e.ctrlKey || e.metaKey) {
             e.preventDefault();
-            if (item.sourceUrl) {
-              window.open(item.sourceUrl, '_blank');
-            }
+            openExternal(item.sourceUrl);
           } else {
             e.preventDefault();
-            const cardRow = dom.streamList.querySelector(`.item-row[data-id="${item.id}"]`);
+            const cardRow = rowForItem(item.id);
             if (cardRow) {
               const expandBtn = cardRow.querySelector('.btn-body-expand');
               if (expandBtn) expandBtn.click();
@@ -765,12 +889,20 @@ function initKeyboardNavigation() {
     const idx = filteredStack.findIndex(i => i.id === itemId);
     if (idx !== -1) {
       focusedItemIndex = idx;
-      dom.streamList.querySelectorAll('.item-row').forEach(row => {
+      dom.streamList.querySelectorAll('.item-row.keyboard-focused').forEach(row => {
         row.classList.remove('keyboard-focused');
       });
       cardEl.classList.add('keyboard-focused');
+      // Clicking the card body (not one of its controls) gives the card keyboard focus.
+      if (!e.target.closest('button, a, input, select, textarea')) cardEl.focus({ preventScroll: true });
     }
   });
+}
+
+/** Opens a collected link in a new tab (http/https only). */
+function openExternal(url) {
+  const safe = safeHttpUrl(url);
+  if (safe) window.open(safe, '_blank', 'noopener');
 }
 
 // ---------- List Virtualization observer setup ----------
@@ -817,8 +949,8 @@ function getSearchFilteredStack() {
 
   const q = searchQuery.toLowerCase().trim();
   return stack.filter(i => {
-    const tagMatch = (i.assignedTag || '').toLowerCase().includes(q) || 
-                     (i.tags || []).some(t => t.name.toLowerCase().includes(q));
+    const tagMatch = (i.assignedTag || '').toLowerCase().includes(q) ||
+                     (i.tags || []).some(t => String((t && typeof t === 'object' ? t.name : t) || '').toLowerCase().includes(q));
     const postMatch = (i.textSnippet || '').toLowerCase().includes(q);
     const authorMatch = (i.authorName || '').toLowerCase().includes(q) || 
                         (i.canonicalAuthorName || '').toLowerCase().includes(q);
@@ -836,9 +968,11 @@ function getFilterCategories() {
 
   const enabledTags = [];
   tags.forEach(t => {
-    const label = typeof t === 'string' ? t : t.label;
+    const label = typeof t === 'string' ? t : (t && t.label);
+    if (!label) return;
     const enabled = typeof t === 'string' ? true : t.isEnabled !== false;
-    if (enabled && label !== 'Ads' && !ignoredTags.includes(label.toLowerCase())) {
+    if (enabled && label !== 'Ads' && label !== 'Unclassified' && !(t && t.isPseudo)
+      && !ignoredTags.includes(label.toLowerCase()) && !enabledTags.includes(label)) {
       enabledTags.push(label);
     }
   });
@@ -865,13 +999,12 @@ function renderFilterPills() {
   const categories = getFilterCategories();
   const list = getSearchFilteredStack();
 
-  const counts = { All: list.length, Favorites: list.filter(i => i.isFavorite).length };
+  // 'Ads' counts (and filters) ad posts whatever their tag; a legacy 'Ads' tag is not counted twice.
+  const counts = { All: list.length, Favorites: list.filter(i => i.isFavorite).length, Ads: 0 };
   list.forEach(item => {
     const tag = item.assignedTag || 'Unclassified';
-    counts[tag] = (counts[tag] || 0) + 1;
-    if (item.isAd) {
-      counts['Ads'] = (counts['Ads'] || 0) + 1;
-    }
+    if (tag !== 'Ads') counts[tag] = (counts[tag] || 0) + 1;
+    if (isAdItem(item)) counts.Ads += 1;
   });
 
   // Capture starting layout coordinates of existing category pills (First)
@@ -923,10 +1056,7 @@ function renderFilterPills() {
     pill.addEventListener('click', () => {
       activeFilterTag = cat;
       activeFilterAuthor = 'All'; // Reset author filter on category change
-      renderFilterPills();
-      renderSiteFilterPills();
-      renderAuthorPills();
-      renderFeed();
+      applyFilterChange();
     });
 
     dom.filterPills.appendChild(pill);
@@ -998,10 +1128,7 @@ function renderFilterPills() {
         activeFilterAuthor = 'All'; // Reset author filter on category change
         dom.menuTagsDropdown.classList.remove('show');
         dom.btnTagsDropdown.classList.remove('active');
-        renderFilterPills();
-        renderSiteFilterPills();
-        renderAuthorPills();
-        renderFeed();
+        applyFilterChange();
       });
       dom.menuTagsDropdown.appendChild(btn);
     });
@@ -1041,7 +1168,7 @@ function setFilterSite(site) {
     }
   } else if (activeFilterTag === 'Ads') {
     const hasAdsOnSite = getSearchFilteredStack().some(item => {
-      if (!item.isAd) return false;
+      if (!isAdItem(item)) return false;
       if (activeFilterSite === 'All') return true;
       const rawPlatform = (item.sourcePlatform || '').toLowerCase();
       if (activeFilterSite === 'Other') {
@@ -1055,10 +1182,7 @@ function setFilterSite(site) {
     }
   }
 
-
-  renderFilterPills();
-  renderSiteFilterPills();
-  renderFeed();
+  applyFilterChange();
 }
 
 function renderSiteFilterPills() {
@@ -1256,7 +1380,7 @@ function getFilterAuthors() {
     if (activeFilterTag === 'Favorites') {
       tagMatch = item.isFavorite;
     } else if (activeFilterTag === 'Ads') {
-      tagMatch = item.isAd;
+      tagMatch = isAdItem(item);
     } else if (activeFilterTag !== 'All') {
       tagMatch = item.assignedTag === activeFilterTag;
     }
@@ -1281,7 +1405,7 @@ function getFilterAuthors() {
     
     if (tagMatch && siteMatch) {
       counts.All++;
-      const auth = item.canonicalAuthorName || item.authorName || '';
+      const auth = authorKey(item);
       if (auth) {
         counts[auth] = (counts[auth] || 0) + 1;
       }
@@ -1351,10 +1475,7 @@ function renderAuthorPills() {
 
     pill.addEventListener('click', () => {
       activeFilterAuthor = auth;
-      renderFilterPills();
-      renderSiteFilterPills();
-      renderAuthorPills();
-      renderFeed();
+      applyFilterChange();
     });
 
     dom.filterAuthorPills.appendChild(pill);
@@ -1399,10 +1520,7 @@ function renderAuthorPills() {
         activeFilterAuthor = auth;
         dom.menuAuthorsDropdown.classList.remove('show');
         dom.btnAuthorsDropdown.classList.remove('active');
-        renderFilterPills();
-        renderSiteFilterPills();
-        renderAuthorPills();
-        renderFeed();
+        applyFilterChange();
       });
       dom.menuAuthorsDropdown.appendChild(btn);
     });
@@ -1419,9 +1537,11 @@ function renderFeed() {
     virtualizerObserver.disconnect();
   }
 
-  resetClearConfirmation();
+  // Not resetClearConfirmation(): broadcasts re-render the feed constantly while scrolling, and
+  // only a filter change (applyFilterChange) makes a pending "Clear …?" confirmation stale.
 
   const oldFilteredStack = [...filteredStack];
+  const focusedId = focusedItemIndex !== -1 && filteredStack[focusedItemIndex] ? filteredStack[focusedItemIndex].id : null;
 
   filteredStack = searchResults;
 
@@ -1429,7 +1549,7 @@ function renderFeed() {
   if (activeFilterTag === 'Favorites') {
     filteredStack = searchResults.filter(i => i.isFavorite);
   } else if (activeFilterTag === 'Ads') {
-    filteredStack = searchResults.filter(i => i.isAd);
+    filteredStack = searchResults.filter(isAdItem);
   } else if (activeFilterTag !== 'All') {
     filteredStack = searchResults.filter(i => i.assignedTag === activeFilterTag);
   }
@@ -1452,15 +1572,20 @@ function renderFeed() {
     });
   }
 
-  // Filter 3: Author
+  // Filter 3: Author (same key as the author pills and their counts)
   if (activeFilterAuthor !== 'All') {
-    filteredStack = filteredStack.filter(i => i.canonicalAuthorName === activeFilterAuthor);
+    filteredStack = filteredStack.filter(i => authorKey(i) === activeFilterAuthor);
   }
 
-
+  // Keep keyboard focus on the same post when items arrive above it.
+  if (focusedId !== null) {
+    const idx = filteredStack.findIndex(i => i.id === focusedId);
+    focusedItemIndex = idx;
+  }
 
   if (filteredStack.length === 0) {
     list.innerHTML = '';
+    dom.streamEmpty.textContent = emptyFeedMessage();
     dom.streamEmpty.classList.remove('hidden');
     list.classList.add('hidden');
     focusedItemIndex = -1;
@@ -1537,13 +1662,9 @@ function renderFeed() {
           element.classList.remove('keyboard-focused');
         }
 
-        // Update card contents if favorite status or assigned tag has changed
-        if (!element.classList.contains('is-virtualized')) {
-          const domFavorite = element.dataset.favorite === 'true';
-          const domTag = element.dataset.tag || 'Unclassified';
-          if (domFavorite !== !!entry.item.isFavorite || domTag !== (entry.item.assignedTag || 'Unclassified')) {
-            populateCardInner(element, entry.item);
-          }
+        // Update card contents if favorite status, tag, decision or visibility changed
+        if (!element.classList.contains('is-virtualized') && element.dataset.sig !== cardSignature(entry.item)) {
+          populateCardInner(element, entry.item);
         }
       }
     }
@@ -1560,10 +1681,34 @@ function renderFeed() {
   });
 }
 
+function emptyFeedMessage() {
+  if ((state.stack || []).length === 0) return 'No items collected yet. Start scrolling feeds!';
+  const hidden = countHiddenByPrompt();
+  if (!showHiddenByPrompt && hidden > 0 && getActiveStack().length === 0) {
+    return `All ${hidden} collected post${hidden === 1 ? ' is' : 's are'} hidden by your prompt. Use “Hidden by prompt” above to see them.`;
+  }
+  return 'No posts match these filters.';
+}
+
+/** What a rendered card depends on; a change re-renders the card. */
+function cardSignature(item) {
+  const d = item.decision || {};
+  return [
+    item.isFavorite ? 1 : 0,
+    item.assignedTag || 'Unclassified',
+    isHiddenByPrompt(item) ? 1 : 0,
+    d.at || 0,
+    d.provider || '',
+    item.matchInfo && item.matchInfo.manual ? 1 : 0,
+    (item.textSnippet || '').length
+  ].join('|');
+}
+
 function createItemCardShell(item, index) {
   const card = document.createElement('div');
   card.className = 'item-row is-virtualized';
   card.dataset.id = item.id;
+  card.tabIndex = -1;
   card.style.minHeight = '90px';
   card.innerHTML = `<div class="virtual-placeholder" style="height: 66px;"></div>`;
 
@@ -1620,6 +1765,9 @@ function updateFavoriteButtonUI(card, isFavorite, shouldAnimate = false) {
 function populateCardInner(card, item) {
   card.dataset.favorite = item.isFavorite ? 'true' : 'false';
   card.dataset.tag = item.assignedTag || 'Unclassified';
+  card.dataset.sig = cardSignature(item);
+  const hiddenByPrompt = isHiddenByPrompt(item);
+  card.classList.toggle('is-hidden-by-prompt', hiddenByPrompt);
 
   const platform = item.sourcePlatform || 'unknown';
   const timeStr = relativeTime(item.timestamp);
@@ -1627,8 +1775,7 @@ function populateCardInner(card, item) {
   const tagColor = getTagColor(tag);
   card.style.setProperty('--card-accent', tagColor);
 
-  const trackedTags = state.configuration?.trackedTags || [];
-  const tagCfg = trackedTags.find(t => t.label.toLowerCase() === tag.toLowerCase());
+  const tagCfg = findTagConfig(tag);
   const isTrackedCategory = tagCfg ? !tagCfg.isDynamic : false;
 
   if (tag !== 'Unclassified' && isTrackedCategory) {
@@ -1641,9 +1788,9 @@ function populateCardInner(card, item) {
   const entities = extractLocalEntities(item.textSnippet, tag);
   const isCollapsed = !expandedItemIds.has(item.id);
 
-  // Native Favicon integration
-  const faviconUrl = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(item.sourceUrl || 'https://' + platform)}&size=32`;
-  const faviconHtml = `<img src="${faviconUrl}" class="card-favicon" onerror="this.style.display='none';" />`;
+  // Native Favicon integration (the error handler is attached below: CSP blocks inline handlers)
+  const faviconUrl = `chrome-extension://${chrome.runtime.id}/_favicon/?pageUrl=${encodeURIComponent(safeHttpUrl(item.sourceUrl) || 'https://' + platform)}&size=32`;
+  const faviconHtml = `<img src="${escapeHTML(faviconUrl)}" class="card-favicon" alt="" />`;
 
   let linkHtml = '';
   if (item.sourceUrl) {
@@ -1680,7 +1827,8 @@ function populateCardInner(card, item) {
     ? `<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>`
     : `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>`;
 
-  const adBadge = item.isAd ? `<span class="ad-badge">Ad</span>` : '';
+  const adBadge = (isAdItem(item) ? `<span class="ad-badge">Ad</span>` : '')
+    + (hiddenByPrompt ? `<span class="hidden-badge" title="No longer matches your prompt. Hidden, not deleted.">Hidden</span>` : '');
 
   let bodyHtml = '';
   if (body) {
@@ -1711,12 +1859,16 @@ function populateCardInner(card, item) {
 
   let secondaryTagsHtml = '';
   if (item.tags && item.tags.length > 1) {
-    const secondaryTags = item.tags.slice(1, 3); // Up to 2 secondary tags
+    const secondaryTags = item.tags
+      .map(t => (typeof t === 'string' ? { name: t } : t))
+      .filter(t => t && typeof t.name === 'string' && t.name && t.name !== tag)
+      .slice(0, 2); // Up to 2 secondary tags
     secondaryTagsHtml = secondaryTags.map(t => {
       const sTag = t.name;
       const sTagColor = getTagColor(sTag);
+      const scoreTitle = Number.isFinite(t.score) ? `Confidence: ${Math.round(t.score * 100)}%` : sTag;
       return `
-        <span class="card-category-label secondary ${isTagDynamic(sTag) ? 'is-dynamic' : ''}" style="--tag-color: ${sTagColor}" title="Confidence: ${Math.round(t.score * 100)}%" data-filter-tag="${escapeHTML(sTag)}">
+        <span class="card-category-label secondary ${isTagDynamic(sTag) ? 'is-dynamic' : ''}" style="--tag-color: ${sTagColor}" title="${escapeHTML(scoreTitle)}" data-filter-tag="${escapeHTML(sTag)}">
           <span>${escapeHTML(sTag)}</span>
           <button class="btn-flag btn-ignore-tag" title="Ignore tag ${escapeHTML(sTag)}" data-tag="${escapeHTML(sTag)}">
             <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
@@ -1726,45 +1878,21 @@ function populateCardInner(card, item) {
     }).join('');
   }
 
+  // Decision details (path, provider, p(match), confidences, latency, reason, escalation); items
+  // collected before the decision cascade fall back to their legacy matchInfo.
   let infoTooltipHtml = '';
-  if (item.matchInfo) {
-    const mi = item.matchInfo;
-    let tooltipText = '';
-    
-    if (mi.manual) {
-      tooltipText = 'Manually overridden/classified by user.';
-    } else {
-      const parts = [];
-      parts.push(`Classified using: ${mi.engine || 'Rule-based Classifier'}`);
-      
-      if (mi.globalMatchPrompt) {
-        parts.push(`Global Eval Match: "${mi.globalMatchPrompt}"`);
-        if (mi.globalMatchedPhrases && mi.globalMatchedPhrases.length > 0) {
-          parts.push(`Global matched phrase(s): ${mi.globalMatchedPhrases.map(p => `'${p}'`).join(', ')}`);
-        }
-        if (mi.globalMatchedKeywords && mi.globalMatchedKeywords.length > 0) {
-          parts.push(`Global matched keyword(s): ${mi.globalMatchedKeywords.map(k => `'${k}'`).join(', ')}`);
-        }
-      }
-      
-      if (mi.matchedKeywords && mi.matchedKeywords.length > 0) {
-        parts.push(`Matched tag keyword(s): ${mi.matchedKeywords.map(k => `'${k}'`).join(', ')}`);
-      }
-      
-      tooltipText = parts.join(' | ');
-    }
-
-    if (tooltipText) {
-      infoTooltipHtml = `
-        <span class="info-tooltip-wrapper" title="${escapeHTML(tooltipText)}">
-          <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="10"></circle>
-            <line x1="12" y1="16" x2="12" y2="12"></line>
-            <line x1="12" y1="8" x2="12.01" y2="8"></line>
-          </svg>
-        </span>
-      `;
-    }
+  const tooltipText = decisionTooltip(item);
+  if (tooltipText) {
+    const escalated = !!(item.decision && item.decision.escalated);
+    infoTooltipHtml = `
+      <span class="info-tooltip-wrapper ${escalated ? 'is-escalated' : ''}" title="${escapeHTML(tooltipText)}" aria-label="${escapeHTML(tooltipText)}" role="img">
+        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+      </span>
+    `;
   }
 
   // Rebuild inside Shell
@@ -1830,13 +1958,19 @@ function populateCardInner(card, item) {
     </div>
   `;
 
+  // Favicon fallback (inline onerror handlers are blocked by the extension CSP)
+  const favicon = card.querySelector('.card-favicon');
+  if (favicon) {
+    favicon.addEventListener('error', () => { favicon.style.display = 'none'; }, { once: true });
+  }
+
   // Handle author profile clicks
   const profileLinks = card.querySelectorAll('.card-author-profile-link');
   profileLinks.forEach(link => {
     link.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      window.open(link.dataset.url, '_blank');
+      openExternal(link.dataset.url);
     });
   });
 
@@ -1852,10 +1986,7 @@ function populateCardInner(card, item) {
       } else {
         activeFilterAuthor = author;
       }
-      renderFilterPills();
-      renderSiteFilterPills();
-      renderAuthorPills();
-      renderFeed();
+      applyFilterChange();
     });
   });
 
@@ -1867,10 +1998,7 @@ function populateCardInner(card, item) {
       e.stopPropagation();
       const tagToIgnore = btn.dataset.tag;
       showIgnoreTagConfirmation(tagToIgnore, () => {
-        chrome.runtime.sendMessage({
-          type: 'IGNORE_TAG_ADDED',
-          payload: { tag: tagToIgnore }
-        });
+        send(MSG.IGNORE_TAG_ADDED, { tag: tagToIgnore });
       });
     });
   });
@@ -1883,10 +2011,7 @@ function populateCardInner(card, item) {
       e.stopPropagation();
       const domainToIgnore = btn.dataset.domain;
       showIgnoreDomainConfirmation(domainToIgnore, () => {
-        chrome.runtime.sendMessage({
-          type: 'IGNORE_DOMAIN_ADDED',
-          payload: { domain: domainToIgnore }
-        });
+        send(MSG.IGNORE_DOMAIN_ADDED, { domain: domainToIgnore });
       });
     });
   });
@@ -1898,10 +2023,7 @@ function populateCardInner(card, item) {
       e.preventDefault();
       e.stopPropagation();
       const linkToIgnore = btn.dataset.url;
-      chrome.runtime.sendMessage({
-        type: 'IGNORE_LINK_ADDED',
-        payload: { url: linkToIgnore }
-      });
+      send(MSG.IGNORE_LINK_ADDED, { url: linkToIgnore });
     });
   });
 
@@ -1909,7 +2031,7 @@ function populateCardInner(card, item) {
   if (titleLink) {
     titleLink.addEventListener('click', (e) => {
       e.preventDefault();
-      window.open(titleLink.dataset.url, '_blank');
+      openExternal(titleLink.dataset.url);
     });
   }
 
@@ -1917,7 +2039,7 @@ function populateCardInner(card, item) {
   if (link) {
     link.addEventListener('click', (e) => {
       e.preventDefault();
-      window.open(link.dataset.url, '_blank');
+      openExternal(link.dataset.url);
     });
   }
 
@@ -1927,13 +2049,12 @@ function populateCardInner(card, item) {
       e.stopPropagation();
       const filterTag = label.dataset.filterTag;
       if (filterTag) {
-        if (activeFilterTag === filterTag) {
-          activeFilterTag = null;
-        } else {
-          activeFilterTag = filterTag;
-        }
-        document.getElementById('panel-stream').scrollTop = 0;
-        renderAll();
+        // Clicking the active category again goes back to All (never to "no filter").
+        activeFilterTag = activeFilterTag === filterTag ? 'All' : filterTag;
+        activeFilterAuthor = 'All';
+        if (dom.feedContainer) dom.feedContainer.scrollTop = 0;
+        applyFilterChange();
+        scrollActivePillIntoView();
       }
     });
     // Preserve existing double-click logic for sticky toggle
@@ -1966,12 +2087,10 @@ function populateCardInner(card, item) {
   card.querySelector('.btn-favorite').addEventListener('click', (e) => {
     e.stopPropagation();
     const isFavorite = !item.isFavorite;
-    chrome.runtime.sendMessage({
-      type: 'FAVORITE_TOGGLED',
-      payload: { itemId: item.id, isFavorite }
-    });
+    send(MSG.FAVORITE_TOGGLED, { itemId: item.id, isFavorite });
     item.isFavorite = isFavorite;
     updateFavoriteButtonUI(card, isFavorite, true);
+    card.dataset.sig = cardSignature(item);
     renderFilterPills();
     renderFeed();
   });
@@ -1981,12 +2100,9 @@ function populateCardInner(card, item) {
     if (virtualizerObserver) {
       virtualizerObserver.unobserve(card);
     }
-    chrome.runtime.sendMessage({
-      type: 'ITEM_DELETED',
-      payload: { itemId: item.id }
-    });
+    send(MSG.ITEM_DELETED, { itemId: item.id });
     state.stack = state.stack.filter(i => i.id !== item.id);
-    renderAll();
+    renderStreamViews();
   });
 
   const triggerBtn = card.querySelector('.btn-override-trigger');
@@ -1995,7 +2111,7 @@ function populateCardInner(card, item) {
     e.stopPropagation();
     
     if (openDropdownItemId && openDropdownItemId !== item.id) {
-      const activeCard = dom.streamList.querySelector(`.item-row[data-id="${openDropdownItemId}"]`);
+      const activeCard = rowForItem(openDropdownItemId);
       if (activeCard) {
         activeCard.querySelector('.override-popover').classList.remove('show');
         activeCard.querySelector('.btn-override-trigger').classList.remove('dropdown-active');
@@ -2015,35 +2131,60 @@ function populateCardInner(card, item) {
       triggerBtn.classList.remove('dropdown-active');
       openDropdownItemId = null;
 
-      chrome.runtime.sendMessage({
-        type: 'ITEM_RETAGGED',
-        payload: { itemId: item.id, newTag }
-      });
+      send(MSG.ITEM_RETAGGED, { itemId: item.id, newTag });
 
       item.assignedTag = newTag;
-      renderAll();
+      item.matchInfo = { engine: 'Manual Override', manual: true };
+      renderStreamViews();
     });
   });
 }
 
+/** Re-renders the Stream tab (counts, pills, feed) without touching the Settings forms. */
+function renderStreamViews() {
+  renderTelemetry();
+  renderStreamStatus();
+  renderFilterPills();
+  renderSiteFilterPills();
+  renderAuthorPills();
+  renderFeed();
+}
+
 // ---------- Configurator Rendering ----------
 
+/**
+ * Settings › Tracked Categories. A broadcast (STATE_UPDATED) must not wipe what the user is
+ * typing: while a text field in the list has focus the re-render is skipped and done on focusout;
+ * open prompt editors stay open across re-renders.
+ */
 function renderTagConfigurator() {
-  const tags = state.configuration.trackedTags || [];
   const list = dom.tagList;
+  if (!list) return;
+  if (list.contains(document.activeElement) && isTextEntry(document.activeElement)) {
+    tagListDirty = true;
+    return;
+  }
+  tagListDirty = false;
+
+  const tags = state.configuration.trackedTags || [];
   list.innerHTML = '';
+  const labelsNow = new Set();
 
   tags.forEach((tag, i) => {
-    const label = typeof tag === 'string' ? tag : tag.label;
+    const label = typeof tag === 'string' ? tag : (tag && tag.label);
+    if (!label) return;
+    labelsNow.add(label);
     const enabled = typeof tag === 'string' ? true : tag.isEnabled !== false;
     const isDynamic = typeof tag === 'object' && tag.isDynamic;
     const isSticky = typeof tag === 'object' && tag.isSticky;
     const color = BADGE_COLORS[i % BADGE_COLORS.length];
+    const isExpanded = expandedTagPrompts.has(label);
 
     const prompt = typeof tag === 'object' ? (tag.prompt || '') : '';
 
     const row = document.createElement('div');
     row.className = isDynamic ? 'tag-row dynamic' : 'tag-row';
+    row.dataset.tag = label;
     row.style.flexDirection = 'column';
     row.style.alignItems = 'stretch';
 
@@ -2059,99 +2200,93 @@ function renderTagConfigurator() {
       <div style="display: flex; align-items: center; width: 100%;">
         <span class="tag-dot-indicator" style="background: ${color}"></span>
         <span class="tag-label" style="flex: 1;">${escapeHTML(label)} ${isDynamic ? '<span style="font-size: 9px; opacity: 0.5; font-style: italic;">(dynamic)</span>' : ''}</span>
-        <button class="btn-expand-prompt" title="Edit Tag Prompt">✎</button>
-        <label class="tag-toggle" style="margin-left: auto;">
-          <input type="checkbox" ${enabled ? 'checked' : ''} data-tag="${escapeHTML(label)}">
+        <button class="btn-expand-prompt" title="Edit tag prompt" aria-expanded="${isExpanded ? 'true' : 'false'}">✎</button>
+        <label class="tag-toggle" style="margin-left: auto;" title="${enabled ? 'Tracking' : 'Not tracking'}">
+          <input type="checkbox" ${enabled ? 'checked' : ''} data-tag="${escapeHTML(label)}" aria-label="Track ${escapeHTML(label)}">
           <span class="toggle-track"></span>
         </label>
         ${stickyHtml}
         ${promoteHtml}
         <button class="btn-tag-action btn-delete-tag" data-tag="${escapeHTML(label)}" title="Remove tag">×</button>
       </div>
-      <div class="tag-prompt-container" style="display: none;">
-        <textarea class="tag-prompt-textarea" rows="2" placeholder="Identify posts related to ${escapeHTML(label)}.">${escapeHTML(prompt)}</textarea>
+      <div class="tag-prompt-container" style="display: ${isExpanded ? 'flex' : 'none'};">
+        <textarea class="tag-prompt-textarea" rows="2" aria-label="Prompt for ${escapeHTML(label)}" placeholder="Identify posts related to ${escapeHTML(label)}.">${escapeHTML(prompt)}</textarea>
         <button type="button" class="btn-wand btn-wand-existing" title="Regenerate prompt with AI">✨</button>
       </div>
     `;
 
     const checkbox = row.querySelector('input[type="checkbox"]');
     checkbox.addEventListener('change', () => {
-      chrome.runtime.sendMessage({
-        type: 'TAG_TOGGLED',
-        payload: { tag: label, enabled: checkbox.checked }
-      });
+      send(MSG.TAG_TOGGLED, { tag: label, enabled: checkbox.checked });
     });
 
-    // Expand prompt box
+    // Expand prompt box (remembered across re-renders)
     const expandBtn = row.querySelector('.btn-expand-prompt');
     const promptContainer = row.querySelector('.tag-prompt-container');
     const promptTextarea = row.querySelector('.tag-prompt-textarea');
     expandBtn.addEventListener('click', () => {
-      if (promptContainer.style.display === 'none') {
-        promptContainer.style.display = 'flex';
+      const open = promptContainer.style.display === 'none';
+      promptContainer.style.display = open ? 'flex' : 'none';
+      expandBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        expandedTagPrompts.add(label);
         promptTextarea.focus();
       } else {
-        promptContainer.style.display = 'none';
+        expandedTagPrompts.delete(label);
       }
     });
 
-    // Save prompt on change
+    // Save prompt on change (blur)
     promptTextarea.addEventListener('change', (e) => {
-      chrome.runtime.sendMessage({
-        type: 'TAG_PROMPT_UPDATED',
-        payload: { tag: label, prompt: e.target.value }
-      });
+      send(MSG.TAG_PROMPT_UPDATED, { tag: label, prompt: e.target.value });
     });
 
     // Magic wand for existing tag
     const wandBtn = row.querySelector('.btn-wand-existing');
-    wandBtn.addEventListener('click', () => {
+    wandBtn.addEventListener('click', async () => {
       const currentPrompt = promptTextarea.value;
-      promptTextarea.placeholder = 'Regenerating...';
+      promptTextarea.placeholder = 'Regenerating…';
       promptTextarea.value = '';
-      chrome.runtime.sendMessage({
-        type: 'GENERATE_TAG_EVAL_PROMPT',
-        payload: { tag: label, currentPrompt }
-      }, (response) => {
-        if (response && response.success) {
-          promptTextarea.value = response.prompt;
-          chrome.runtime.sendMessage({
-            type: 'TAG_PROMPT_UPDATED',
-            payload: { tag: label, prompt: response.prompt }
-          });
-        } else {
-          promptTextarea.value = currentPrompt;
-        }
-      });
+      wandBtn.disabled = true;
+      const response = await send(MSG.GENERATE_TAG_EVAL_PROMPT, { tag: label, currentPrompt });
+      wandBtn.disabled = false;
+      // The row may have been re-rendered meanwhile: write to the live textarea.
+      const live = rowTextareaFor(label) || promptTextarea;
+      if (response && response.success && typeof response.prompt === 'string') {
+        live.value = response.prompt;
+        send(MSG.TAG_PROMPT_UPDATED, { tag: label, prompt: response.prompt });
+      } else {
+        live.value = currentPrompt;
+        notify('warn', 'Could not suggest a prompt right now.', 'tag-wand');
+      }
     });
 
     if (isDynamic) {
       row.querySelector('.btn-sticky-tag').addEventListener('click', () => {
-        chrome.runtime.sendMessage({
-          type: 'TAG_STICKY_TOGGLED',
-          payload: { tag: label, isSticky: !isSticky }
-        });
+        send(MSG.TAG_STICKY_TOGGLED, { tag: label, isSticky: !isSticky });
       });
-    }
-
-    if (isDynamic) {
       row.querySelector('.btn-promote-tag').addEventListener('click', () => {
-        chrome.runtime.sendMessage({
-          type: 'TAG_PROMOTED',
-          payload: { tag: label }
-        });
+        send(MSG.TAG_PROMOTED, { tag: label });
       });
     }
 
     row.querySelector('.btn-delete-tag').addEventListener('click', () => {
-      chrome.runtime.sendMessage({
-        type: 'TAG_REMOVED',
-        payload: { tag: label }
-      });
+      expandedTagPrompts.delete(label);
+      send(MSG.TAG_REMOVED, { tag: label });
     });
 
     list.appendChild(row);
   });
+
+  // Forget editors of tags that no longer exist.
+  for (const label of [...expandedTagPrompts]) if (!labelsNow.has(label)) expandedTagPrompts.delete(label);
+}
+
+/** The prompt textarea of a tag row currently in the DOM. */
+function rowTextareaFor(label) {
+  if (!dom.tagList) return null;
+  const row = [...dom.tagList.querySelectorAll('.tag-row')].find(r => r.dataset.tag === label);
+  return row ? row.querySelector('.tag-prompt-textarea') : null;
 }
 
 function renderSitesConfigurator() {
@@ -2163,8 +2298,9 @@ function renderSitesConfigurator() {
     const row = document.createElement('div');
     row.className = site.isCustom ? 'tag-row custom-site' : 'tag-row';
 
+    const siteId = escapeHTML(String(site.id ?? ''));
     const deleteBtnHtml = site.isCustom
-      ? `<button class="btn-tag-action btn-delete-tag btn-delete-site" data-id="${site.id}" title="Remove site">×</button>`
+      ? `<button class="btn-tag-action btn-delete-tag btn-delete-site" data-id="${siteId}" title="Remove site">×</button>`
       : '';
 
     const domainLabel = site.domain === '*' ? 'Any Site (*)' : escapeHTML(site.domain);
@@ -2177,7 +2313,7 @@ function renderSitesConfigurator() {
         ${cautionWarning}
       </div>
       <label class="tag-toggle">
-        <input type="checkbox" ${site.isEnabled ? 'checked' : ''} data-id="${site.id}">
+        <input type="checkbox" ${site.isEnabled ? 'checked' : ''} data-id="${siteId}">
         <span class="toggle-track"></span>
       </label>
       ${deleteBtnHtml}
@@ -2185,18 +2321,12 @@ function renderSitesConfigurator() {
 
     const checkbox = row.querySelector('input[type="checkbox"]');
     checkbox.addEventListener('change', () => {
-      chrome.runtime.sendMessage({
-        type: 'SITE_TOGGLED',
-        payload: { siteId: site.id, enabled: checkbox.checked }
-      });
+      send(MSG.SITE_TOGGLED, { siteId: site.id, enabled: checkbox.checked });
     });
 
     if (site.isCustom) {
       row.querySelector('.btn-delete-site').addEventListener('click', () => {
-        chrome.runtime.sendMessage({
-          type: 'SITE_REMOVED',
-          payload: { siteId: site.id }
-        });
+        send(MSG.SITE_REMOVED, { siteId: site.id });
       });
     }
 
@@ -2224,10 +2354,7 @@ function renderIgnoredKeywords() {
     `;
 
     row.querySelector('.btn-delete-kw').addEventListener('click', () => {
-      chrome.runtime.sendMessage({
-        type: 'KEYWORD_REMOVED',
-        payload: { keyword: kw }
-      });
+      send(MSG.KEYWORD_REMOVED, { keyword: kw });
     });
 
     list.appendChild(row);
@@ -2255,10 +2382,7 @@ function renderIgnoredTags() {
     `;
 
     row.querySelector('.btn-delete-ignored-tag').addEventListener('click', () => {
-      chrome.runtime.sendMessage({
-        type: 'IGNORE_TAG_REMOVED',
-        payload: { tag: t }
-      });
+      send(MSG.IGNORE_TAG_REMOVED, { tag: t });
     });
 
     list.appendChild(row);
@@ -2286,10 +2410,7 @@ function renderIgnoredDomains() {
     `;
 
     row.querySelector('.btn-delete-ignored-domain').addEventListener('click', () => {
-      chrome.runtime.sendMessage({
-        type: 'IGNORE_DOMAIN_REMOVED',
-        payload: { domain: d }
-      });
+      send(MSG.IGNORE_DOMAIN_REMOVED, { domain: d });
     });
 
     list.appendChild(row);
@@ -2317,57 +2438,210 @@ function renderIgnoredLinks() {
     `;
 
     row.querySelector('.btn-delete-ignored-link').addEventListener('click', () => {
-      chrome.runtime.sendMessage({
-        type: 'IGNORE_LINK_REMOVED',
-        payload: { url: lnk }
-      });
+      send(MSG.IGNORE_LINK_REMOVED, { url: lnk });
     });
 
     list.appendChild(row);
   });
 }
 
-function renderMatchPromptConfigurator() {
-  const cfg = state.configuration;
-  if (dom.matchPromptToggle && dom.matchPromptInput) {
-    if (document.activeElement !== dom.matchPromptInput) {
-      dom.matchPromptInput.value = cfg.matchPrompt || '';
-    }
-    dom.matchPromptToggle.checked = !!cfg.isMatchPromptEnabled;
-    
-    // Render the tags list with weights
-    if (dom.matchPromptTagsContainer) {
-      dom.matchPromptTagsContainer.innerHTML = '';
-      if (cfg.matchPrompt && cfg.matchPromptTags && cfg.matchPromptTags.length > 0) {
-        cfg.matchPromptTags.forEach(t => {
-          const name = typeof t === 'object' ? t.name : t;
-          const weight = typeof t === 'object' ? t.weight : null;
-          const span = document.createElement('span');
-          span.className = 'entity-chip';
-          if (weight) {
-            span.innerHTML = `#${escapeHTML(name)} <span style="font-weight: 700; color: var(--accent); margin-left: 2px;">${weight}</span>`;
-            span.style.opacity = (0.4 + (weight / 5) * 0.5).toFixed(2);
-          } else {
-            span.textContent = '#' + escapeHTML(name);
-            span.style.opacity = '0.6';
-          }
-          dom.matchPromptTagsContainer.appendChild(span);
-        });
-      }
-    }
+// ---------- Prompt filter ----------
 
-    // Render the enhanced prompt if available
-    if (dom.matchPromptEnhanced) {
-      const enhanced = cfg.matchPromptEnhanced || '';
-      if (cfg.matchPrompt && enhanced.trim()) {
-        dom.matchPromptEnhanced.style.display = 'block';
-        dom.matchPromptEnhanced.textContent = `Enhanced: "${enhanced}"`;
-      } else {
-        dom.matchPromptEnhanced.style.display = 'none';
-        dom.matchPromptEnhanced.textContent = '';
-      }
+/** Known EngineStatus.warnings (lib/pipeline/apply-decision.js promptWarnings and the cascade). */
+const PROMPT_WARNING_TEXT = {
+  empty_prompt: 'The filter is on but the prompt is empty, so every post is collected.',
+  gate_off_with_prompt: 'The filter is off, so every post is collected. Turn it on to keep only posts that match this prompt.'
+};
+
+// UPDATE_MATCH_PROMPT is debounced; GENERATE_PROMPT_TAGS follows the save. `promptGen` identifies
+// the latest edit so replies for older text are ignored.
+let promptGen = 0;
+let promptSaveInFlight = 0;
+let promptTagsPending = false;
+
+const savePromptDebounced = debounce((value) => { savePrompt(value); }, 600);
+
+/** Saves the prompt text, then asks for its key topics (chips) and expansion. */
+async function savePrompt(value) {
+  const gen = ++promptGen;
+  promptSaveInFlight += 1;
+  const reply = await send(MSG.UPDATE_MATCH_PROMPT, { prompt: value });
+  promptSaveInFlight -= 1;
+  if (!reply || reply.success === false) {
+    if (gen === promptGen) {
+      promptTagsPending = false;
+      notify('error', 'Could not save the prompt. Try again in a moment.', 'prompt-save');
+      renderMatchPromptConfigurator();
     }
+    return;
   }
+  state.configuration = { ...state.configuration, matchPrompt: value };
+  if (gen !== promptGen) return; // a newer edit is on its way
+  if (!value.trim()) {
+    promptTagsPending = false;
+    renderMatchPromptConfigurator();
+    return;
+  }
+  const res = await send(MSG.GENERATE_PROMPT_TAGS, { prompt: value });
+  if (gen !== promptGen) return; // the prompt changed while the topics were generated
+  promptTagsPending = false;
+  if (!res || res.stale || res.success === false) {
+    // Stale replies (the prompt changed in the meantime) are ignored: broadcasts carry the truth.
+    renderMatchPromptConfigurator();
+    return;
+  }
+  renderPromptChips(res.tags);
+  renderPromptEnhanced(res.enhanced);
+}
+
+/** Prompt-topic chips; tags may be strings or { name, weight }. Text is set with textContent. */
+function renderPromptChips(tags) {
+  const box = dom.matchPromptTagsContainer;
+  if (!box) return;
+  box.textContent = '';
+  (Array.isArray(tags) ? tags : []).forEach(t => {
+    const name = typeof t === 'string' ? t : (t && typeof t.name === 'string' ? t.name : '');
+    if (!name.trim()) return;
+    const weight = t && typeof t === 'object' && Number.isFinite(t.weight) ? t.weight : null;
+    const chip = document.createElement('span');
+    chip.className = 'entity-chip prompt-chip';
+    chip.textContent = `#${name.trim()}`;
+    if (weight !== null) {
+      const w = document.createElement('span');
+      w.className = 'chip-weight';
+      w.textContent = String(weight);
+      chip.append(' ', w);
+      chip.style.opacity = Math.min(1, 0.4 + (weight / 5) * 0.5).toFixed(2);
+    }
+    box.appendChild(chip);
+  });
+}
+
+function renderPromptChipsLoading() {
+  const box = dom.matchPromptTagsContainer;
+  if (!box) return;
+  box.textContent = '';
+  const note = document.createElement('span');
+  note.className = 'prompt-chips-loading';
+  note.textContent = 'Finding the key topics…';
+  box.appendChild(note);
+}
+
+function renderPromptEnhanced(enhanced) {
+  if (!dom.matchPromptEnhanced) return;
+  const text = typeof enhanced === 'string' ? enhanced.trim() : '';
+  dom.matchPromptEnhanced.textContent = text ? `Expanded: “${text}”` : '';
+  dom.matchPromptEnhanced.classList.toggle('hidden', !text);
+}
+
+function renderMatchPromptConfigurator() {
+  const cfg = state.configuration || {};
+  if (!dom.matchPromptToggle || !dom.matchPromptInput) return;
+  // Never overwrite what the user is typing, or typed and has not saved yet.
+  const editing = document.activeElement === dom.matchPromptInput || savePromptDebounced.pending() || promptSaveInFlight > 0;
+  if (!editing && dom.matchPromptInput.value !== (cfg.matchPrompt || '')) {
+    dom.matchPromptInput.value = cfg.matchPrompt || '';
+  }
+  dom.matchPromptToggle.checked = !!cfg.isMatchPromptEnabled;
+
+  if (promptTagsPending) renderPromptChipsLoading();
+  else renderPromptChips(cfg.matchPrompt ? cfg.matchPromptTags : []);
+  if (!promptTagsPending) renderPromptEnhanced(cfg.matchPrompt ? cfg.matchPromptEnhanced : '');
+
+  renderPromptStatus();
+}
+
+/**
+ * ON/OFF state of the filter plus a one-line hint: the prompt is set but the filter is off, the
+ * filter is on with an empty prompt, and other EngineStatus warnings.
+ */
+function renderPromptStatus() {
+  if (!dom.matchPromptState || !dom.matchPromptHint) return;
+  const cfg = state.configuration || {};
+  const on = !!cfg.isMatchPromptEnabled;
+  const typed = dom.matchPromptInput ? dom.matchPromptInput.value : '';
+  const hasPrompt = !!String((dom.matchPromptInput ? typed : cfg.matchPrompt) || '').trim();
+
+  dom.matchPromptState.textContent = on ? 'On' : 'Off';
+  dom.matchPromptState.dataset.on = on ? 'true' : 'false';
+  if (dom.promptSection) dom.promptSection.dataset.filter = on ? 'on' : 'off';
+
+  const lines = [];
+  let tone = 'info';
+  // Derived here (fresher than the service worker's copy while the user types).
+  if (on && !hasPrompt) {
+    lines.push(PROMPT_WARNING_TEXT.empty_prompt);
+    tone = 'warn';
+  } else if (!on && hasPrompt) {
+    lines.push(PROMPT_WARNING_TEXT.gate_off_with_prompt);
+  }
+  const warnings = state.engineStatus && Array.isArray(state.engineStatus.warnings) ? state.engineStatus.warnings : [];
+  for (const w of warnings) {
+    if (typeof w !== 'string' || w === 'empty_prompt' || w === 'gate_off_with_prompt') continue;
+    lines.push(PROMPT_WARNING_TEXT[w] || w.replace(/_/g, ' '));
+    tone = 'warn';
+  }
+  dom.matchPromptHint.textContent = lines.join(' ');
+  dom.matchPromptHint.dataset.tone = tone;
+  dom.matchPromptHint.classList.toggle('hidden', lines.length === 0);
+}
+
+// ---------- Stream status: hidden-by-prompt pill, re-decide progress ----------
+
+function renderStreamStatus() {
+  if (!dom.streamStatus) return;
+  const hidden = countHiddenByPrompt();
+  if (hidden === 0 && showHiddenByPrompt) showHiddenByPrompt = false;
+
+  dom.hiddenPill.classList.toggle('hidden', hidden === 0);
+  dom.hiddenPill.classList.toggle('active', showHiddenByPrompt);
+  dom.hiddenPill.setAttribute('aria-pressed', showHiddenByPrompt ? 'true' : 'false');
+  dom.hiddenPillLabel.textContent = `Hidden by prompt (${hidden})`;
+  dom.hiddenPill.title = showHiddenByPrompt
+    ? 'Showing posts that no longer match your prompt. Click to hide them again.'
+    : 'Posts that no longer match your prompt are hidden, never deleted. Click to show them.';
+
+  const p = lastRedecide;
+  const showProgress = !!p;
+  dom.redecideStatus.classList.toggle('hidden', !showProgress);
+  if (showProgress) {
+    const total = Number(p.total) || 0;
+    const done = Math.min(Number(p.done) || 0, total || Infinity);
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    dom.redecideText.textContent = p.finished
+      ? `Re-checked ${total} post${total === 1 ? '' : 's'} · ${Number(p.hidden) || 0} hidden`
+      : `Re-checking posts… ${total > 0 ? `${done}/${total}` : ''}`;
+    const fill = dom.redecideBar.querySelector('.progress-fill');
+    dom.redecideBar.classList.toggle('indeterminate', !p.finished && total === 0);
+    fill.style.width = p.finished ? '100%' : (total > 0 ? `${pct}%` : '');
+    dom.redecideBar.setAttribute('aria-valuenow', String(p.finished ? 100 : pct));
+  }
+  dom.streamStatus.classList.toggle('hidden', hidden === 0 && !showProgress);
+}
+
+/** REDECIDE_PROGRESS { jobId, done, total, hidden, finished } */
+function onRedecideProgress(p) {
+  if (!p || typeof p !== 'object') return;
+  lastRedecide = { ...p };
+  renderStreamStatus();
+  if (diagnostics) diagnostics.onRedecideProgress(p);
+  if (p.finished) {
+    const finishedJob = p.jobId;
+    setTimeout(() => {
+      if (lastRedecide && lastRedecide.finished && lastRedecide.jobId === finishedJob) {
+        lastRedecide = null;
+        renderStreamStatus();
+      }
+    }, 5000);
+  }
+}
+
+function toggleHiddenByPrompt() {
+  showHiddenByPrompt = !showHiddenByPrompt;
+  renderStreamStatus();
+  applyFilterChange();
+  renderTelemetry();
+  renderExportNote();
 }
 
 function renderAll() {
@@ -2375,10 +2649,12 @@ function renderAll() {
   renderEngineStatus();
   renderProcessingStatus();
   renderPauseStatus();
+  renderStreamStatus();
   renderFilterPills();
   renderSiteFilterPills();
   renderAuthorPills();
   renderFeed();
+  renderExportNote();
   renderMatchPromptConfigurator();
   renderTagConfigurator();
   renderSitesConfigurator();
@@ -2386,485 +2662,51 @@ function renderAll() {
   renderIgnoredTags();
   renderIgnoredDomains();
   renderIgnoredLinks();
+  if (intelligence) intelligence.update({ configuration: state.configuration });
 }
 
-// ---------- HTML Feed Diary Export Builder ----------
+// ---------- Exports (ui/export.js) ----------
 
-function triggerHtmlExport() {
-  const stack = getActiveStack();
-  if (stack.length === 0) {
-    alert('No items collected to export. Start scrolling feeds first!');
-    return;
+function manifestVersion() {
+  try {
+    return (chrome.runtime.getManifest && chrome.runtime.getManifest().version) || '';
+  } catch {
+    return '';
   }
-
-  const itemsHtml = stack.map(item => {
-    const { title, body } = parseCardText(item.textSnippet);
-    const tag = item.assignedTag || 'Unclassified';
-    const tagColor = getTagColor(tag);
-    const platform = item.sourcePlatform || 'unknown';
-    const timestampStr = new Date(item.timestamp).toLocaleString();
-    const linkStr = item.sourceUrl 
-      ? `<a href="${escapeHTML(item.sourceUrl)}" target="_blank" class="card-link">${escapeHTML(extractDomain(item.sourceUrl))} ↗</a>` 
-      : '';
-    const adBadge = item.isAd ? `<span class="ad-badge">Ad</span>` : '';
-    const bodyStr = body ? `<div class="card-body">${escapeHTML(body)}</div>` : '';
-    const favIndicator = item.isFavorite ? '<span class="fav-indicator">❤️ Favorite</span>' : '';
-
-    let authorHtml = '';
-    if (item.authorName) {
-      const authorNameSafe = escapeHTML(item.authorName);
-      if (item.authorUrl) {
-        authorHtml = `<a href="${escapeHTML(item.authorUrl)}" target="_blank" class="card-author-pill">@${authorNameSafe}</a>`;
-      } else {
-        authorHtml = `<span class="card-author-pill">@${authorNameSafe}</span>`;
-      }
-    }
-
-    return `
-      <div class="card" data-category="${escapeHTML(tag)}" data-favorite="${item.isFavorite}" data-ad="${item.isAd}">
-        <div class="card-header">
-          <span class="platform">${escapeHTML(platform)}</span>
-          ${linkStr}
-          ${authorHtml}
-          <span class="time">${timestampStr}</span>
-          ${adBadge}
-          ${favIndicator}
-        </div>
-        <div class="card-title">${escapeHTML(title)}</div>
-        ${bodyStr}
-        <div class="card-footer">
-          <span class="card-category" style="--tag-color: ${tagColor}">
-            <span class="cat-dot"></span>${escapeHTML(tag)}
-          </span>
-        </div>
-      </div>
-    `;
-  }).join('\n');
-
-
-  const htmlTemplate = `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ScrollCollector — Personal Feed Diary</title>
-  <style>
-    :root {
-      --bg: #09090b;
-      --bg-elevated: #131316;
-      --bg-hover: #1e1e22;
-      --text-primary: #f4f4f5;
-      --text-secondary: #a1a1aa;
-      --text-muted: #52525b;
-      --border: #202024;
-      --accent: #6366f1;
-      --accent-hover: #4f46e5;
-    }
-
-    body.light-theme {
-      --bg: #fafafa;
-      --bg-elevated: #ffffff;
-      --bg-hover: #f4f4f5;
-      --text-primary: #09090b;
-      --text-secondary: #71717a;
-      --text-muted: #a1a1aa;
-      --border: #e4e4e7;
-      --accent: #4f46e5;
-      --accent-hover: #3730a3;
-    }
-
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text-primary);
-      padding: 40px 24px;
-      line-height: 1.5;
-      transition: background 0.3s ease, color 0.3s ease;
-    }
-
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-    }
-
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 30px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 20px;
-    }
-
-    h1 {
-      font-size: 24px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-    }
-
-    .theme-toggle {
-      background: var(--bg-elevated);
-      color: var(--text-secondary);
-      border: 1px solid var(--border);
-      padding: 6px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 600;
-      transition: all 0.2s;
-    }
-    .theme-toggle:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-
-    /* Controls */
-    .controls {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      margin-bottom: 24px;
-    }
-
-    .search-input {
-      width: 100%;
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      color: var(--text-primary);
-      padding: 10px 16px;
-      border-radius: 8px;
-      font-size: 14px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
-    .search-input:focus {
-      border-color: var(--accent);
-    }
-
-    .filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .filter-btn {
-      background: var(--bg-elevated);
-      color: var(--text-secondary);
-      border: 1px solid var(--border);
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .filter-btn:hover {
-      background: var(--bg-hover);
-      color: var(--text-primary);
-    }
-    .filter-btn.active {
-      background: var(--accent);
-      color: #ffffff;
-      border-color: var(--accent);
-    }
-
-    /* Cards Grid */
-    .cards-list {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-
-    .card {
-      background: var(--bg-elevated);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 20px;
-      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-      transition: transform 0.2s, border-color 0.2s;
-    }
-    .card:hover {
-      transform: translateY(-2px);
-      border-color: var(--text-muted);
-    }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 11px;
-      color: var(--text-secondary);
-      margin-bottom: 12px;
-    }
-
-    .platform {
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .card-link {
-      color: var(--accent);
-      text-decoration: none;
-    }
-    .card-link:hover { text-decoration: underline; }
-
-    .time {
-      color: var(--text-muted);
-      margin-left: auto;
-    }
-
-    .fav-indicator {
-      background: rgba(236, 72, 153, 0.12);
-      color: #ec4899;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-
-    .ad-badge {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ef4444;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-weight: 700;
-    }
-
-    .card-author-pill {
-      font-size: 11px;
-      color: var(--text-primary);
-      background: var(--bg-hover);
-      border: 1px solid var(--border);
-      padding: 2px 8px;
-      border-radius: 12px;
-      text-decoration: none;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      max-width: 150px;
-      display: inline-block;
-    }
-
-
-    .card-title {
-      font-size: 16px;
-      font-weight: 700;
-      line-height: 1.4;
-      margin-bottom: 8px;
-      word-break: break-all;
-      overflow-wrap: break-word;
-      word-wrap: break-word;
-    }
-
-    .card-body {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.6;
-      margin-bottom: 12px;
-      white-space: pre-wrap;
-      word-break: break-all;
-      overflow-wrap: break-word;
-      word-wrap: break-word;
-    }
-
-    .card-footer {
-      display: flex;
-      align-items: center;
-      border-top: 1px solid var(--border);
-      padding-top: 12px;
-    }
-
-    .card-category {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 11px;
-      font-weight: 600;
-    }
-
-    .cat-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      background: var(--tag-color, var(--text-muted));
-    }
-
-    .no-results {
-      text-align: center;
-      padding: 40px;
-      color: var(--text-muted);
-      font-style: italic;
-      display: none;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <header>
-      <h1>ScrollCollector Diary</h1>
-      <button class="theme-toggle" id="theme-btn">Light Theme</button>
-    </header>
-
-    <div class="controls">
-      <input type="text" id="search" class="search-input" placeholder="Search insights by keywords, domains, or body text...">
-      <div class="filters" id="filters-container">
-        <button class="filter-btn active" data-filter="all">All</button>
-        <button class="filter-btn" data-filter="favorites">❤️ Favorites</button>
-        <button class="filter-btn" data-filter="ads">Ads</button>
-      </div>
-    </div>
-
-    <div class="cards-list" id="cards-wrapper">
-      ${itemsHtml}
-      <div class="no-results" id="no-results-msg">No matching insights found.</div>
-    </div>
-  </div>
-
-  <script>
-    const searchInput = document.getElementById('search');
-    const cards = Array.from(document.querySelectorAll('.card'));
-    const filtersContainer = document.getElementById('filters-container');
-    const noResults = document.getElementById('no-results-msg');
-    
-    // Theme Toggle
-    const themeBtn = document.getElementById('theme-btn');
-    themeBtn.addEventListener('click', () => {
-      const isLight = document.body.classList.toggle('light-theme');
-      themeBtn.textContent = isLight ? 'Dark Theme' : 'Light Theme';
-    });
-
-    // Populate Dynamic Filters
-    const categories = new Set();
-    cards.forEach(card => {
-      const cat = card.dataset.category;
-      if (cat && cat !== 'Ads' && cat !== 'Unclassified') {
-        categories.add(cat);
-      }
-    });
-    
-    categories.forEach(cat => {
-      const btn = document.createElement('button');
-      btn.className = 'filter-btn';
-      btn.dataset.filter = cat.toLowerCase();
-      btn.textContent = cat;
-      filtersContainer.appendChild(btn);
-    });
-
-    const allFilters = Array.from(document.querySelectorAll('.filter-btn'));
-    let activeFilter = 'all';
-
-    allFilters.forEach(btn => {
-      btn.addEventListener('click', () => {
-        allFilters.forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        activeFilter = btn.dataset.filter;
-        filterAndSearch();
-      });
-    });
-
-    searchInput.addEventListener('input', filterAndSearch);
-
-    function filterAndSearch() {
-      const query = searchInput.value.toLowerCase().trim();
-      let matchCount = 0;
-
-      cards.forEach(card => {
-        const text = card.textContent.toLowerCase();
-        const category = card.dataset.category.toLowerCase();
-        const isFavorite = card.dataset.favorite === 'true';
-        const isAd = card.dataset.ad === 'true';
-
-        let matchesFilter = false;
-        if (activeFilter === 'all') {
-          matchesFilter = true;
-        } else if (activeFilter === 'favorites') {
-          matchesFilter = isFavorite;
-        } else if (activeFilter === 'ads') {
-          matchesFilter = isAd;
-        } else {
-          matchesFilter = category === activeFilter;
-        }
-
-        const matchesQuery = !query || text.includes(query);
-
-        if (matchesFilter && matchesQuery) {
-          card.style.display = 'block';
-          matchCount++;
-        } else {
-          card.style.display = 'none';
-        }
-      });
-
-      noResults.style.display = matchCount === 0 ? 'block' : 'none';
-    }
-  </script>
-</body>
-</html>`;
-
-  const blob = new Blob([htmlTemplate], { type: 'text/html;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `scrollcollector_diary_${Date.now()}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
-// ---------- Standard Data Downloaders ----------
-
-function triggerJsonExport() {
-  const stack = getActiveStack();
-  if (stack.length === 0) {
-    alert('No items collected to export.');
-    return;
-  }
-
-  const jsonString = JSON.stringify(stack, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `scrollcollector_export_${Date.now()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+/** Exports contain what the feed shows: ignore lists apply; hidden-by-prompt posts only when shown. */
+function renderExportNote() {
+  if (!dom.exportNote) return;
+  const hidden = countHiddenByPrompt();
+  const text = hidden > 0 && !showHiddenByPrompt
+    ? `${hidden} post${hidden === 1 ? '' : 's'} hidden by your prompt ${hidden === 1 ? 'is' : 'are'} not included. Turn on “Hidden by prompt” in Stream to include ${hidden === 1 ? 'it' : 'them'}.`
+    : '';
+  dom.exportNote.textContent = text;
+  dom.exportNote.classList.toggle('hidden', !text);
 }
 
-function triggerCsvExport() {
-  const stack = getActiveStack();
-  if (stack.length === 0) {
-    alert('No items collected to export.');
+/** @param {'json'|'csv'|'html'} kind */
+function triggerExport(kind) {
+  const items = getActiveStack();
+  if (items.length === 0) {
+    notify('info', 'Nothing to export yet. Start scrolling a feed first.', 'export');
     return;
   }
-
-  const headers = ['ID', 'Timestamp', 'Platform', 'Source URL', 'Category', 'Is Ad', 'Is Favorite', 'Favorited At', 'Text Snippet'];
-  
-  const rows = stack.map(item => [
-    item.id,
-    new Date(item.timestamp).toISOString(),
-    item.sourcePlatform || 'unknown',
-    item.sourceUrl || '',
-    item.assignedTag || 'Unclassified',
-    item.isAd ? 'TRUE' : 'FALSE',
-    item.isFavorite ? 'TRUE' : 'FALSE',
-    item.favoritedAt ? new Date(item.favoritedAt).toISOString() : '',
-    `"${(item.textSnippet || '').replace(/"/g, '""')}"`
-  ]);
-
-  const csvContent = [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `scrollcollector_export_${Date.now()}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  const now = Date.now();
+  const input = { items, configuration: state.configuration, version: manifestVersion(), now };
+  let content;
+  if (kind === 'json') content = toJson(input);
+  // The BOM lets spreadsheet apps detect UTF-8.
+  else if (kind === 'csv') content = `﻿${toCsv(items)}`;
+  else content = toHtmlExport({ ...input, tagColor: getTagColor });
+  try {
+    downloadText(content, exportFilename(kind, now), EXPORT_MIME[kind]);
+    notify('success', `Exported ${items.length} post${items.length === 1 ? '' : 's'} as ${kind.toUpperCase()}.`, 'export');
+  } catch (err) {
+    console.error('[sidepanel] export failed', err);
+    notify('error', 'The export failed. Please try again.', 'export');
+  }
 }
 
 // ---------- Tab Change Auto-Detection Listener ----------
@@ -2930,22 +2772,95 @@ function handleTabUrlChange(url) {
 // ---------- Message Listener ----------
 
 function initMessageListener() {
-  chrome.runtime.onMessage.addListener((message) => {
-    if (!message || !message.type) return;
+  chrome.runtime.onMessage.addListener((message, sender) => {
+    // Messages for the offscreen document / service worker carry a target: not ours.
+    if (!message || typeof message.type !== 'string' || message.target) return;
+    // Only this extension's own contexts (the service worker) update the panel. Content scripts
+    // run inside web pages: a compromised page could otherwise forge the collected stack, toasts,
+    // the engine badge or re-decide progress in this trusted UI.
+    if (!isExtensionPageSender(sender)) return;
 
     switch (message.type) {
-      case 'STATE_UPDATED':
-        state = { ...state, ...message.payload };
-        renderAll();
+      case MSG.STATE_UPDATED:
+        if (message.payload && typeof message.payload === 'object') {
+          state = { ...state, ...message.payload, engineStatus: state.engineStatus };
+          renderAll();
+        }
         break;
 
-      case 'ENGINE_STATUS':
-        state.engineStatus = message.payload;
-        renderEngineStatus();
-        renderTelemetry();
+      case MSG.INFLIGHT_UPDATED:
+        // Cheap counter update: no full re-render.
+        state.inFlightCount = Math.max(0, Number(message.payload && message.payload.count) || 0);
+        renderProcessingStatus();
         break;
+
+      case MSG.ENGINE_STATUS:
+        applyEngineStatus(message.payload);
+        break;
+
+      case MSG.REDECIDE_PROGRESS:
+        onRedecideProgress(message.payload);
+        break;
+
+      case MSG.TOAST: {
+        const p = message.payload || {};
+        if (typeof p.text === 'string' && p.text.trim()) notify(p.level, p.text, typeof p.key === 'string' ? p.key : undefined);
+        break;
+      }
     }
   });
+}
+
+// ---------- Intelligence settings & diagnostics ----------
+
+/** Calibrated confidence floors of a System 1 model (placeholders for the floor inputs). */
+async function loadCalibration(modelKey) {
+  if (!/^[a-z0-9-]+$/i.test(String(modelKey || ''))) return null;
+  try {
+    const res = await fetch(chrome.runtime.getURL(`lib/decision/calibration/${modelKey}.q8.json`));
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json && typeof json === 'object' ? { floor: json.floor || null } : null;
+  } catch {
+    return null;
+  }
+}
+
+function initIntelligence() {
+  const intelligenceRoot = $('#intelligence-root');
+  const diagnosticsRoot = $('#diagnostics-root');
+  if (intelligenceRoot) {
+    intelligence = mountIntelligence(intelligenceRoot, {
+      send,
+      toast: toaster,
+      getLanguageModel: () => globalThis.LanguageModel,
+      loadCalibration
+    });
+  }
+  if (diagnosticsRoot) {
+    diagnostics = mountDiagnostics(diagnosticsRoot, {
+      send,
+      toast: toaster,
+      getContext: () => ({
+        version: manifestVersion(),
+        intelligence: (state.configuration && state.configuration.intelligence) || null,
+        engineStatus: state.engineStatus
+      }),
+      onDiagnostics: (diag) => {
+        if (intelligence) intelligence.update({ diagnostics: diag });
+        if (diag && diag.engineStatus && typeof diag.engineStatus === 'object' && diag.engineStatus.badge) {
+          applyEngineStatus(diag.engineStatus);
+        }
+      }
+    });
+  }
+}
+
+/** Header badge: opens Settings › Intelligence. */
+function openIntelligenceSettings() {
+  switchTab('settings');
+  const section = $('#intelligence-section');
+  if (section) section.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ---------- DOMContentLoaded Bootstrap ----------
@@ -2955,12 +2870,19 @@ document.addEventListener('DOMContentLoaded', () => {
     telTotal: $('#tel-total'),
     telRate: $('#tel-rate'),
     telEngine: $('#tel-engine'),
+    engineBadge: $('#engine-badge'),
     engineDot: $('#engine-dot'),
     engineLabel: $('#engine-label'),
     processingIndicator: $('#processing-indicator'),
     processingCount: $('#processing-count'),
     streamList: $('#stream-list'),
     streamEmpty: $('#stream-empty'),
+    streamStatus: $('#stream-status'),
+    hiddenPill: $('#hidden-pill'),
+    hiddenPillLabel: $('#hidden-pill-label'),
+    redecideStatus: $('#redecide-status'),
+    redecideText: $('#redecide-text'),
+    redecideBar: $('#redecide-bar'),
     filterPills: $('#filter-pills'),
     filterSitePills: $('#filter-site-pills'), // Site filter scroller
     filterAuthorPills: $('#filter-author-pills'), // Author filter scroller
@@ -2986,6 +2908,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnExportHtml: $('#btn-export-html'),
     btnExportJson: $('#btn-export-json'),
     btnExportCsv: $('#btn-export-csv'),
+    exportNote: $('#export-note'),
 
     // Settings config
     tagList: $('#tag-list'),
@@ -3008,8 +2931,11 @@ document.addEventListener('DOMContentLoaded', () => {
     newIgnoredDomainInput: $('#new-ignored-domain-input'),
     newIgnoredLinkInput: $('#new-ignored-link-input'),
 
+    promptSection: $('#prompt-section'),
     matchPromptToggle: $('#match-prompt-toggle'),
+    matchPromptState: $('#match-prompt-state'),
     matchPromptInput: $('#match-prompt-input'),
+    matchPromptHint: $('#match-prompt-hint'),
     matchPromptTagsContainer: $('#match-prompt-tags-container'),
     matchPromptEnhanced: $('#match-prompt-enhanced'),
 
@@ -3021,9 +2947,17 @@ document.addEventListener('DOMContentLoaded', () => {
     themeToggle: $('#theme-toggle'),
   };
 
+  // Toasts first: everything below may report through them.
+  toaster = createToaster({ root: document.body });
+
   // Init Theme
   initTheme();
   dom.themeToggle.addEventListener('click', toggleTheme);
+
+  // Engine badge: grey "checking" until the service worker answers; polled only while unknown/loading.
+  enginePoller = createEnginePoller({ poll: fetchEngineStatus, intervalMs: 5000 });
+  renderEngineStatus();
+  dom.engineBadge.addEventListener('click', openIntelligenceSettings);
 
   // Init segmented tab panels switching
   initTabs();
@@ -3040,6 +2974,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // Keyboard navigation shortcuts
   initKeyboardNavigation();
 
+  // Settings › Intelligence (System 1, providers, behaviour) and Diagnostics
+  initIntelligence();
+
+  // Hidden-by-prompt pill
+  dom.hiddenPill.addEventListener('click', toggleHiddenByPrompt);
+
+  // Tracked Categories: re-render once the user leaves a text field the broadcasts skipped.
+  dom.tagList.addEventListener('focusout', () => {
+    setTimeout(() => {
+      if (tagListDirty && !(dom.tagList.contains(document.activeElement) && isTextEntry(document.activeElement))) {
+        renderTagConfigurator();
+      }
+    }, 0);
+  });
+
   // Add tag form handler
   // New tag prompt logic
   const newTagInput = $('#new-tag-input');
@@ -3047,6 +2996,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const newTagPromptInput = $('#new-tag-prompt-input');
   const newTagWandBtn = $('#new-tag-wand-btn');
   let newTagDebounce = null;
+  let newTagRequest = 0;
 
   newTagInput.addEventListener('input', (e) => {
     const val = e.target.value.trim();
@@ -3059,51 +3009,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (newTagPromptContainer.style.display === 'none') {
       newTagPromptContainer.style.display = 'flex';
-      newTagPromptInput.placeholder = 'Generating prompt...';
+      newTagPromptInput.placeholder = 'Generating prompt…';
       newTagPromptInput.value = '';
     }
 
     clearTimeout(newTagDebounce);
-    newTagDebounce = setTimeout(() => {
-      chrome.runtime.sendMessage({
-        type: 'GENERATE_TAG_EVAL_PROMPT',
-        payload: { tag: val, currentPrompt: '' }
-      }, (response) => {
-        if (response && response.success && !newTagPromptInput.value) { // only set if user hasn't typed
-          newTagPromptInput.value = response.prompt;
-        }
-      });
+    newTagDebounce = setTimeout(async () => {
+      const request = ++newTagRequest;
+      const response = await send(MSG.GENERATE_TAG_EVAL_PROMPT, { tag: val, currentPrompt: '' });
+      // Only fill in when this is still the latest request and the user has not typed a prompt.
+      if (request === newTagRequest && response && response.success && typeof response.prompt === 'string' && !newTagPromptInput.value) {
+        newTagPromptInput.value = response.prompt;
+      }
     }, 800);
   });
 
-  newTagWandBtn.addEventListener('click', () => {
+  newTagWandBtn.addEventListener('click', async () => {
     const val = newTagInput.value.trim();
     if (!val) return;
     const currentPrompt = newTagPromptInput.value;
     newTagPromptInput.value = '';
-    newTagPromptInput.placeholder = 'Regenerating...';
-    chrome.runtime.sendMessage({
-      type: 'GENERATE_TAG_EVAL_PROMPT',
-      payload: { tag: val, currentPrompt }
-    }, (response) => {
-      if (response && response.success) {
-        newTagPromptInput.value = response.prompt;
-      }
-    });
+    newTagPromptInput.placeholder = 'Regenerating…';
+    const request = ++newTagRequest;
+    const response = await send(MSG.GENERATE_TAG_EVAL_PROMPT, { tag: val, currentPrompt });
+    if (request !== newTagRequest) return;
+    if (response && response.success && typeof response.prompt === 'string') {
+      newTagPromptInput.value = response.prompt;
+    } else {
+      newTagPromptInput.value = currentPrompt;
+      notify('warn', 'Could not suggest a prompt right now.', 'tag-wand');
+    }
   });
 
-  dom.addTagForm.addEventListener('submit', (e) => {
+  dom.addTagForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const tagVal = newTagInput.value.trim();
     const promptVal = newTagPromptInput.value.trim();
     if (!tagVal) return;
-    chrome.runtime.sendMessage({
-      type: 'TAG_ADDED',
-      payload: { tag: tagVal, prompt: promptVal }
-    });
+    newTagRequest += 1;
     newTagInput.value = '';
     newTagPromptInput.value = '';
     newTagPromptContainer.style.display = 'none';
+    const reply = await send(MSG.TAG_ADDED, { tag: tagVal, prompt: promptVal });
+    if (reply && reply.success === false) notify('warn', reply.error === 'Tag already exists' ? `“${tagVal}” is already tracked.` : `Could not add “${tagVal}”.`, 'tag-add');
   });
 
   // Add site form handler
@@ -3112,13 +3060,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const value = dom.newSiteInput.value.trim();
     if (!value) return;
     if (!value.includes('.')) {
-      alert('Please enter a valid domain name (e.g. reddit.com)');
+      notify('warn', 'Enter a domain name such as reddit.com.', 'site-add');
+      dom.newSiteInput.focus();
       return;
     }
-    chrome.runtime.sendMessage({
-      type: 'SITE_ADDED',
-      payload: { domain: value }
-    });
+    send(MSG.SITE_ADDED, { domain: value });
     dom.newSiteInput.value = '';
   });
 
@@ -3127,10 +3073,7 @@ document.addEventListener('DOMContentLoaded', () => {
     e.preventDefault();
     const value = dom.newKeywordInput.value.trim();
     if (!value) return;
-    chrome.runtime.sendMessage({
-      type: 'KEYWORD_ADDED',
-      payload: { keyword: value }
-    });
+    send(MSG.KEYWORD_ADDED, { keyword: value });
     dom.newKeywordInput.value = '';
   });
 
@@ -3140,10 +3083,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const value = dom.newIgnoredTagInput.value.trim();
       if (!value) return;
-      chrome.runtime.sendMessage({
-        type: 'IGNORE_TAG_ADDED',
-        payload: { tag: value }
-      });
+      send(MSG.IGNORE_TAG_ADDED, { tag: value });
       dom.newIgnoredTagInput.value = '';
     });
   }
@@ -3154,10 +3094,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const value = dom.newIgnoredDomainInput.value.trim();
       if (!value) return;
-      chrome.runtime.sendMessage({
-        type: 'IGNORE_DOMAIN_ADDED',
-        payload: { domain: value }
-      });
+      send(MSG.IGNORE_DOMAIN_ADDED, { domain: value });
       dom.newIgnoredDomainInput.value = '';
     });
   }
@@ -3168,106 +3105,58 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       const value = dom.newIgnoredLinkInput.value.trim();
       if (!value) return;
-      chrome.runtime.sendMessage({
-        type: 'IGNORE_LINK_ADDED',
-        payload: { url: value }
-      });
+      send(MSG.IGNORE_LINK_ADDED, { url: value });
       dom.newIgnoredLinkInput.value = '';
     });
   }
 
-  // Match prompt handlers
+  // Prompt filter: toggle + debounced save (600 ms) followed by topic generation
   if (dom.matchPromptToggle && dom.matchPromptInput) {
-    dom.matchPromptToggle.addEventListener('change', (e) => {
-      chrome.runtime.sendMessage({
-        type: 'TOGGLE_MATCH_PROMPT',
-        payload: { isEnabled: e.target.checked }
-      });
+    dom.matchPromptToggle.addEventListener('change', async (e) => {
+      const isEnabled = !!e.target.checked;
+      // The toggle acts on the saved prompt: save pending typing first.
+      savePromptDebounced.flush();
+      state.configuration = { ...state.configuration, isMatchPromptEnabled: isEnabled };
+      renderPromptStatus();
+      const reply = await send(MSG.TOGGLE_MATCH_PROMPT, { isEnabled });
+      if (!reply || reply.success === false) {
+        notify('error', 'Could not change the prompt filter. Try again.', 'prompt-toggle');
+        state.configuration = { ...state.configuration, isMatchPromptEnabled: !isEnabled };
+        renderMatchPromptConfigurator();
+      }
+      // { stale: true } replies only mean the expansion was for an older prompt: nothing to do.
     });
 
-    let debounceTimeout = null;
     dom.matchPromptInput.addEventListener('input', (e) => {
       const val = e.target.value;
-      
-      // Save configuration
-      chrome.runtime.sendMessage({
-        type: 'UPDATE_MATCH_PROMPT',
-        payload: { prompt: val }
-      });
-      
-      // Clear containers and show loading state if not empty
-      if (dom.matchPromptTagsContainer) {
-        if (!val.trim()) {
-          dom.matchPromptTagsContainer.innerHTML = '';
-        } else {
-          dom.matchPromptTagsContainer.innerHTML = '<span style="font-size: 10px; color: var(--text-secondary);">Generating expected tags...</span>';
-        }
-      }
-      if (dom.matchPromptEnhanced) {
-        dom.matchPromptEnhanced.textContent = '';
-        dom.matchPromptEnhanced.style.display = 'none';
-      }
-
-      // Debounce tag generation (expensive AI call)
-      clearTimeout(debounceTimeout);
-      debounceTimeout = setTimeout(() => {
-        if (!val.trim()) return;
-
-        chrome.runtime.sendMessage({
-          type: 'GENERATE_PROMPT_TAGS',
-          payload: { prompt: val }
-        }, (response) => {
-          if (dom.matchPromptTagsContainer) {
-            dom.matchPromptTagsContainer.innerHTML = ''; // clear loading
-            if (response && response.success && response.tags && response.tags.length > 0) {
-              response.tags.forEach(t => {
-                const name = typeof t === 'object' ? t.name : t;
-                const weight = typeof t === 'object' ? t.weight : null;
-                const span = document.createElement('span');
-                span.className = 'entity-chip';
-                if (weight) {
-                  span.innerHTML = `#${escapeHTML(name)} <span style="font-weight: 700; color: var(--accent); margin-left: 2px;">${weight}</span>`;
-                  span.style.opacity = (0.4 + (weight / 5) * 0.5).toFixed(2);
-                } else {
-                  span.textContent = '#' + escapeHTML(name);
-                  span.style.opacity = '0.6';
-                }
-                dom.matchPromptTagsContainer.appendChild(span);
-              });
-            }
-          }
-          if (dom.matchPromptEnhanced) {
-            if (response?.success && response.enhanced) {
-              dom.matchPromptEnhanced.textContent = `Enhanced: "${response.enhanced}"`;
-              dom.matchPromptEnhanced.style.display = 'block';
-            } else {
-              dom.matchPromptEnhanced.textContent = '';
-              dom.matchPromptEnhanced.style.display = 'none';
-            }
-          }
-        });
-      }, 1000); // 1s debounce
+      promptTagsPending = !!val.trim();
+      if (promptTagsPending) renderPromptChipsLoading();
+      else renderPromptChips([]);
+      renderPromptEnhanced('');
+      renderPromptStatus();
+      savePromptDebounced(val);
     });
+
+    // Leaving the field (or closing the panel) saves right away.
+    dom.matchPromptInput.addEventListener('blur', () => savePromptDebounced.flush());
+    window.addEventListener('pagehide', () => savePromptDebounced.flush());
   }
 
   // Pause button clicker
   dom.pauseToggle.addEventListener('click', () => {
     const nextPausedState = !state.configuration.isTrackingPaused;
-    
+
     state.configuration.isTrackingPaused = nextPausedState;
     state.configuration.trackingPausedAt = nextPausedState ? Date.now() : null;
     renderPauseStatus();
 
-    chrome.runtime.sendMessage({
-      type: 'IS_TRACKING_PAUSED_TOGGLED',
-      payload: { isPaused: nextPausedState }
-    });
+    send(MSG.IS_TRACKING_PAUSED_TOGGLED, { isPaused: nextPausedState });
   });
 
   // Export action triggers
-  dom.btnExportHtml.addEventListener('click', triggerHtmlExport);
-  dom.btnExportJson.addEventListener('click', triggerJsonExport);
-  dom.btnExportCsv.addEventListener('click', triggerCsvExport);
+  dom.btnExportHtml.addEventListener('click', () => triggerExport('html'));
+  dom.btnExportJson.addEventListener('click', () => triggerExport('json'));
+  dom.btnExportCsv.addEventListener('click', () => triggerExport('csv'));
 
   // Clear stream
   dom.clearStackBtn.addEventListener('click', () => {
@@ -3287,25 +3176,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   dom.btnConfirmClearTag.addEventListener('click', () => {
-    chrome.runtime.sendMessage({
-      type: 'CLEAR_STACK',
-      payload: { tag: activeFilterTag }
-    });
+    send(MSG.CLEAR_STACK, { tag: activeFilterTag });
     resetClearConfirmation();
   });
 
   dom.btnConfirmClearAll.addEventListener('click', () => {
-    chrome.runtime.sendMessage({
-      type: 'CLEAR_STACK',
-      payload: { tag: 'All' }
-    });
+    send(MSG.CLEAR_STACK, { tag: 'All' });
     resetClearConfirmation();
   });
 
   // Global click event to dismiss custom popover overrides dropdown
   document.addEventListener('click', () => {
     if (openDropdownItemId) {
-      const activeCard = dom.streamList.querySelector(`.item-row[data-id="${openDropdownItemId}"]`);
+      const activeCard = rowForItem(openDropdownItemId);
       if (activeCard) {
         activeCard.querySelector('.override-popover').classList.remove('show');
         activeCard.querySelector('.btn-override-trigger').classList.remove('dropdown-active');
@@ -3327,10 +3210,7 @@ document.addEventListener('DOMContentLoaded', () => {
       activeFilterTag = 'All';
       activeFilterSite = 'All';
       activeFilterAuthor = 'All';
-      renderFilterPills();
-      renderSiteFilterPills();
-      renderAuthorPills();
-      renderFeed();
+      applyFilterChange();
     });
 
 
@@ -3338,10 +3218,7 @@ document.addEventListener('DOMContentLoaded', () => {
       dom.globalSearch.value = '';
       searchQuery = '';
       dom.searchClearBtn.classList.add('hidden');
-      renderFilterPills();
-      renderSiteFilterPills();
-      renderAuthorPills();
-      renderFeed();
+      applyFilterChange();
     });
   }
 
@@ -3351,23 +3228,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // Tab change listeners
   initTabChangeListener();
 
-  // Request initial state payload
-  chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
-    if (response) {
-      state = { ...state, ...response };
-      try {
-        renderAll();
-      } catch (e) {
-        document.body.innerHTML = `<div style="color:red; padding:20px; font-family: monospace; white-space: pre-wrap;">${e.stack}</div>`;
-      }
+  // Initial state (rendered with defaults if the service worker does not answer)
+  send(MSG.GET_STATE).then((response) => {
+    if (response && typeof response === 'object' && response.success !== false) {
+      state = { ...state, ...response, engineStatus: state.engineStatus };
+    }
+    try {
+      renderAll();
+    } catch (err) {
+      console.error('[sidepanel] render failed', err);
+      notify('error', 'Part of the panel failed to render. Reopen it to try again.', 'render');
     }
   });
 
-  chrome.runtime.sendMessage({ type: 'GET_ENGINE_STATUS' }, (response) => {
-    if (response) {
-      state.engineStatus = response;
-      renderEngineStatus();
-      renderTelemetry();
-    }
-  });
+  fetchEngineStatus();
+
+  // Key status ({ set, last4 }) and provider stats for Settings › Intelligence.
+  if (diagnostics) diagnostics.refresh();
 });

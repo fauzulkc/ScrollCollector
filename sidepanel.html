@@ -29,10 +29,10 @@
           <polygon points="5 3 19 12 5 21 5 3"></polygon>
         </svg>
       </button>
-      <div class="status-indicator" title="Model Status">
-        <span id="engine-dot" class="engine-dot"></span>
-        <span id="engine-label" class="engine-label">—</span>
-      </div>
+      <button type="button" id="engine-badge" class="status-indicator" data-level="checking" title="Checking the local decision model…" aria-label="Decision engine: Checking…">
+        <span id="engine-dot" class="engine-dot level-checking"></span>
+        <span id="engine-label" class="engine-label">Checking…</span>
+      </button>
       <div id="processing-indicator" class="processing-indicator hidden" title="Analyzing scrolls in background">
         <svg class="spinner" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round">
           <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25"></circle>
@@ -60,7 +60,7 @@
   </header>
 
   <!-- Global Paused Banner -->
-  <div id="pause-banner" class="pause-banner hidden">
+  <div id="pause-banner" class="pause-banner hidden" role="status">
     <span>Collection paused since <strong id="pause-time">—</strong></span>
   </div>
 
@@ -135,8 +135,22 @@
         </div>
       </div>
 
+      <!-- Prompt-filter status: hidden-by-prompt toggle + re-decide progress -->
+      <div id="stream-status" class="stream-status hidden">
+        <button type="button" id="hidden-pill" class="hidden-pill hidden" aria-pressed="false" title="Posts that no longer match your prompt are hidden, never deleted">
+          <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+            <line x1="1" y1="1" x2="23" y2="23"/>
+          </svg>
+          <span id="hidden-pill-label">Hidden by prompt (0)</span>
+        </button>
+        <div id="redecide-status" class="redecide-status hidden" role="status">
+          <span id="redecide-text" class="redecide-text"></span>
+          <div class="progress slim" id="redecide-bar" role="progressbar" aria-label="Re-checking posts" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill"></div></div>
+        </div>
+      </div>
 
-      
       <!-- Feed Container -->
       <div id="feed-container">
         <div id="stream-list" class="item-list"></div>
@@ -218,26 +232,37 @@
             <span>Download CSV</span>
           </button>
         </div>
+        <p id="export-note" class="export-note hidden"></p>
       </div>
     </section>
 
     <!-- Tab 3: Settings Panel -->
     <section id="panel-settings" class="tab-panel">
-      <!-- Eval Match Prompt Configurator -->
-      <div class="settings-section">
-        <div class="settings-title" style="display: flex; justify-content: space-between; align-items: center;">
-          <span>Eval Match Mode</span>
-          <label class="toggle-switch">
-            <input type="checkbox" id="match-prompt-toggle">
-            <span class="slider"></span>
+      <!-- Prompt filter -->
+      <div class="settings-section" id="prompt-section">
+        <div class="settings-title section-title-row">
+          <label for="match-prompt-input">Prompt filter</label>
+          <label class="filter-switch" for="match-prompt-toggle">
+            <span id="match-prompt-state" class="filter-state" data-on="false">Off</span>
+            <span class="tag-toggle">
+              <input type="checkbox" id="match-prompt-toggle" aria-describedby="match-prompt-help">
+              <span class="toggle-track"></span>
+            </span>
           </label>
         </div>
-        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 8px;">
-          If enabled, only posts matching this prompt will be collected.
-        </p>
-        <textarea id="match-prompt-input" class="match-prompt-textarea" placeholder="e.g. Find posts about AI tools that help with coding..." rows="3"></textarea>
-        <div id="match-prompt-tags-container" style="display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap;"></div>
-        <p id="match-prompt-enhanced" style="display: none; font-size: 10px; color: var(--text-secondary); margin-top: 8px; font-style: italic; border-left: 2px solid var(--accent); padding-left: 6px;"></p>
+        <p id="match-prompt-help" class="section-help">When the filter is on, only posts that match this prompt are collected. Posts that stop matching after you edit it are hidden, never deleted.</p>
+        <textarea id="match-prompt-input" class="match-prompt-textarea" placeholder="e.g. Find posts about AI tools that help with coding…" rows="3"></textarea>
+        <p id="match-prompt-hint" class="prompt-hint hidden" role="status"></p>
+        <div id="match-prompt-tags-container" class="prompt-chips"></div>
+        <p id="match-prompt-enhanced" class="prompt-enhanced hidden"></p>
+      </div>
+
+      <!-- Intelligence: System 1, escalation providers, decision behaviour, diagnostics -->
+      <div class="settings-section" id="intelligence-section">
+        <div class="settings-title">Intelligence</div>
+        <p class="section-help">Every post is decided on this device first. Only posts the local model is unsure about can be passed on, to the provider you choose.</p>
+        <div id="intelligence-root"></div>
+        <div id="diagnostics-root"></div>
       </div>
 
       <!-- Tag Configurator -->
@@ -311,12 +336,16 @@
         <div class="settings-title">Keyboard Shortcuts</div>
         <div class="shortcuts-guide">
           <div class="shortcut-row">
-            <span><kbd>↑</kbd> / <kbd>↓</kbd> or <kbd>Tab</kbd></span>
+            <span><kbd>↑</kbd> / <kbd>↓</kbd></span>
             <span class="shortcut-desc">Navigate cards</span>
           </div>
           <div class="shortcut-row">
             <span><kbd>←</kbd> / <kbd>→</kbd></span>
-            <span class="shortcut-desc">Change tag of focused card</span>
+            <span class="shortcut-desc">Change tag of focused card (no card: switch category)</span>
+          </div>
+          <div class="shortcut-row">
+            <span><kbd>Esc</kbd></span>
+            <span class="shortcut-desc">Unfocus card</span>
           </div>
           <div class="shortcut-row">
             <span><kbd>Space</kbd></span>
@@ -331,11 +360,12 @@
             <span class="shortcut-desc">Open source link</span>
           </div>
         </div>
+        <p class="section-help shortcuts-note">Shortcuts work on the Stream tab when you are not typing in a field.</p>
       </div>
     </section>
 
   </main>
 
-  <script src="sidepanel.js"></script>
+  <script type="module" src="sidepanel.js"></script>
 </body>
 </html>
