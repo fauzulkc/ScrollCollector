@@ -168,6 +168,11 @@ on 255,255,255)**. `--text-secondary` measured **7.24:1 dark and 4.83:1 light** 
 the condition that it lands before 🧪 Testing's release run starts; otherwise it rides with lenses. The 🧷
 extension seat lands it now. **Done when** the built `dist/ext` panel re-renders `.card-time` at 4.5:1 or
 better in both themes.
+**Record, 2026-10-11 01:25. Render PASS** on `8026f7b` (the 🧷 extension seat's commit; `dist/ext/sidepanel.css`
+matches the source). Re-measured by Design with `node scratchpad/design/render-panel.mjs`: `.card-time`
+measured **7.24:1 dark (161,161,170 on 19,19,22) and 4.83:1 light (113,113,122 on 255,255,255)** at 320, 400
+and 560 px. The image was read: `card-light-320.png` shows the time at body-text weight. **Still open:** the
+real-browser pin, which 🧪 Testing owns, and the live look in the owner's Chrome.
 
 ## Observed, not ruled (read from source 2026-10-10 at `44f04d3`; rendered 2026-10-11 at `9bfb189`)
 
