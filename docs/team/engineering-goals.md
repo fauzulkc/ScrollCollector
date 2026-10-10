@@ -274,3 +274,19 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   committed at 04:08:05). **The commit timestamps are authoritative** (`git log --format='%h %cI %s' --
   docs/team/engineering-goals.md`). In particular, the candidate (2) freeze is `0833c13` at 04:08:05 +0600, and the
   held-out set is opened only after it. Lines left as written; this line corrects them.
+- 2026-10-11 (after `22ec658`) · **RESULT of the pre-registered gate measurement: neither candidate adopted.**
+  Held-out set (🧪 Testing team, second author): 7 user prompts (5 short), 113 posts, 769 pairs per model after
+  22 borderline excluded, 67 yes / 702 no. sha256 re-checked by me, full match with Testing's log (genre `38aedfac…76c8`,
+  labels `ceb6372e…71fd`, posts `650930fc…9eb4`, prompts `7cbb850b…60cc`). Measurement by the research tier (log
+  `scratchpad/team/runs/engineering/2026-10-11-eng3-gate-measurement.md`); the pooled table re-derived by me from its
+  per-pair rows with my own script. Proxy: second-author yes/no, System 1 only, strictness balanced.
+  | Model | Baseline (lens ≥ 0.5) TP/FP/FN · P · R | (1) lens OR label | (2) recipe D (frozen) |
+  |---|---|---|---|
+  | minilm | 26/3/41 · 0.897 · 0.388 | 58/22/9 · 0.725 · 0.866 | 30/3/37 · 0.909 · 0.448 |
+  | bge-small | 25/0/42 · 1.000 · 0.373 | 55/13/12 · 0.809 · 0.821 | 24/0/43 · 1.000 · 0.358 |
+  (1): recall +0.478 / +0.448, precision −0.172 / −0.191 → **fails** the ≤ 0.05 precision limit. (2): recall +0.060 /
+  −0.015 → **fails** the +0.10 recall bar; expansion missing equals the baseline on 0 of 769 differing verdicts. The rule
+  is not moved. **Outside the rule, deciding nothing:** on user-style prompts the lens alone recalls ~0.38 (0.71 / 0.69 on
+  the eval's own prompts); the shipped cascade's `whenUnsure: collect` adds 28-29 pairs (P 0.776 / 0.906, R 0.672 /
+  0.716). The shipped cascade never passes a user prompt's expansion (`cascade.js:253-254`); (2) was simulated in the
+  harness.
