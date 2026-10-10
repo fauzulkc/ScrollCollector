@@ -1,0 +1,39 @@
+{
+  "seat-bar-raiser": {
+    "hash": "6f126f2269ffac7f4138ed5ed6c06ab03de874bcae4d7e0721f19a8b5ab59974",
+    "origin": "catalogue",
+    "seated": "2026-10-10"
+  },
+  "seat-ceo": {
+    "hash": "eb48155ca6e09615252b3867be26b19c9ce16d9649c811d66dedb5dfd1c4373e",
+    "origin": "catalogue",
+    "seated": "2026-10-10"
+  },
+  "seat-chief-of-staff": {
+    "hash": "7e3a58b8e4ccdb790f3fc4d26abdf8f03dfe7b4da442a295968c4d2886343639",
+    "origin": "catalogue",
+    "seated": "2026-10-10"
+  },
+  "seat-design": {
+    "hash": "0f2269648949d0893ab324803e95aaa398a6c9b2ca99870c6a38597383d8a726",
+    "origin": "catalogue",
+    "seated": "2026-10-10"
+  },
+  "seat-engineering": {
+    "hash": "685453628a0bc89274ae75a9986f400922f5fa80d91f9cc31620a804865ea46f",
+    "origin": "catalogue",
+    "seated": "2026-10-10"
+  },
+  "seat-extension": {
+    "hash": "95be5a040a951093fa8575b2650f6b73989a22d8967ab40397fd6a25a65e777b",
+    "mark": "🧷",
+    "origin": "derive:seat-frontend",
+    "seat": "Browser-extension engineer",
+    "seated": "2026-10-10"
+  },
+  "seat-testing": {
+    "hash": "92b21245555ffcaad6b29592f50334aa68936d717c19beef90317787c3c40b02",
+    "origin": "catalogue",
+    "seated": "2026-10-10"
+  }
+}
