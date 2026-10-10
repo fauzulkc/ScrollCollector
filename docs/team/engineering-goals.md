@@ -8,7 +8,7 @@ date, never written over.
 | Goal | For decision | State |
 |---|---|---|
 | **ENG-1** · lenses data model | DEC-6 | **shipped in 0.11.0** (tag `v0.11.0`, origin/main `dad4faa`): merged leg 842/842 unit, 42/42 e2e (🧭 CEO's run) |
-| **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | draft plan; queued after ENG-1 (DEC-8) |
+| **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | started 2026-10-11 (CEO QUEUE after 0.11.0); measurements pre-registered, not yet run |
 | **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | parked 2026-10-11: probe + pre-registered genre cues failed; gates stay red (see Record) |
 
 ---
@@ -349,3 +349,30 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   collected set = pre-migration set) fails 3 of 5 on `4f9eca6`, passes 5 of 5 on `3c4fac1`; unit 842/842,
   e2e migration + lenses-collect 5/5 (my runs). F2 (three stale gate comments) and F4 (manual items never marked)
   fixed in the same commit.
+- 2026-10-11 (after `8830d84`) · **ENG-2 started; PRE-REGISTERED before any measurement or code.** Base: a branch off
+  origin/main `10e744a`. Form: DESIGN.md D-4 (48 × 48 px thumbnail, grows to `min(240px, panel − 48px)`, shows only
+  the stored image, no image = no box). Split by file: capture (`content.js`, `lib/content/`) is 🧷 Extension's team,
+  called once the data shape below is fixed; fetch, shrink, store, delete and the pipeline are Engineering's.
+  - **Data shape (fixed now):** the content script sends at most one image URL per post (`imageUrl`, the post's own
+    first content image, never an avatar, logo or favicon; http(s) only). The background fetches it once, at capture
+    time, `credentials: 'omit'`, no referrer, with a deadline; decodes with `createImageBitmap`; shrinks on an
+    `OffscreenCanvas` to the edge chosen below; encodes WebP; stores the bytes in IndexedDB keyed by item id, **outside
+    the locked stack**; sets `item.thumb = { key, w, h, bytes }`. Deleted with its post and on eviction. Never sent to
+    any provider (DEC-5): it never enters a decision request. Any failure: no `thumb`, the post is unchanged. The fetch
+    queue is bounded (trap `6dcd335`).
+  - **M1 · size (decides edge and quality):** on a corpus of photo-like post images (source to be approved by the owner
+    before download; never golden or private data), WebP byte size at longest edge **480 px and 320 px**, quality
+    ladder 0.8 / 0.7 / 0.6 / 0.5 / 0.4, in Chrome for Testing's own encoder. Report p50 / p95 / p99 per cell.
+  - **Byte-cap rule (fixed now):** storage budget 64 MB for a full 2,000-post stack ⇒ hard ceiling **32 KB**.
+    Choose **480 px** if some quality ≥ 0.5 has p95 ≤ 24 KB, else 320 px under the same test, else 320 px at 0.4.
+    Take the highest such quality. **Cap = min(32 KB, p99 at the chosen setting rounded up to the next KB).** At capture,
+    an image over the cap is re-encoded down the ladder; still over at 0.4 ⇒ no thumbnail. Not moved after M1 runs.
+  - **M2 · fetch works without the page's cookies:** measured only on live feeds (LinkedIn, X, YouTube) in the owner's
+    Chrome after the build, by success rate per site. Below 80 % on a site: report to 🧭 CEO, no workaround that sends
+    cookies.
+  - **M3 · cost:** fetch → decode → encode → store, per image, in Chrome for Testing on served fixture images; p95 ≤
+    150 ms and never on the content script's thread; else the queue is throttled, not the cap moved.
+  - **Listing (DEC-2):** no new manifest permission (`<all_urls>` and `unlimitedStorage` already cover it), but the
+    host-access justification gains "fetches the post's preview image from the site's own image server", the
+    `unlimitedStorage` line gains thumbnails, and the data-use "Website content" row gains "a small preview image".
+    That widens what the listing says ⇒ 🧭 CEO before it lands; edited in `docs/STORE-LISTING.md` in the same commit.
