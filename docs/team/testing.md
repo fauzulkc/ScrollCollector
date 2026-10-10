@@ -36,7 +36,8 @@ CEO
 - **DEC-2:** publishing, sending, spending and signing are owner-only (a Chrome Web Store upload or a
   release is never this seat's act); pushing is "on its own": a seat pushes its landed work once the
   checks pass and a reviewing seat has passed it, and reports the push after.
-- **Owner's testing and AI direction (2026-10-09/10, not yet a decision row; the CEO is to record it):**
+- **Owner's testing and AI direction (2026-10-09/10).** The AI half is recorded as DEC-3, DEC-4, DEC-5
+  (2026-10-11; the rows win). The testing half is test policy, yours to record in `docs/TEST-STANDARD.md`:
   testing = Playwright E2E on Chrome for Testing in WSL **plus** live checks in the owner's Chrome via
   Claude-in-Chrome; the owner types API keys themselves (no test ever stores or types a real key).
   System 1 is a bundled sentence-embedding model (bge-small-en-v1.5 / MiniLM, q8) in the offscreen

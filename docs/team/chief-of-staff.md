@@ -29,11 +29,10 @@ the owner
   that kind becomes an Open question for the owner, worded as a question. Pushing: seats push on their own once checks
   pass and a reviewing seat passed it, and report after; a push is **not** an owner question. Owner's words are in
   the DEC-2 row: quote them, never paraphrase.
-- **The owner's AI direction (2026-10-09/10, from the owner's earlier sessions; not yet a decision row):** embeddings
+- **DEC-3, DEC-4, DEC-5** (the owner's AI direction of 2026-10-09/10, recorded 2026-10-11; the rows win): embeddings
   bundled as System 1; the browser's built-in model is the only LLM tier; Jev/OpenAI opt-in only, uncertain posts only,
   one provider, no chaining; the owner types API keys; small, cheap, fast, private
-  (`scratchpad/team/shared/setup-facts.md`). The CEO records it; do not re-ask the owner about it. When it lands,
-  close any line still reading it as open.
+  (`scratchpad/team/shared/setup-facts.md`). Recorded by the CEO; do not re-ask the owner about it.
 
 ## Project facts this seat relies on
 _(measured 2026-10-10 unless marked)_

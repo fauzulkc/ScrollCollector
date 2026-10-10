@@ -29,15 +29,15 @@ the owner
 - **DEC-2** (team, owner-only acts, push rule): owner-only = publishing, sending, spending and signing (Chrome Web
   Store, GitHub releases). Seats push their own landed work once the checks pass and a reviewing seat has passed it,
   and report the push after; your push still runs §3e's checks (fast-forward only, no oversized blob, credential scan).
-- **The owner's AI direction (2026-10-09/10, from the owner's earlier sessions; not yet a decision row):**
+- **DEC-3, DEC-4, DEC-5** (the owner's AI direction of 2026-10-09/10, recorded 2026-10-11 00:27 +0600; the rows win):
   System 1 = small q8 sentence-embedding model (MiniLM / bge-small) via Transformers.js in the offscreen document,
   weights bundled, nothing downloaded at runtime; the only LLM tier is the browser's built-in model (Gemini Nano,
   `LanguageModel` Prompt API), never a downloaded or bundled generative model; cloud decision APIs (TypeSafe's Jev,
   OpenAI) are off by default, each needs its own opt-in, only uncertain posts escalate, one primary provider, no
   chaining; testing = Playwright E2E plus live checks in the owner's Chrome; the owner types API keys; goal: small,
   cheap, fast, private. Source: `scratchpad/team/shared/setup-facts.md`.
-  **Your first item: record this direction as decision rows** (the owner already made it, so it is recorded, not
-  asked; TEAM.md §7), then run the forward sweep and send `STANDING` to every seat.
+  Recorded 2026-10-11 with the forward sweep and a `STANDING` line to every seat. The testing half is
+  🧪 Testing's to record in `docs/TEST-STANDARD.md` (test policy, rulebook §3b), sent to it as a `TASK`.
 
 ## Project facts this seat relies on
 _(measured 2026-10-10 unless marked)_
@@ -59,13 +59,14 @@ _(measured 2026-10-10 unless marked)_
   (Windows: `\\wsl.localhost\Ubuntu-24.04\home\fauzul\code\ScrollCollector`). Run git/npm from WSL only: from Windows,
   write a script to scratch and run `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-24.04 -- bash -l /mnt/c/<script>`.
 - **Register counts** (§1 step 4): rows `grep -c '^| \*\*DEC-' docs/DECISIONS.md`; ruled
-  `grep -cE '^\| \*\*DEC-.*(✅|❌)' docs/DECISIONS.md`. Both 2 on 2026-10-10.
+  `grep -cE '^\| \*\*DEC-.*(✅|❌)' docs/DECISIONS.md`. Both 2 on 2026-10-10; both 5 on 2026-10-11.
 - **Health check:** no running service; the product's live state is the built `dist/ext/` loaded in the owner's
   Chrome (via `npm run sync:win` → `/mnt/d/code/ScrollCollector-dev`). Only the owner's Chrome proves "live".
 
 ## Traps paid for
-- **The code chose before the register did** (rulebook trap 3): the cascade's AI direction is already in code
-  (`lib/decision/cascade.js` header: "the only LLM tier is the browser's built-in LanguageModel") with no decision row.
+- **The code chose before the register did** (rulebook trap 3): the cascade's AI direction was in code
+  (`lib/decision/cascade.js` header: "the only LLM tier is the browser's built-in LanguageModel") for days with no
+  decision row; closed 2026-10-11 by DEC-3..5.
 - **README drift:** `README.md` describes Gemini Nano plus a rule engine and does not mention the System 1 embedding
   model (grep for "embedding|System 1|MiniLM" in README.md returns nothing); a claim read from README is a hypothesis.
 - **Windows git:** shows spurious exec-bit diffs on `.sh` files and its credential helper hangs; use WSL git (setup-facts).

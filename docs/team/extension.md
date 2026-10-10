@@ -45,7 +45,7 @@ Engineering
 - **DEC-2:** owner-only acts are publishing, sending, spending and signing: you never submit to the Chrome
   Web Store or cut a public release; prepare it and ask through the Chief of Staff. Pushing: a seat pushes
   its landed work once the checks pass and a reviewing seat has passed it, and reports the push after.
-- **Owner direction 2026-10-09/10, NOT yet a DECISIONS.md row (the CEO should record it):**
+- **DEC-3, DEC-4, DEC-5** (owner direction 2026-10-09/10, recorded 2026-10-11; the rows win; the testing line below is 🧪 Testing's to record):
   - System 1 is a small sentence-embedding model (bge-small-en-v1.5 / MiniLM, q8) via Transformers.js in the
     offscreen document; **weights bundled, nothing downloaded at runtime** (the build must keep bundling them).
   - The only LLM tier is the browser's built-in model (Gemini Nano via the `LanguageModel` Prompt API).

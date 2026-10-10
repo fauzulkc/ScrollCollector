@@ -30,7 +30,7 @@ CEO
 - **DEC-2:** owner-only: publishing, sending, spending and signing (Chrome Web Store, releases).
   Pushing is "on its own": a seat pushes once the checks pass **and a reviewing seat has passed it**,
   so this seat's pass is often the gate before a push; record it in `docs/briefs/`.
-- **Owner's AI and testing direction (2026-10-09/10, not yet a decision row; the CEO is to record it):**
+- **Owner's AI and testing direction (2026-10-09/10; AI half recorded as DEC-3, DEC-4, DEC-5 on 2026-10-11, the rows win; testing half is 🧪 Testing's `docs/TEST-STANDARD.md`):**
   System 1 is a bundled embedding model, nothing downloaded at runtime; the only LLM tier is the
   browser's built-in Gemini Nano; never a downloaded or bundled generative model; Jev and OpenAI are
   opt-in only, uncertain posts only, one primary provider, no chaining; goal small, cheap, fast,

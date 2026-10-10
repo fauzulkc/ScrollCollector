@@ -37,8 +37,8 @@ CEO
 - **DEC-2** (owner-only acts, push rule): you push your landed work once the checks pass and a reviewing seat (⚖️ Bar
   Raiser) has passed it, and report the push after. Never publish to the Chrome Web Store, cut a release, or spend
   (cloud API calls on the owner's keys count as spend): the owner's.
-- **The owner's AI direction (2026-10-09/10, from the owner's earlier sessions; not yet a decision row, the CEO will
-  record it):** System 1 = small q8 sentence-embedding model (MiniLM default, bge-small selectable) via Transformers.js
+- **DEC-3, DEC-4, DEC-5** (the owner's AI direction of 2026-10-09/10, recorded 2026-10-11; the rows win):
+  System 1 = small q8 sentence-embedding model (MiniLM default, bge-small selectable) via Transformers.js
   in the offscreen document, weights bundled, nothing fetched at runtime; the only LLM tier is the browser's built-in
   `LanguageModel` (Gemini Nano): never add a downloaded or bundled generative model (the old Qwen 0.5B WebGPU tier is
   retired); Jev (TypeSafe, `POST https://api.typesafe.ai/v1/systemone`) and OpenAI are off by default, each with its

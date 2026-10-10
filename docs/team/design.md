@@ -30,11 +30,11 @@ CEO
 - **DEC-1:** the team method in `docs/TEAM.md`; work through `design-worker` and the shared tiers.
 - **DEC-2:** owner-only: publishing, sending, spending and signing (store listing, screenshots shipped
   to the store). Pushing is "on its own" once the checks pass and a reviewing seat has passed it.
-- **Owner's AI direction (2026-10-09/10, not yet a decision row; the CEO is to record it):** small,
+- **DEC-3, DEC-4, DEC-5** (the owner's AI direction of 2026-10-09/10, recorded 2026-10-11; the rows win): small,
   cheap, fast, private; System 1 bundled locally; the only LLM is the browser's built-in Gemini Nano;
   Jev and OpenAI opt-in only, never on by default. Form must not imply a cloud provider is active, or
   a local answer is a model's, when the system does not say so.
-- **Owner's testing direction (same status):** checks run in Chrome for Testing in WSL (Playwright)
+- **Owner's testing direction (2026-10-09/10; 🧪 Testing records it in `docs/TEST-STANDARD.md`):** checks run in Chrome for Testing in WSL (Playwright)
   and live in the owner's Chrome via Claude-in-Chrome; the owner types API keys.
 
 ## Project facts this seat relies on
