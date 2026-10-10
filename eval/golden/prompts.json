@@ -1,0 +1,30 @@
+{
+  "note": "Global match prompts for the System 1 eval. `text` is what the user types (restaurant is the user's verbatim prompt). `expansion` stands in for the short expansion an on-device LLM would write for recipe C/D; it was written before any eval results were seen and is never tuned.",
+  "prompts": [
+    {
+      "id": "restaurant",
+      "text": "find me restaurant and 5 star quality food posts. I am fascinated by michelin star cooking",
+      "expansion": "restaurants, chefs, fine dining, Michelin-starred cuisine, tasting menus and high-quality food"
+    },
+    {
+      "id": "coding",
+      "text": "AI tools that help with coding",
+      "expansion": "AI coding assistants, code generation, AI pair programming and developer tools that write, review or test code"
+    },
+    {
+      "id": "jobs",
+      "text": "remote software engineering jobs",
+      "expansion": "job openings for remote software engineers and developers, hiring for remote engineering roles"
+    },
+    {
+      "id": "immigration",
+      "text": "visa and immigration updates for tech workers",
+      "expansion": "work visas, H-1B, green cards, Blue Card, work permits and immigration rule changes affecting software engineers and tech workers"
+    },
+    {
+      "id": "climate",
+      "text": "climate and extreme weather news",
+      "expansion": "climate change, global warming, heatwaves, hurricanes, floods, droughts, wildfires and extreme weather events"
+    }
+  ]
+}

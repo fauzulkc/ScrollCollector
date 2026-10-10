@@ -1,0 +1,229 @@
+{
+  "model": "bge-small",
+  "modelId": "Xenova/bge-small-en-v1.5",
+  "dtype": "q8",
+  "pooling": "cls",
+  "queryPrefix": "Represent this sentence for searching relevant passages: ",
+  "recipe": "B",
+  "labelTemplate": "about",
+  "labelAnchors": "single",
+  "labelPrefix": true,
+  "chunk": {
+    "maxChars": 800,
+    "pool": "max"
+  },
+  "embedBatchSize": 1,
+  "embedRuntime": "onnxruntime-web 1.22.0-dev.20250306-ccf8fdd9ea (wasm, the extension's runtime)",
+  "match": {
+    "a": 1.164832,
+    "b": -6.855509,
+    "bgTrim": 0.1,
+    "minStd": 0.02
+  },
+  "tag": {
+    "score": "raw",
+    "agg": "max",
+    "lexical": {
+      "beta": 0.05427,
+      "cap": 3
+    },
+    "T": 0.02921,
+    "noneSim": 0.546771,
+    "multi": {
+      "a": 1.034935,
+      "b": -4.089107
+    }
+  },
+  "floor": {
+    "matches_prompt": 0.68,
+    "primary_tag": 0.3
+  },
+  "corpusHash": "e604c656",
+  "corpusSize": 64,
+  "normalizer": "lib/decision/state.js normalizeForDecision",
+  "promptCleaner": "lib/decision/questions.js cleanPrompt",
+  "report": {
+    "generatedAt": "2026-10-10",
+    "generator": "eval/run-eval.mjs",
+    "golden": {
+      "synthetic": 137,
+      "private": 7,
+      "prompts": [
+        "restaurant",
+        "coding",
+        "jobs",
+        "immigration",
+        "climate"
+      ]
+    },
+    "pass": false,
+    "gates": [
+      {
+        "name": "restaurant AUROC (LOPO)",
+        "value": 0.98882,
+        "target": ">= 0.9",
+        "pass": true
+      },
+      {
+        "name": "private export max p (LOPO)",
+        "value": 0.003961,
+        "target": "< 0.5",
+        "pass": true
+      },
+      {
+        "name": "false friends with p > 0.5 (LOPO)",
+        "value": 1,
+        "target": "<= 2",
+        "pass": true
+      },
+      {
+        "name": "escalated precision (restaurant, LOPO)",
+        "value": 1,
+        "target": ">= 0.9",
+        "pass": true
+      },
+      {
+        "name": "escalated recall (restaurant, LOPO)",
+        "value": 0.913043,
+        "target": ">= 0.85",
+        "pass": true
+      },
+      {
+        "name": "escalation rate (restaurant, LOPO)",
+        "value": 0.153285,
+        "target": "<= 0.25",
+        "pass": true
+      },
+      {
+        "name": "escalated precision at the deployed floor (restaurant, LOPO p)",
+        "value": 1,
+        "target": ">= 0.9",
+        "pass": true
+      },
+      {
+        "name": "escalated recall at the deployed floor (restaurant, LOPO p)",
+        "value": 0.869565,
+        "target": ">= 0.85",
+        "pass": true
+      },
+      {
+        "name": "escalation rate at the deployed floor (restaurant, LOPO p)",
+        "value": 0.124088,
+        "target": "<= 0.25",
+        "pass": true
+      },
+      {
+        "name": "tag top-1, tag-coverage posts (5-fold CV)",
+        "value": 0.636364,
+        "target": ">= 0.7",
+        "pass": false
+      },
+      {
+        "name": "tag top-3 (tags only), tag-coverage posts (5-fold CV)",
+        "value": 0.87013,
+        "target": ">= 0.9",
+        "pass": false
+      },
+      {
+        "name": "match ECE (pooled LOPO)",
+        "value": 0.030853,
+        "target": "<= 0.08",
+        "pass": true
+      },
+      {
+        "name": "tag ECE (5-fold CV)",
+        "value": 0.08325,
+        "target": "<= 0.08",
+        "pass": false
+      },
+      {
+        "name": "info: tag top-1, all tagged posts (5-fold CV)",
+        "value": 0.53719,
+        "target": ">= 0.7",
+        "pass": false,
+        "info": true
+      },
+      {
+        "name": "info: tag top-3 (tags only), all tagged posts (5-fold CV)",
+        "value": 0.743802,
+        "target": ">= 0.9",
+        "pass": false,
+        "info": true
+      },
+      {
+        "name": "info: tag top-1 any listed tag, tag-coverage posts",
+        "value": 0.779221,
+        "target": ">= 0.7",
+        "pass": true,
+        "info": true
+      }
+    ],
+    "match": {
+      "lopoRecipeByPrompt": {
+        "restaurant": "B",
+        "coding": "B",
+        "jobs": "B",
+        "immigration": "B",
+        "climate": "B"
+      },
+      "lopoAurocByPrompt": {
+        "restaurant": 0.98882,
+        "coding": 1,
+        "jobs": 1,
+        "immigration": 1,
+        "climate": 1
+      },
+      "lopoPooledEce": 0.030853,
+      "restaurantLopo": {
+        "precisionAt05": 0.944444,
+        "recallAt05": 0.73913,
+        "escalated": {
+          "precision": 1,
+          "recall": 0.913043,
+          "rate": 0.153285,
+          "floor": 0.78
+        },
+        "escalatedAtDeployedFloor": {
+          "precision": 1,
+          "recall": 0.869565,
+          "rate": 0.124088,
+          "floor": 0.68
+        },
+        "falseFriendsOver05": 1,
+        "privateMaxP": 0.003961
+      },
+      "bestRecipeAnyExpansion": "D",
+      "restaurantAurocByRecipe": {
+        "A": 0.981366,
+        "B": 0.98882,
+        "C": 0.995859,
+        "D": 0.993375
+      }
+    },
+    "tag": {
+      "top1": 0.53719,
+      "lenientTop1": 0.661157,
+      "top3": 0.735537,
+      "top3TagsOnly": 0.743802,
+      "topicTop1": 0.636364,
+      "topicTop3TagsOnly": 0.87013,
+      "topicLenientTop1": 0.779221,
+      "noneAccuracy": 0.4375,
+      "ece": 0.08325,
+      "escalationRate": 0.218978,
+      "accuracyWithEscalation": 0.678832,
+      "multiAuroc": 0.809097
+    },
+    "latency": {
+      "singleMedianMs": 515,
+      "singleP90Ms": 657,
+      "batchPerTextMs": 525,
+      "n": 12,
+      "batchVsSingleCos": {
+        "min": 0.9953949596162504,
+        "mean": 0.9966457712632967
+      }
+    },
+    "recommendedDefault": false
+  }
+}
