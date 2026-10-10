@@ -251,7 +251,12 @@
           </label>
         </div>
         <p id="match-prompt-help" class="section-help">When the filter is on, only posts that match this prompt are collected. Posts that stop matching after you edit it are hidden, never deleted.</p>
-        <textarea id="match-prompt-input" class="match-prompt-textarea" placeholder="e.g. Find posts about AI tools that help with coding…" rows="3"></textarea>
+        <textarea id="match-prompt-input" class="match-prompt-textarea" placeholder="e.g. Find posts about AI tools that help with coding…" rows="3" aria-describedby="match-prompt-save-state"></textarea>
+        <div class="prompt-save-row">
+          <span id="match-prompt-save-state" class="prompt-save-state" role="status"></span>
+          <button type="button" id="match-prompt-revert" class="btn-prompt-revert hidden">Discard</button>
+          <button type="button" id="match-prompt-save" class="btn-prompt-save" disabled title="Save prompt (Ctrl+Enter)">Save prompt</button>
+        </div>
         <p id="match-prompt-hint" class="prompt-hint hidden" role="status"></p>
         <div id="match-prompt-tags-container" class="prompt-chips"></div>
         <p id="match-prompt-enhanced" class="prompt-enhanced hidden"></p>

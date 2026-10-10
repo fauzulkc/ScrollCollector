@@ -2453,18 +2453,56 @@ const PROMPT_WARNING_TEXT = {
   gate_off_with_prompt: 'The filter is off, so every post is collected. Turn it on to keep only posts that match this prompt.'
 };
 
-// UPDATE_MATCH_PROMPT is debounced; GENERATE_PROMPT_TAGS follows the save. `promptGen` identifies
-// the latest edit so replies for older text are ignored.
+// The prompt is saved explicitly (Save button or Ctrl/Cmd+Enter) so a half-typed prompt never
+// re-decides the stack. GENERATE_PROMPT_TAGS follows the save; `promptGen` identifies the latest
+// save so replies for older text are ignored.
 let promptGen = 0;
 let promptSaveInFlight = 0;
 let promptTagsPending = false;
+/** Set when the user types in the prompt box; cleared by Save / Discard. */
+let promptUserEdited = false;
 
-const savePromptDebounced = debounce((value) => { savePrompt(value); }, 600);
+/** True when the user typed a prompt that differs from the saved one. */
+function isPromptDirty() {
+  if (!dom.matchPromptInput || !promptUserEdited) return false;
+  return dom.matchPromptInput.value.trim() !== String((state.configuration || {}).matchPrompt || '').trim();
+}
+
+/** Save button / Discard button / "Unsaved changes" line. */
+function renderPromptSaveState(errorText = '') {
+  if (!dom.matchPromptSave) return;
+  const dirty = isPromptDirty();
+  const saving = promptSaveInFlight > 0;
+  dom.matchPromptSave.disabled = !dirty || saving;
+  dom.matchPromptSave.textContent = saving ? 'Saving…' : 'Save prompt';
+  if (dom.matchPromptRevert) dom.matchPromptRevert.classList.toggle('hidden', !dirty || saving);
+  if (dom.matchPromptSaveState) {
+    let text = '';
+    let tone = '';
+    if (errorText) { text = errorText; tone = 'error'; }
+    else if (saving) text = 'Saving and re-checking collected posts…';
+    else if (dirty) { text = 'Unsaved changes — press Save (Ctrl+Enter) to apply.'; tone = 'dirty'; }
+    dom.matchPromptSaveState.textContent = text;
+    dom.matchPromptSaveState.dataset.tone = tone;
+  }
+}
+
+/** Saves whatever is in the textarea (no-op when nothing changed). */
+function saveTypedPrompt() {
+  if (!dom.matchPromptInput || !isPromptDirty() || promptSaveInFlight > 0) return;
+  const value = dom.matchPromptInput.value.trim();
+  promptTagsPending = !!value;
+  if (promptTagsPending) renderPromptChipsLoading();
+  else renderPromptChips([]);
+  renderPromptEnhanced('');
+  return savePrompt(value);
+}
 
 /** Saves the prompt text, then asks for its key topics (chips) and expansion. */
 async function savePrompt(value) {
   const gen = ++promptGen;
   promptSaveInFlight += 1;
+  renderPromptSaveState();
   const reply = await send(MSG.UPDATE_MATCH_PROMPT, { prompt: value });
   promptSaveInFlight -= 1;
   if (!reply || reply.success === false) {
@@ -2472,10 +2510,14 @@ async function savePrompt(value) {
       promptTagsPending = false;
       notify('error', 'Could not save the prompt. Try again in a moment.', 'prompt-save');
       renderMatchPromptConfigurator();
+      renderPromptSaveState('Not saved — try again.');
     }
     return;
   }
   state.configuration = { ...state.configuration, matchPrompt: value };
+  if (dom.matchPromptInput && dom.matchPromptInput.value.trim() === value) promptUserEdited = false;
+  renderPromptSaveState();
+  if (gen === promptGen) notify('info', 'Prompt saved. Collected posts are being re-checked.', 'prompt-save');
   if (gen !== promptGen) return; // a newer edit is on its way
   if (!value.trim()) {
     promptTagsPending = false;
@@ -2538,7 +2580,7 @@ function renderMatchPromptConfigurator() {
   const cfg = state.configuration || {};
   if (!dom.matchPromptToggle || !dom.matchPromptInput) return;
   // Never overwrite what the user is typing, or typed and has not saved yet.
-  const editing = document.activeElement === dom.matchPromptInput || savePromptDebounced.pending() || promptSaveInFlight > 0;
+  const editing = document.activeElement === dom.matchPromptInput || isPromptDirty() || promptSaveInFlight > 0;
   if (!editing && dom.matchPromptInput.value !== (cfg.matchPrompt || '')) {
     dom.matchPromptInput.value = cfg.matchPrompt || '';
   }
@@ -2549,6 +2591,7 @@ function renderMatchPromptConfigurator() {
   if (!promptTagsPending) renderPromptEnhanced(cfg.matchPrompt ? cfg.matchPromptEnhanced : '');
 
   renderPromptStatus();
+  renderPromptSaveState();
 }
 
 /**
@@ -2935,6 +2978,9 @@ document.addEventListener('DOMContentLoaded', () => {
     matchPromptToggle: $('#match-prompt-toggle'),
     matchPromptState: $('#match-prompt-state'),
     matchPromptInput: $('#match-prompt-input'),
+    matchPromptSave: $('#match-prompt-save'),
+    matchPromptRevert: $('#match-prompt-revert'),
+    matchPromptSaveState: $('#match-prompt-save-state'),
     matchPromptHint: $('#match-prompt-hint'),
     matchPromptTagsContainer: $('#match-prompt-tags-container'),
     matchPromptEnhanced: $('#match-prompt-enhanced'),
@@ -3110,12 +3156,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Prompt filter: toggle + debounced save (600 ms) followed by topic generation
+  // Prompt filter: toggle + explicit save (button / Ctrl+Enter) followed by topic generation
   if (dom.matchPromptToggle && dom.matchPromptInput) {
     dom.matchPromptToggle.addEventListener('change', async (e) => {
       const isEnabled = !!e.target.checked;
       // The toggle acts on the saved prompt: save pending typing first.
-      savePromptDebounced.flush();
+      if (isPromptDirty()) await saveTypedPrompt();
       state.configuration = { ...state.configuration, isMatchPromptEnabled: isEnabled };
       renderPromptStatus();
       const reply = await send(MSG.TOGGLE_MATCH_PROMPT, { isEnabled });
@@ -3127,19 +3173,29 @@ document.addEventListener('DOMContentLoaded', () => {
       // { stale: true } replies only mean the expansion was for an older prompt: nothing to do.
     });
 
-    dom.matchPromptInput.addEventListener('input', (e) => {
-      const val = e.target.value;
-      promptTagsPending = !!val.trim();
-      if (promptTagsPending) renderPromptChipsLoading();
-      else renderPromptChips([]);
-      renderPromptEnhanced('');
+    dom.matchPromptInput.addEventListener('input', () => {
+      promptUserEdited = true;
       renderPromptStatus();
-      savePromptDebounced(val);
+      renderPromptSaveState();
     });
 
-    // Leaving the field (or closing the panel) saves right away.
-    dom.matchPromptInput.addEventListener('blur', () => savePromptDebounced.flush());
-    window.addEventListener('pagehide', () => savePromptDebounced.flush());
+    dom.matchPromptInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        saveTypedPrompt();
+      }
+    });
+
+    if (dom.matchPromptSave) dom.matchPromptSave.addEventListener('click', () => saveTypedPrompt());
+    if (dom.matchPromptRevert) {
+      dom.matchPromptRevert.addEventListener('click', () => {
+        promptUserEdited = false;
+        dom.matchPromptInput.value = (state.configuration || {}).matchPrompt || '';
+        renderMatchPromptConfigurator();
+        renderPromptSaveState();
+      });
+    }
+    renderPromptSaveState();
   }
 
   // Pause button clicker
