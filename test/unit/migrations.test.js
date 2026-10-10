@@ -364,7 +364,9 @@ describe('schema v3: prompt lenses (DEC-6) and the per-prompt collect switch', (
     expect(SCHEMA_VERSION).toBe(3);
   });
 
-  test.each([[true, true], [false, false]])('master switch %s: every user tag gets isLens and collects = %s (an upgrade changes no feed)', (gateOn, collects) => {
+  // Re-pinned by Engineering (DEC-6 cdd1490, Bar Raiser F3): before lenses a tag never collected, so every
+  // migrated user tag is labels-only whatever the master switch was; the old pin was collects = master state.
+  test.each([[true, false], [false, false]])('master switch %s: every user tag gets isLens and collects = %s (an upgrade changes no feed)', (gateOn, collects) => {
     const { state } = migrateState(v2(gateOn));
     expect(userTags(state).map((t) => [t.isLens, t.collects])).toEqual([[true, collects], [true, collects]]);
   });
@@ -392,9 +394,10 @@ describe('schema v3: prompt lenses (DEC-6) and the per-prompt collect switch', (
 
   test('re-running the migration is a no-op, and a collects the user already set is kept', () => {
     const input = v2(true);
-    input.configuration.trackedTags.find((t) => t.id === 'u1').collects = false;
+    // true, not false (re-pinned by Engineering): with the labels-only default a stored false would pass even if ignored
+    input.configuration.trackedTags.find((t) => t.id === 'u1').collects = true;
     const once = migrateState(input);
-    expect(once.state.configuration.trackedTags.find((t) => t.id === 'u1').collects).toBe(false);
+    expect(once.state.configuration.trackedTags.find((t) => t.id === 'u1').collects).toBe(true);
     expect(migrateState(once.state).changed).toBe(false);
   });
 });

@@ -108,9 +108,9 @@ test('a v1 profile migrates intact on restart, renders, and heals when its posts
     expect(cfg.matchPromptTags).toEqual(['Restaurants', 'Michelin']);
     expect(cfg.promptVersion).toBe(0);
     expect(cfg.trackedTags.find((t) => t.label === 'Ads')).toMatchObject({ isPseudo: true });
-    // v2 -> v3: the tag the user wrote becomes a prompt that collects (the master gate was on, so nobody's feed changes);
-    // built-in tags are never prompts (DEC-6)
-    expect(cfg.trackedTags.find((t) => t.label === 'Ramen')).toMatchObject({ isLens: true, collects: true });
+    // v2 -> v3: the tag the user wrote becomes a labels-only prompt (collects: false), so nobody's collected set
+    // changes, master on or off (DEC-6 cdd1490; re-pinned by Engineering); built-in tags are never prompts (DEC-6)
+    expect(cfg.trackedTags.find((t) => t.label === 'Ramen')).toMatchObject({ isLens: true, collects: false });
     expect(cfg.trackedTags.filter((t) => t.isLens !== undefined || t.collects !== undefined).map((t) => t.label)).toEqual(['Ramen']);
     expect(cfg.ignoredKeywords).toEqual(['crypto']);
     expect(cfg.intelligence).toBeUndefined();

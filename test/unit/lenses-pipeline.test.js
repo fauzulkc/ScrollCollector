@@ -192,14 +192,14 @@ describe('migration to lenses (migrateState)', () => {
     expect(changed).toBe(true);
     const flagged = state.configuration.trackedTags.filter((t) => t.isLens === true).map((t) => t.label);
     expect(flagged).toEqual(['Ramen', 'Chess']);
-    // the master gate was on (switch on, prompt set): the flagged tags collect
-    expect(state.configuration.trackedTags.filter((t) => t.isLens === true).map((t) => t.collects)).toEqual([true, true]);
+    // labels only, even with the master on (DEC-6 cdd1490, Bar Raiser F3; re-pinned by Engineering)
+    expect(state.configuration.trackedTags.filter((t) => t.isLens === true).map((t) => t.collects)).toEqual([false, false]);
     expect(state.configuration.trackedTags.find((t) => t.label === 'Kept off').collects).toBeUndefined();
     expect(state.configuration.trackedTags.find((t) => t.label === 'Kept off').isLens).toBe(false);
     expect(state.configuration.trackedTags.filter((t) => /^t\d+$/.test(t.id)).every((t) => t.isLens === undefined)).toBe(true);
   });
 
-  test('collects = whether the master gate was on before the migration (an upgrade never starts filtering)', () => {
+  test('collects = false whatever the master gate was (re-pinned by Engineering, DEC-6 cdd1490: an upgrade changes no collected set)', () => {
     const off = v2();
     off.configuration.isMatchPromptEnabled = false;
     const a = migrateState(off).state.configuration.trackedTags.filter((t) => t.isLens === true);
@@ -207,15 +207,17 @@ describe('migration to lenses (migrateState)', () => {
     const noPrompt = v2();
     noPrompt.configuration.matchPrompt = '  ';
     expect(migrateState(noPrompt).state.configuration.trackedTags.filter((t) => t.isLens === true).map((t) => t.collects)).toEqual([false, false]);
-    // and the gate that results is off: collect everything, as before
+    // and the gate that results is the old one: off when the master was off, on (through main only) when it was on
     expect(isGateOn(migrateState(off).state.configuration)).toBe(false);
     expect(isGateOn(migrateState(v2()).state.configuration)).toBe(true);
+    expect(migrateState(v2()).state.configuration.trackedTags.filter((t) => t.isLens === true).map((t) => t.collects)).toEqual([false, false]);
   });
 
   test('a tag that already carries collects keeps it', () => {
     const input = v2();
-    input.configuration.trackedTags.find((t) => t.label === 'Ramen').collects = false;
-    expect(migrateState(input).state.configuration.trackedTags.find((t) => t.label === 'Ramen').collects).toBe(false);
+    // true, not false: with the labels-only default a stored false would pass even if it were ignored
+    input.configuration.trackedTags.find((t) => t.label === 'Ramen').collects = true;
+    expect(migrateState(input).state.configuration.trackedTags.find((t) => t.label === 'Ramen').collects).toBe(true);
   });
 
   test('stack: decided posts without lenses are marked for backfill; scores are never derived from stored tags', () => {
