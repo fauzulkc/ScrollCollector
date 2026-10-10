@@ -1,6 +1,6 @@
 # ScrollCollector 📜🤖
 
-ScrollCollector is a privacy-first, zero-latency Chromium browser extension that extracts, redacts, and classifies text content in real time as you scroll through social feeds and web pages. It runs entirely on your local machine, utilizing your browser's built-in on-device AI (Gemini Nano) or a lightweight local keyword engine.
+ScrollCollector is a privacy-first, zero-latency Chromium browser extension that extracts, redacts, and classifies text content in real time as you scroll through social feeds and web pages. By default it runs entirely on your machine: a small sentence-embedding model bundled with the extension (System 1) decides every post, the browser's built-in model (Gemini Nano) is asked only about the posts System 1 is unsure of, and a keyword engine fills any gap. Cloud decision APIs are off unless you turn one on.
 
 It is designed as a high-performance keyboard-driven curator to capture, filter, and compile web insights into interactive offline feed diaries.
 
@@ -8,7 +8,9 @@ It is designed as a high-performance keyboard-driven curator to capture, filter,
 
 ## Key Features
 
-- **On-Device AI, no model downloads**: Semantic classification uses the browser's built-in **Prompt API** (Chrome Gemini Nano / Edge Phi-4-mini) and falls back to the **Rule-based Classifier** (always available offline). The extension never downloads a generative model of its own.
+- **System 1, bundled local embeddings**: every post is first scored by a small q8 sentence-embedding model (all-MiniLM-L6-v2 by default, bge-small-en-v1.5 selectable) run with Transformers.js on WebAssembly in the extension's offscreen document. The weights ship inside the extension; nothing is downloaded at runtime.
+- **On-device LLM only for uncertain posts, no model downloads**: posts System 1 answers with low confidence go to the browser's built-in **Prompt API** (Chrome Gemini Nano / Edge Phi-4-mini). The **Rule-based Classifier** (always available offline) fills whatever is still unanswered. The extension never downloads or bundles a generative model of its own.
+- **Cloud decisions are opt-in**: TypeSafe Jev and OpenAI are off by default. Each needs its own opt-in and your own API key; only posts System 1 is unsure of are sent, to one primary provider at a time, never chained.
 - **Dynamic Tag Generation**: Automatically extracts and suggests new category tags (e.g. *Cooking*, *Space*, *Tesla*) for items that do not match existing tags.
 - **Priority Routing**: Custom and default tags always take classification priority over dynamic tags.
 - **Segmented Workspace**: A clean, modern tabbed interface (**Stream**, **Export**, **Settings**) replacing vertical collapsible widgets to optimize narrow side panels.
@@ -84,7 +86,7 @@ Run the compilation script in your shell to build the standalone installers:
    - Open your browser and navigate to `chrome://extensions/` (or `edge://extensions/` / `brave://extensions/`).
    - Enable **Developer Mode** (toggle in the top-right corner).
    - Click the **Load unpacked** button in the top-left.
-   - Select the `ScrollCollector` folder containing `manifest.json`.
+   - Select the built `dist/ext/` folder (run `npm run fetch:models`, then `npm run build:ext`; see `BUILD.md`). The source folder has no bundled model weights, so System 1 cannot start from it.
 
 3. **Open the App**:
    - Click the extension puzzle icon in the toolbar.
@@ -94,12 +96,15 @@ Run the compilation script in your shell to build the standalone installers:
 
 ## Enabling On-Device AI
 
-ScrollCollector uses progressive enhancement for semantic inference:
+ScrollCollector decides each post with a cascade (`lib/decision/cascade.js`): a cache, a noise prefilter, then:
 
-| Tier | Engine | Browsers |
-|------|--------|----------|
-| 1 | Browser Prompt API (built-in model) | Chrome (Gemini Nano), Edge (Phi-4-mini) |
-| 3 | Rule-based Classifier | All browsers (keyword fallback) |
+| Step | Engine | When it runs | Browsers |
+|------|--------|--------------|----------|
+| System 1 | Bundled q8 sentence embeddings (MiniLM default, bge-small selectable), offscreen document | Every post, in one batch | All Chromium browsers |
+| Escalation | Browser Prompt API (built-in model), the default; or TypeSafe Jev / OpenAI if you opt in | Only posts System 1 answered with low confidence; one primary provider, within a rate budget | Chrome (Gemini Nano), Edge (Phi-4-mini) |
+| Rules | Rule-based Classifier | Fills anything still unanswered | All browsers (keyword fallback) |
+
+The flags below are needed only for the escalation step; System 1 works without them.
 
 The header status pill shows which tier is active: **green** = semantic AI ready, **orange** = downloading or keyword fallback.
 
@@ -157,9 +162,9 @@ await LanguageModel.availability({
 
 ### Brave
 
-Brave does not ship Google's Gemini Nano download, so ScrollCollector uses the **Rule-based
-Classifier** there (keyword matching, no flags required). It does not download a replacement
-language model.
+Brave does not ship Google's Gemini Nano download, so posts System 1 is unsure of fall back to the
+**Rule-based Classifier** there (keyword matching, no flags required). System 1 still runs. It does
+not download a replacement language model.
 
 ---
 
@@ -178,4 +183,4 @@ language model.
 
 ## License
 
-MIT License. Operates 100% locally with zero external network tracking.
+MIT License. No external network tracking. By default every decision is made on your device; post text leaves it only if you turn on a cloud provider (TypeSafe Jev or OpenAI).
