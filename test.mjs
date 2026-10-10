@@ -4,8 +4,8 @@ import './lib/sanitizer.js';
 const { sanitize } = globalThis.MindstreamSanitizer;
 
 import { buildSystemPrompt, buildUserPrompt } from './lib/prompt-builder.js';
-import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch, isSocialNoise, scoreRuleBasedEvalMatch, buildEvalKeywords, parseModelJson, containsEvalTerm, generateCustomKeywords } from './lib/inference-engine.js';
-import { createRouter } from './lib/inference/router.js';
+import { cleanTagName, keywordFallback, extractNounTopic, heuristicAuthorMatch, isSocialNoise, scoreRuleBasedEvalMatch, buildEvalKeywords, parseModelJson, containsEvalTerm, generateCustomKeywords, normalizeForMatch, normalizeTagList, setSemanticGenerator, checkEngineStatus, autoSuggestTagPrompt, extractTagsFromPrompt, RULES_ENGINE } from './lib/inference-engine.js';
+import { createNanoProvider } from './lib/decision/providers/nano.js';
 import { getBrowserModelDisplayName } from './lib/inference/browser-detect.js';
 import { createStateLock } from './lib/state-lock.js';
 
@@ -63,9 +63,13 @@ test('Inference Engine - keywordFallback Tests', (t) => {
     { label: 'AI & Machine Learning', prompt: 'Identify posts related to AI, machine learning, deep learning, model, transformers.' }
   ];
 
-  // Tech match
+  // Tech match. Intentional change: one short keyword ("code") is no longer enough on its own,
+  // the rules tier needs two hits or one specific (6+ chars, non-generic) keyword.
   const match1 = keywordFallback('We need to write python code and commit it to our repository.', enabledTags);
-  assert.strictEqual(match1.tags[0]?.name, 'Tech');
+  assert.strictEqual(match1.tags.length, 0);
+  const match1b = keywordFallback('We need to write python code and review the programming guide.', enabledTags);
+  assert.strictEqual(match1b.tags[0]?.name, 'Tech');
+  assert.ok(match1b.tags[0].score < 1, 'scores are absolute, not normalized to 1.0');
 
   // Finance match
   const match2 = keywordFallback('The bond yield curve is showing recession indicators.', enabledTags);
@@ -210,6 +214,20 @@ test('Eval Match - strict rule-based scoring', (t) => {
   assert.ok(keywords.tagKeywords.includes('restaurant'));
 });
 
+test('Eval Match - normalized text and legacy prompt tags', (t) => {
+  assert.strictEqual(normalizeForMatch('𝗠𝗶𝗰𝗵𝗲𝗹𝗶𝗻​  Star'), 'michelin star');
+  assert.ok(containsEvalTerm('Dinner at a 𝗠𝗶𝗰𝗵𝗲𝗹𝗶𝗻 restaurant', 'michelin'));
+  assert.deepStrictEqual(normalizeTagList([{ name: 'Michelin', weight: 1 }, 'michelin', null, 'Food']), ['Michelin', 'Food']);
+
+  const legacy = scoreRuleBasedEvalMatch(
+    'We visited a Michelin star restaurant last night.',
+    'find me restaurant and 5 star quality food posts',
+    [{ name: 'Michelin', weight: 1 }, { name: 'Restaurant', weight: 0.5 }]
+  );
+  assert.ok(legacy.doesMatch);
+  assert.ok(legacy.matchedKeywords.every(k => !k.includes('[object')));
+});
+
 test('parseModelJson tolerates markdown fences', (t) => {
   assert.deepStrictEqual(parseModelJson('{"matches": true}'), { matches: true });
   assert.deepStrictEqual(
@@ -218,73 +236,84 @@ test('parseModelJson tolerates markdown fences', (t) => {
   );
 });
 
-test('Inference router — provider fallback order', async (t) => {
+// Ported from the retired lib/inference/router.js tests: the semantic tier is now an injectable
+// generator list (lib/inference-engine.js setSemanticGenerator), by default the browser's built-in
+// LanguageModel provider (lib/decision/providers/nano.js); provider details are covered by
+// test/unit/provider-nano.test.js.
+test('Semantic generators — fallback order, readiness and legacy engine status', async (t) => {
   const calls = [];
-
-  const tier1 = {
-    tier: 1,
-    getDisplayName: () => 'Mock Browser SLM',
-    isAvailable: async () => true,
-    inferJson: async () => {
-      calls.push('tier1');
-      return null;
-    },
-    getEngineStatus: async () => ({ tier: 1, name: 'Mock Browser SLM', status: 'ready' })
+  const notReady = {
+    displayName: 'Not Ready SLM',
+    isReady: async () => false,
+    generateJson: async () => { calls.push('notReady'); return { prompt: 'never' }; }
   };
-
-  const tier2 = {
-    tier: 2,
-    getDisplayName: () => 'Mock WebGPU',
-    isAvailable: async () => true,
-    inferJson: async () => {
-      calls.push('tier2');
-      return { tags: [{ name: 'Tech', score: 1 }] };
-    },
-    getEngineStatus: async () => ({ tier: 2, name: 'Mock WebGPU', status: 'ready' })
+  const failing = {
+    displayName: 'Failing SLM',
+    isReady: async () => true,
+    generateJson: async () => { calls.push('failing'); throw Object.assign(new Error('boom'), { code: 'error' }); }
   };
-
-  const keyword = {
-    tier: 3,
-    getDisplayName: () => 'Rule-based Classifier',
-    isAvailable: async () => true,
-    getEngineStatus: async () => ({ tier: 3, name: 'Rule-based Classifier', status: 'ready' })
+  const working = {
+    displayName: 'Mock Nano',
+    isReady: async () => true,
+    status: () => ({ state: 'ready', availability: 'available' }),
+    generateJson: async (system, user, opts) => {
+      calls.push('working');
+      assert.ok(opts.schema && opts.schema.required.includes('prompt'), 'the helper passes its response schema');
+      return { prompt: 'Identify posts about sourdough baking.' };
+    }
   };
+  t.after(() => setSemanticGenerator(null));
 
-  const router = createRouter([tier1, tier2], [tier1, tier2, keyword]);
+  setSemanticGenerator([notReady, failing, working]);
+  const original = console.warn;
+  console.warn = () => {};
+  try {
+    assert.strictEqual(await autoSuggestTagPrompt('Baking'), 'Identify posts about sourdough baking.');
+  } finally {
+    console.warn = original;
+  }
+  assert.deepStrictEqual(calls, ['failing', 'working'], 'a generator that is not ready is skipped without a call');
 
-  const result = await router.inferJson({
-    systemPrompt: 'test',
-    userPrompt: 'hello'
-  });
+  // The deprecated legacy status reflects the first generator.
+  setSemanticGenerator(working);
+  assert.deepStrictEqual(await checkEngineStatus(), { tier: 1, name: 'Mock Nano', status: 'ready', availability: 'available' });
+  setSemanticGenerator({ displayName: 'Mock Nano', isReady: async () => false, status: () => ({ state: 'downloading' }), generateJson: async () => null });
+  assert.strictEqual((await checkEngineStatus()).status, 'downloading');
 
-  assert.deepStrictEqual(calls, ['tier1', 'tier2']);
-  assert.strictEqual(result.engine, 'Mock WebGPU');
-  assert.strictEqual(result.tier, 2);
-
-  const status = await router.checkEngineStatus();
-  assert.strictEqual(status.tier, 1);
-  assert.strictEqual(status.name, 'Mock Browser SLM');
+  // Rules only.
+  setSemanticGenerator(false);
+  assert.deepStrictEqual(await checkEngineStatus(), { tier: 3, name: RULES_ENGINE, status: 'ready' });
+  assert.strictEqual(await autoSuggestTagPrompt('Baking'), 'Find posts related to Baking.');
 });
 
-test('Inference router — keyword status when no semantic provider ready', async (t) => {
-  const unavailable = {
-    tier: 1,
-    getDisplayName: () => 'Mock Browser SLM',
-    isAvailable: async () => false,
-    inferJson: async () => null,
-    getEngineStatus: async () => null
-  };
+test('Semantic generators — default built-in LanguageModel: heuristics without it, JSON with it', async (t) => {
+  t.after(() => setSemanticGenerator(null));
 
-  const keyword = {
-    tier: 3,
-    getDisplayName: () => 'Rule-based Classifier',
-    isAvailable: async () => true,
-    getEngineStatus: async () => ({ tier: 3, name: 'Rule-based Classifier', status: 'ready' })
-  };
+  // Node has no LanguageModel: the default generator is not ready and every helper uses its heuristic.
+  setSemanticGenerator(null);
+  assert.strictEqual(typeof globalThis.LanguageModel, 'undefined');
+  assert.strictEqual((await checkEngineStatus()).tier, 3);
+  assert.strictEqual(await autoSuggestTagPrompt('Baking'), 'Find posts related to Baking.');
 
-  const router = createRouter([unavailable], [unavailable, keyword]);
-  const status = await router.checkEngineStatus();
-  assert.strictEqual(status.tier, 3);
+  // A fake LanguageModel behind the nano provider answers through the same hook.
+  const prompts = [];
+  const languageModel = {
+    availability: async () => 'available',
+    create: async () => ({
+      clone: async () => ({
+        prompt: async (text, options) => {
+          prompts.push({ text, options });
+          return '{"tags": ["Baking", "Bread"]}';
+        },
+        destroy() {}
+      }),
+      destroy() {}
+    })
+  };
+  setSemanticGenerator(createNanoProvider({ languageModel }));
+  assert.deepStrictEqual(await extractTagsFromPrompt('sourdough bread and baking posts'), ['Baking', 'Bread']);
+  assert.strictEqual(prompts.length, 1);
+  assert.deepStrictEqual(prompts[0].options.responseConstraint.required, ['tags']);
 });
 
 test('Browser detect — display names', (t) => {
