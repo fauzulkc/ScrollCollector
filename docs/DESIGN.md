@@ -9,7 +9,8 @@ place and appends the record. Only Design edits the operative text; others propo
 D-5 (the prompt spec for DEC-6 as amended, the preview spec for DEC-7, the card time in the release).
 Open with ⚙️ Engineering (as of 01:40): whether user-added prompts stay in tag classification (D-1), and
 the measured image size (D-4). Answered: the user-prompt data (D-1) and the score's unit (D-3).
-Next free numbers: **P-4, D-6**.
+Next free numbers: **P-4, D-8** (D-6 is the Design team's draft, awaiting adoption; D-7, the wide panel,
+was ruled 2026-10-11).
 
 ## How these were measured (2026-10-11, at `9bfb189`, `dist/ext` built 2026-10-10 22:24 after the last source edit)
 
@@ -306,6 +307,50 @@ and it is gone once any switch is On. Weak pin: a test that reads the stylesheet
 only that the switch exists.
 **Done when** the built `dist/ext` panel is rendered at 320, 400 and 560 px in both themes with one
 collecting and one labels-only prompt, the image read, and the marker's contrast measured on both grounds.
+
+### D-7 · The panel fills any width it is given (2026-10-11, owner's ask)
+**Ruling.**
+1. **The panel uses the whole width Chrome gives it.** Lift `body { max-width: 500px }` (`sidepanel.css`
+   `body`; keep `min-width: 280px`). The header, tabs, search, filter rows and footer span the full width.
+2. **The stream becomes a grid of cards** (`#stream-list`): `grid-template-columns:
+   repeat(auto-fill, minmax(min(300px, 100%), 1fr))`, `gap: 12px`, `align-items: start`. At most widths
+   that keeps cards between 300 and about 480 px wide. Measured columns: 2 at 640 px, 3 at 1100, 4 at 1500.
+   Below about 636 px it stays one column, as today.
+3. **Reading order is left to right, then down (row by row), never column by column.** In a selected
+   prompt's view the list is a ranking (D-2), and in "All" it is newest first. A masonry or CSS-columns
+   flow would read ranks and times out of order. Short cards leave a gap below them, and that is accepted
+   (`align-items: start`).
+4. **Anything in the list that is not a card spans the full row** (`grid-column: 1 / -1`): the day
+   dividers, empty states and status lines (D-6's `#collect-summary` included). A divider never sits in
+   one cell beside cards.
+5. **Settings and Export do not stretch.** Their content is held at `max-width: 560px`, left-aligned under
+   the tabs. Forms and help text stay at the width they were written for.
+6. **Nothing else changes with width:** no type sizes by breakpoint, no hidden controls, and no horizontal
+   page scroll at any width. The filter rows keep scrolling sideways and show more pills as width grows.
+   D-4's grown preview stays `min(240px, panel width − 48px)`, anchored to its card.
+**Measured.** The owner's screenshot (2026-10-11) shows a panel about 770 px wide, with content ending
+near 500 px and an empty band to its right. Reproduced with `node scratchpad/design/proto-wide.mjs` (8
+seeded posts, Chrome for Testing, dark). **As is:** the body is 500 px at both 770 and 1100 px, one column
+of 476 px cards, about 84 characters per line. **Prototype** (this ruling's CSS injected): the body fills
+the panel; 640 px → 2 columns of 302 px (51 characters per line); 770 → 2 of 367 (63); 1100 → 3 of 351
+(60); 1500 → 4 of 360 (62); `scrollWidth` equals the viewport at every width. Renders:
+`wide-asis-770.png`, `wide-wide-770.png`, `wide-wide-1100.png` (stream, read: time order 1m, 8m, 15m, 22m,
+29m runs left to right; the day divider spans the row) and `wide-settings-770.png` (Settings held at
+560 px). **Not measured:** the widest single-column card, at just under 636 px, is about 600 px, which
+works out to about 105 characters per line from the measured rate. That narrow band is accepted. Light
+theme not rendered: this ruling changes no colour.
+**Escalation test.** Form: taken. **Handed to 🧭 CEO:** which branch and release this rides is queue
+order. The store release ships as it stands (DEC-8), so by default it lands with prompts on
+`feat/prompt-lenses`. A separate "open in a full tab" mode would be new scope and is not ruled here. With
+this ruling, the page already works at any width if it is opened in a tab. **Handed to the 🧷 extension
+seat (clear it with ⚙️ Engineering):** the list virtualiser (`initVirtualizer`, `is-virtualized` with a
+`minHeight`) must keep each card in its grid cell. A card that drops out of view must not reflow its row.
+**Pin (for 🧪 Testing, real browser).** At 1100 px the body width equals the viewport, there are 3 card
+columns, the first three cards' `top` values are equal and their `left` values increase, a day divider
+spans the full row, and `scrollWidth` equals the viewport. At 400 px there is one column. Weak pin: a test
+that reads the stylesheet for `max-width`.
+**Done when** the built `dist/ext` panel is re-rendered at 400, 770 and 1100 px with the image read, the
+pin is green, and the owner sees it fill the panel in their own Chrome.
 
 ## Observed, not ruled (read from source 2026-10-10 at `44f04d3`; rendered 2026-10-11 at `9bfb189`)
 
