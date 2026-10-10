@@ -15,7 +15,9 @@ Chosen: lenses now, workspaces later only if collections need keeping apart.
   Every enabled tag is scored per post (`tag:<label>` nouls), but only scores >= 0.5 survive into
   `decision.tags` (`apply-decision.js:159-161`), and the post is filed under one `assignedTag`.
 - The side panel's tag pills count by `assignedTag` only, and the list is sorted newest first (`sidepanel.js:944`).
-So a tag already is a second prompt; what is missing is keeping every score, showing every match, and sorting by it.
+What is missing is a score per user prompt on every post, showing every match, and sorting by it. Corrected 2026-10-11
+01:40: this line first read "a tag already is a second prompt". Lenses are scored like the match prompt instead,
+because its calibration passes and the tag calibration does not (DEC-6 record; `eval/reports/2026-10-10-system1.md:40-41`).
 
 ## Scope (what "lenses done" means)
 1. Every prompt's score is kept on every post, below 0.5 too (⚙️ Engineering owns the shape and the migration).
