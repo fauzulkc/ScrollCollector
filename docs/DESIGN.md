@@ -5,11 +5,11 @@ and citable patterns for the side panel and its views; a ruling binds whoever bu
 Browser-extension engineer implements). Each ruling is a dated entry with the measurement and render that
 forced it, its reproduction command, and the escalation outcome; a correction fixes the operative line in
 place and appends the record. Only Design edits the operative text; others propose. A decision in
-`docs/DECISIONS.md` outranks this file. **State (2026-10-11 01:20):** patterns P-1 and P-2, rulings D-1 to
+`docs/DECISIONS.md` outranks this file. **State (2026-10-11 01:50):** patterns P-1 to P-3, rulings D-1 to
 D-5 (the prompt spec for DEC-6 as amended, the preview spec for DEC-7, the card time in the release).
 Open with ⚙️ Engineering (as of 01:40): whether user-added prompts stay in tag classification (D-1), and
 the measured image size (D-4). Answered: the user-prompt data (D-1) and the score's unit (D-3).
-Next free numbers: **P-3, D-6**.
+Next free numbers: **P-4, D-6**.
 
 ## How these were measured (2026-10-11, at `9bfb189`, `dist/ext` built 2026-10-10 22:24 after the last source edit)
 
@@ -40,6 +40,17 @@ A number on a filter pill equals **exactly** the number of cards shown when that
 the same search and site and author filters. Counts across lenses may sum to more than "All" (a post sits in
 every lens it matched); no form may suggest they partition it (no stacked bar, no "of total", no percentages
 of All).
+
+### P-3 · A number is compared only where the system says it compares (2026-10-11)
+Order, a shared axis, and side-by-side bars all invite the eye to compare. **Use them only between numbers
+the system says are comparable.** For prompt scores, that means **within one prompt** (one prompt's score
+across posts). It does **not** mean across prompts (two prompts' scores on one post).
+**Measured.** `eval/reports/2026-10-10-system1.md`, Notes (line 282 at `562d77a`): one calibration
+"transfers across prompts in ranking (AUROC near 1 everywhere) but not always in level". In its per-prompt
+table, the held-out `climate` prompt has AUROC 1.00 but recall 0.00 at 0.5. ⚙️ Engineering relayed this
+(inbox, 2026-10-11) and Design re-read it. Reopen if Engineering reports a calibration whose level
+transfers across prompts.
+*Pin:* on a card, the chips' order does not depend on their scores. Weak pin: checking that bars exist.
 
 ## Rulings
 
@@ -122,14 +133,17 @@ Jobs" is a claim. Each prompt chip carries:
 - the lens's own colour as a 6 px dot, the lens name, and the score as **a whole number from 0 to 100**
   (`Math.round(score × 100)`, one function everywhere it is shown), in bold tabular figures, in
   `--text-primary`;
-- under them, a **2 px bar filled to the score on an axis that starts at 0** and ends at 100. Never start
-  the axis at the threshold: a bar that starts at 50 makes 51 look empty and 92 look full;
+- **only on the selected prompt's chip** (amended 01:50, P-3), a **2 px bar under the name, filled to the
+  score on an axis that starts at 0** and ends at 100. Down the list, these bars compare one prompt's
+  scores, which is sound. The other chips show the name and number with no bar, and with no prompt
+  selected no chip has a bar. Never start the axis at the threshold: a bar that starts at 50 makes 51 look
+  empty and 92 look full;
 - colour is the lens's identity only. **No red, amber or green ramp by strength**: colour would then
   claim good or bad. The chip carries **no engine or provider mark** (DEC-3 to DEC-5); the path and engine
   stay in the existing decision tooltip (the ⓘ icon);
-- order: with a prompt selected, its chip comes first, outlined in its colour; the others follow by
-  score, strongest first. With none selected, all chips go by score. At 320 px the chips wrap; none is
-  dropped or truncated;
+- order (amended 01:50, P-3): with a prompt selected, its chip comes first, outlined in its colour. The
+  others follow in **the user's prompt-list order (Settings), never by score**, and so does every chip when
+  none is selected. At 320 px the chips wrap; none is dropped or truncated;
 - a post that matched no user prompt (collected with the gate off) has no chip row: no empty row and no
   "0".
 - every chip follows P-1: no opacity, scale or dashed border by rank.
@@ -157,6 +171,13 @@ the count. Lens scores use the match-prompt calibration (rule 3). The chip's hov
 the 🧷 extension seat's, under D-3's constraint that it does not say "Confidence" or "%". Note: a looser
 strictness setting lowers the threshold, so chips can appear at scores near 30. Those are true numbers and
 are shown as they are.
+**Record, 2026-10-11 01:50.** Engineering's reply says the number is a 0–100 match score, not a percent,
+and suggests "Match score" as the hover word. That wording is the 🧷 extension seat's to adopt. Engineering
+also reported that the score's level does not transfer across prompts (P-3, re-read by Design in the eval
+report). The earlier text ordered every chip by score and gave every chip a bar on one shared axis. That
+told the eye that "AI coding tools 92" fits better than "Remote ML jobs 61", a claim the system does not
+make. The operative text was fixed in place: list order, and a bar only on the selected prompt.
+`proto-prompts-*.png` still shows the earlier form; re-render once it is built.
 
 ### D-4 · The image preview (DEC-7) (2026-10-11)
 **Ruling.**
