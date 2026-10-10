@@ -290,3 +290,13 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   the eval's own prompts); the shipped cascade's `whenUnsure: collect` adds 28-29 pairs (P 0.776 / 0.906, R 0.672 /
   0.716). The shipped cascade never passes a user prompt's expansion (`cascade.js:253-254`); (2) was simulated in the
   harness.
+- 2026-10-11 (after `dac2b55`) · **Prompt shape evidence for candidate (3), for 📐 Design** (descriptive, not pre-registered,
+  decides nothing; from the held-out per-pair rows, prompt ids only because the set is private). Lens-only recall
+  (≥ 0.5) per held-out prompt, minilm / bge-small, with word count: invest 3w 0.12 / 0.12 · space 2w 0.20 / 0.60 ·
+  ev 5w 0.33 / 0.22 · cycling 4w 0.36 / 0.55 · burnout 4w 0.50 / 0.40 · housing 7w 0.90 / 0.50 · **languages 13w
+  0.22 / 0.11**. Eval prompts (in-sample for the calibration): jobs 4w and coding 6w worked; restaurant 16w worked.
+  **Finding: length does not predict recall here.** The longest held-out prompt is among the worst; short prompts span
+  0.12-0.60. ~~"0.09 short versus 0.99 full" as a general rule~~: one prompt (restaurant), not a pattern. What the data
+  does support: recall varies by prompt from 0.11 to 0.90 and cannot be predicted from length, so a user needs to
+  **see how a prompt is doing** (e.g. how many posts it matched, or a near-miss count just under the line), not only
+  a writing rule. Limits: 7 prompts, 8-11 yes posts each, one author.
