@@ -62,13 +62,14 @@ Measured 2026-10-10 unless marked.
   `D:\code\ScrollCollector` is a symlink to it). Branch in work `feat/decision-cascade`. No CI (no `.github/workflows/`).
 - Run git / npm / node from WSL, never Windows git. From Windows: write a script to the scratchpad and run
   `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-24.04 -- bash -l /mnt/c/<path>`. Node v24.14.0 via fnm under `bash -l`.
-- Stack: Chrome MV3, plain ES modules, no bundler or framework; version 0.9.0; dep `@huggingface/transformers` ^3.4.0.
-- Manifest (0.9.0): permissions storage, activeTab, sidePanel, favicon, tabs, scripting, alarms, offscreen,
-  idle, unlimitedStorage; host_permissions `<all_urls>`; `content.js` on `<all_urls>` at document_idle;
+- Stack: Chrome MV3, plain ES modules, no bundler or framework; version 0.10.0 (2026-10-11); dep `@huggingface/transformers` ^3.4.0.
+- Manifest (0.10.0, 2026-10-11): permissions storage, sidePanel, favicon, tabs, scripting, alarms, offscreen,
+  idle, unlimitedStorage (`activeTab` removed in 0.10.0: no caller); each justified in `docs/STORE-LISTING.md`; host_permissions `<all_urls>`; `content.js` on `<all_urls>` at document_idle;
   `lib/content/linkedin-urn-bridge.js` in MAIN world on `https://www.linkedin.com/*` at document_start; CSP
   `script-src 'self' 'wasm-unsafe-eval'; object-src 'self'`; COEP require-corp, COOP same-origin; module
   service worker `background.js`; side panel `sidepanel.html`. `<all_urls>` lengthens store review.
-- Sites in `content.js`: LinkedIn, X, YouTube, Facebook, Instagram, Medium, heuristic custom sites.
+- Default sites (`DEFAULT_SITE_DOMAINS`, `lib/sites.js`, 2026-10-11): Facebook, LinkedIn, X, Instagram, YouTube,
+  Medium, GitHub, Hacker News; plus heuristic custom sites the user adds.
 - Commands: `npm test` (= `node test.mjs && vitest run`); `npm run test:unit`; `npm run test:e2e`
   (Playwright, 18 specs in `e2e/`, 1 worker, 180 s timeout, Chrome for Testing in WSL; `e2e/ui.spec.mjs`,
   `security.spec.mjs`, `startup.spec.mjs` look closest to this seat, by name only: UNVERIFIED); `npm run build:ext` → `dist/ext/` (copies
@@ -77,9 +78,13 @@ Measured 2026-10-10 unless marked.
   (= `D:\code\ScrollCollector-dev`, exists, held 0.9.0 on 2026-10-10).
 - Live check: in the owner's Chrome, `chrome://extensions` → Load unpacked / reload from
   `D:\code\ScrollCollector-dev` (Chrome is flaky loading from `\\wsl.localhost`), then reload the site tab.
-- Packaging (older, Go): `build-installer.sh`, `build-pkg.sh`, `package-release.sh`, `bump-version.js`,
-  `installer/` (go-webview2 Windows installer), `companion/`; documented in `BUILD.md`. Whether these still
-  produce a working package: UNVERIFIED.
+- **Store package** (2026-10-11): `npm run package:store` (`scripts/package-store.sh`) →
+  `releases/ScrollCollector-<version>-store.zip`, the contents of `dist/ext/`, with guards (versions agree, every
+  manifest-named and model file present). 0.10.0: 46 MB zipped. Privacy policy draft: `docs/PRIVACY.md`.
+- Packaging (older, Go): `build-installer.sh` (zips `dist/ext/` since 2026-10-11; before, it zipped source files
+  with no models and no `ui/`), `build-pkg.sh`, `package-release.sh`, `bump-version.js` (commits and tags on its
+  own: not for a release bump, the tag is the CEO's), `installer/`, `companion/`; documented in `BUILD.md`.
+  Whether the Go installers still compile and install: UNVERIFIED.
 - Chrome Web Store: no listing is known to exist; listing state and any store account: UNVERIFIED.
 
 ## Traps paid for

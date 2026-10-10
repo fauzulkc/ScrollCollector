@@ -1,6 +1,6 @@
 {
   "name": "scrollcollector",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "description": "Deterministic web page feed tracking and categorizer using Gemini Nano.",
   "type": "module",
   "scripts": {
@@ -11,6 +11,7 @@
     "fetch:models": "node scripts/fetch-models.mjs",
     "build:ext": "node scripts/build-ext.mjs",
     "sync:win": "bash scripts/sync-win.sh",
+    "package:store": "bash scripts/package-store.sh",
     "vendor:ai": "node scripts/build-ext.mjs"
   },
   "author": "Fauzul Chowdhury",

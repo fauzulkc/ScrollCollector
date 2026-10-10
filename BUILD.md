@@ -4,17 +4,34 @@ This document explains how to compile the binary executables and package the bro
 
 ---
 
+## 🏪 Chrome Web Store package (the release path)
+
+Run from WSL, once per release, after the version in `manifest.json` and `package.json` has been raised:
+```bash
+npm run fetch:models    # once: the System 1 weights the package bundles
+npm run package:store   # -> releases/ScrollCollector-<version>-store.zip
+```
+`package:store` runs `build:ext`, checks that every file `manifest.json` names and every bundled model file
+is in `dist/ext/` and that both versions agree, then zips the **contents** of `dist/ext/` (manifest.json at
+the zip root). The listing text, permission justifications and data-use answers are in
+`docs/STORE-LISTING.md`; the privacy policy is `docs/PRIVACY.md`. Uploading and submitting are the owner's.
+
+The installers below are the older friends-and-family path, not for the store.
+
+---
+
 ## 🛠️ Prerequisites
 
-To build ScrollCollector, you need:
-1. **Go Compiler (1.20+)**: Installed on your system.
-2. **Zip Utility**: Command-line utility to package the extension files.
+To build the installers, you need:
+1. **Node.js and `npm install`**, plus `npm run fetch:models` once: the installer embeds `dist/ext/`.
+2. **Go Compiler (1.20+)**: Installed on your system.
+3. **Zip Utility**: Command-line utility to package the extension files.
 
 ---
 
 ## 📦 Automated Build Script
 
-We provide a shell script, `build-installer.sh`, that automates the entire process of zipping the extension assets, cross-compiling the Windows companion app, and packaging the standalone Windows installer.
+We provide a shell script, `build-installer.sh`, that automates the entire process of building and zipping the extension (`dist/ext/`), cross-compiling the Windows companion app, and packaging the standalone Windows installer.
 
 To run the automated build script (e.g. from WSL or a Linux/macOS bash terminal):
 ```bash
@@ -31,21 +48,11 @@ Upon success, this produces:
 If you want to compile individual components manually, follow these instructions:
 
 ### 1. Package the Extension
-Compress the Chrome extension assets into a ZIP file. This zip is embedded directly into the installer installer payload.
+Build the extension and compress the **built** package into a ZIP file. This zip is embedded directly into the installer payload. (Zipping the source files instead ships without the bundled models and the `ui/` folder, and System 1 never loads.)
 ```bash
-zip -r installer/ScrollCollector.zip \
-  icons/ \
-  lib/ \
-  offscreen/ \
-  manifest.json \
-  background.js \
-  content.js \
-  sidepanel.css \
-  sidepanel.html \
-  sidepanel.js \
-  install-guide.html \
-  README.md \
-  -x "*.DS_Store"
+npm run build:ext
+(cd dist/ext && zip -r ../../installer/ScrollCollector.zip . -x "*.DS_Store")
+zip -j installer/ScrollCollector.zip install-guide.html README.md
 ```
 
 ### 2. Compile the Windows Installer Wizard
