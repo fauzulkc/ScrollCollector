@@ -64,9 +64,9 @@ date, never written over.
    (`lib/pipeline/redecide.js:19,134`). Known: a post's label comes from tag classification and its chip from the lens
    score, two signals that can disagree (sent to 📐 Design).
 8. **Migration:** `SCHEMA_VERSION` 2 → 3. Configuration: existing user-added tags get `isLens: true` (rule 1:
-   not a built-in label, not dynamic, not pseudo, not Ads) and **`collects` = whether the master gate was on**
-   (`isGateOn` at migration time): an upgrade never starts filtering for a user who was collecting everything. New
-   tags from `TAG_ADDED` get `collects: true` (the owner's default). Ruled as built: DEC-6 02:58 addendum. Stack: posts without `decision.lenses` are marked
+   not a built-in label, not dynamic, not pseudo, not Ads) and **`collects: false`** (labels only): before lenses a
+   tag never collected, so every collected set is unchanged, master on or off (DEC-6 `cdd1490`, Bar Raiser F3). New
+   tags from `TAG_ADDED` get `collects: true` (the owner's default). Manual overrides are never marked for backfill. Stack: posts without `decision.lenses` are marked
    for a lens backfill and re-scored by the existing re-decide job under the state lock, System 1 only, no
    escalation, no cloud. Idempotent.
 9. **Re-decide on prompt change:** adding, removing, enabling, renaming or editing a lens's prompt changes
@@ -342,3 +342,10 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   gain (3 posts) sits inside the ±0.105 band at n = 77. Remaining levers are outside the embedding (Nano's re-ask of
   uncertain tags, unmeasured here without the Prompt API) or the gate's definition (Testing's register: the "any
   listed tag" row already reads 0.792 / 0.779). Parked pending 🧭 CEO.
+- 2026-10-11 (commit `3c4fac1` on `feat/prompt-lenses`) · **Rule 8 corrected** on ⚖️ Bar Raiser finding F3 and 🧭 CEO
+  `cdd1490`: ~~"`collects` = whether the master gate was on … an upgrade never starts filtering"~~. Its premise missed
+  *widening*: with the master on, every migrated tag collected, so tag-only posts hidden before were collected after.
+  Now `collects: false` for every migrated tag. Guard `test/unit/lenses-migration-guard.test.js` (post-migration
+  collected set = pre-migration set) fails 3 of 5 on `4f9eca6`, passes 5 of 5 on `3c4fac1`; unit 842/842,
+  e2e migration + lenses-collect 5/5 (my runs). F2 (three stale gate comments) and F4 (manual items never marked)
+  fixed in the same commit.
