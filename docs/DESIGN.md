@@ -7,7 +7,8 @@ forced it, its reproduction command, and the escalation outcome; a correction fi
 place and appends the record. Only Design edits the operative text; others propose. A decision in
 `docs/DECISIONS.md` outranks this file. **State (2026-10-11 01:20):** patterns P-1 and P-2, rulings D-1 to
 D-5 (the prompt spec for DEC-6 as amended, the preview spec for DEC-7, the card time in the release).
-Open with ⚙️ Engineering: the user-prompt data (D-1), the score's unit (D-3), the image size (D-4).
+Open with ⚙️ Engineering (as of 01:40): whether user-added prompts stay in tag classification (D-1), and
+the measured image size (D-4). Answered: the user-prompt data (D-1) and the score's unit (D-3).
 Next free numbers: **P-3, D-6**.
 
 ## How these were measured (2026-10-11, at `9bfb189`, `dist/ext` built 2026-10-10 22:24 after the last source edit)
@@ -53,6 +54,9 @@ Settings shows the prompts as one list, each row with its name and its text. No 
 control sits beside that list. The tags keep their own list.
 **A prompt with no name** is shown by its own text, cut with an ellipsis at the pill's maximum width, with
 the full text in its title. No invented name and no "Untitled".
+**A prompt the user added as a tag (`isLens`) appears only as a prompt** (the prompt row, the prompt
+chips, the prompts list in Settings). It never appears as a pill in the tag row or as a label in the card
+footer, even when the code files a post under it as `assignedTag`. (Added 2026-10-11 01:40.)
 **Measured.** Today the same idea appears under three names: the search placeholder says "tags", Settings
 says "Prompt filter" (`sidepanel.html:244`) and "Add custom tag…" (`:279`), and each of the 25 default tags
 already carries a prompt ("Identify posts related to …", `scratchpad/design/renders/tags.json`). The owner's
@@ -72,11 +76,20 @@ lens (`tag:<label>`) and collect a post when *any* lens reaches the threshold. T
 gate collection, against the amended DEC-6. ENG-1 also has no field marking which tags the user wrote. It
 gives the match prompt no name, and it has only one match prompt. This ruling needs, from the data, a set
 of user prompts, each with an optional name. Their shape is Engineering's.
+**Record, 2026-10-11 01:40. Closed** by ENG-1 as amended (`562d77a`, rules 1–5). A lens is the match
+prompt (id `main`, no name, so it is shown by its text per this ruling) plus each tag the user added
+(`isLens: true`, named by its label). The built-in tags are never lenses and never gate; a unit gate covers
+this. **New, from the same re-read:** ENG-1 rule 7 leaves `assignedTag` and `decision.tags` unchanged, so an
+`isLens` tag can still be a post's tag. That would show one object as both kinds. The form half is taken
+above (the `isLens` paragraph). Whether lens tags should stay in tag classification is ⚙️ Engineering's,
+and it is sent to them.
 
 ### D-2 · The prompt row and the prompt view (2026-10-11, amended 01:20)
 **Ruling.** The prompts get **their own row, above the tag row** (`#filter-pills`). It holds one pill per
 user prompt:
-- each pill carries the prompt's colour dot, its name (D-1), and its count (P-2);
+- one pill per **enabled** user prompt; a disabled prompt has no pill and no chips;
+- each pill carries the prompt's colour dot, its name (D-1), and its count (P-2). A user-added prompt
+  keeps its tag colour. The match prompt (`main`) has none, so it uses `--accent`;
 - pills are outlined, not filled, so they never read as the tag row's selected "All";
 - `max-width` is 160 px; when there are more pills than fit, the row scrolls sideways like the rows below;
 - **no prompts, no row:** no empty box and no placeholder;
@@ -137,6 +150,13 @@ number and no unit. The shipped tooltip's "Confidence: n%" is not reused on the 
 CEO's scope ruling; the operative text was fixed in place. ENG-1 states that a lens score is a calibrated,
 independent sigmoid score, not the competing softmax. That supports a 0–100 reading, but it does not yet
 answer the unit or the hover wording, which stay open with Engineering.
+**Record, 2026-10-11 01:40. Answered** by ENG-1 as amended (`562d77a`, rule 5 and its non-goals). The
+number is `lensScoreLabel(score)` = `Math.round(score × 100)`, shown bare with **no "%"**. "Matched" is
+`isLensMatch` (score at or above the strictness threshold), the one test behind the chips, the list and
+the count. Lens scores use the match-prompt calibration (rule 3). The chip's hover wording is words: it is
+the 🧷 extension seat's, under D-3's constraint that it does not say "Confidence" or "%". Note: a looser
+strictness setting lowers the threshold, so chips can appear at scores near 30. Those are true numbers and
+are shown as they are.
 
 ### D-4 · The image preview (DEC-7) (2026-10-11)
 **Ruling.**
