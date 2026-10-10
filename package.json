@@ -5,11 +5,19 @@
   "type": "module",
   "scripts": {
     "test": "node test.mjs && vitest run",
-    "vendor:ai": "mkdir -p lib/vendor && cp node_modules/@huggingface/transformers/dist/transformers.web.min.js lib/vendor/"
+    "test:unit": "vitest run",
+    "test:eval": "node eval/run-eval.mjs",
+    "test:e2e": "playwright test",
+    "fetch:models": "node scripts/fetch-models.mjs",
+    "build:ext": "node scripts/build-ext.mjs",
+    "sync:win": "bash scripts/sync-win.sh",
+    "vendor:ai": "node scripts/build-ext.mjs"
   },
   "author": "Fauzul Chowdhury",
   "license": "MIT",
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "fake-indexeddb": "^6.2.5",
     "happy-dom": "^20.10.6",
     "vitest": "^4.1.9"
   },
