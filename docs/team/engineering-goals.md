@@ -54,14 +54,21 @@ date, never written over.
    `Math.round(score × 100)` (📐 D-3's one function). The panel's pill count, list and chips all use it (P-2).
 6. **Escalation:** a lens question below its floor is uncertain like `matches_prompt` today; one post's
    uncertain lens questions go in its **one** call to the **one** primary provider (DEC-5), at most 10 lenses.
-7. **Additive:** `decision.tags`, `decision.tag`, `assignedTag` keep their meaning; `pMatch` = the `main`
-   lens's score (unchanged meaning). No current reader changes in this slice.
+7. **A lens is not a tag:** `isLens` tags leave tag classification (the tag questions, `primary_tag`, tag nouls,
+   `rankTags`, `decision.tags`, `assignedTag` candidates, dynamic-tag matching). Built-in and dynamic tags classify
+   exactly as today; `decision.tags`, `decision.tag`, `assignedTag` keep their meaning over that set; `pMatch` = the
+   `main` lens's score. A stored post filed under a lens tag is re-filed by the v3 backfill; manual overrides keep
+   their tag (`lib/pipeline/redecide.js:19,134` never re-decides them).
 8. **Migration:** `SCHEMA_VERSION` 2 → 3. Configuration: existing user-added tags get `isLens: true` (rule 1:
    not a built-in label, not dynamic, not pseudo, not Ads). Stack: posts without `decision.lenses` are marked
    for a lens backfill and re-scored by the existing re-decide job under the state lock, System 1 only, no
    escalation, no cloud. Idempotent.
 9. **Re-decide on prompt change:** adding, removing, enabling, renaming or editing a lens's prompt changes
    `decisionFingerprint` and re-decides, as the match prompt does today.
+10. **`userLenses(configuration)`** returns one ordered array: `main` first (when the match prompt is non-empty),
+   then enabled `isLens` tags in configured order, each `{ id, label, text }` (`label` null for `main`; `text` the
+   prompt, a blank tag prompt being the stored default "Find posts related to <label>."). No colour is stored: the
+   panel derives it (`getTagColor`, `sidepanel.js:1775`). 📐 D-1's Settings list and D-2's row read this.
 
 ### Rejected implementations
 - Back-filling `lenses` from stored `decision.tags`: the scores below 0.5 were discarded, so the result is partial and false.
@@ -127,3 +134,7 @@ byte cap, never sent to any cloud provider, the post works with no image.
 - 2026-10-11 01:30 +0600 · ENG-2 working size revised: 📐 D-4 grows to 240 CSS px (about 480 px at 2×), so the
   draft's 160 px / 12 KB is too small for a sharp grown view. Measure WebP at 320 and 480 px before ruling; the cap
   keeps a full 2,000-post stack under 64 MB.
+- 2026-10-11 01:55 +0600 · ENG-1 rule 7 changed on 📐 Design's ask (D-1 record 01:40): ~~"Additive: `decision.tags`,
+  `decision.tag`, `assignedTag` keep their meaning … No current reader changes in this slice."~~ → lens tags leave tag
+  classification, so a post is never filed under a prompt and shown with no footer tag. Rule 10 added (`userLenses`
+  shape). The build worker was steered with the change mid-run.
