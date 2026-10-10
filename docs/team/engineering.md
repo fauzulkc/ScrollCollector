@@ -6,8 +6,8 @@ decisions that bind it, and the traps it has paid for. The seat reads it right a
 every time it starts. A decision in [DECISIONS.md](../DECISIONS.md) outranks both.
 
 ## Owns here
-- **Register:** engineering goals; what lands in code. No goals file exists yet and the rulebook names none
-  (measured 2026-10-10); "what lands in code" is the git history on the paths below, commit subjects `engineering: …`.
+- **Register:** engineering goals in [engineering-goals.md](engineering-goals.md) (created 2026-10-11; ENG-1 lenses
+  data model, ENG-2 thumbnails); what lands in code is the git history on the paths below, commit subjects `engineering: …`.
 - **Paths:** the background and decision core: `background.js`; `lib/bg/` (except `lib/bg/inject.js`);
   `lib/messages.js`; `lib/state-lock.js`; `lib/decision/` (incl. `providers/`, `calibration/`, `models.js`);
   `lib/pipeline/`; `lib/storage/`; `lib/sanitizer.js`; `offscreen/`; `lib/offscreen-client.js`;
