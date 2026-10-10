@@ -18,6 +18,7 @@ import { decisionTooltip } from './ui/decision-info.js';
 import { toCsv, toJson, toHtmlExport, downloadText, exportFilename, EXPORT_MIME } from './ui/export.js';
 import { mountIntelligence } from './ui/intelligence.js';
 import { mountDiagnostics } from './ui/diagnostics.js';
+import { LENS_MAIN_ID, userLenses, scoredLenses, collectingLenses, isLensGateOn, isLensMatch, matchedLenses, lensScoreLabel } from './lib/decision/lenses.js';
 
 // ---------- Constants & Assets ----------
 
@@ -102,6 +103,7 @@ let showHiddenByPrompt = false; // "Hidden by prompt (N)" pill state
 let activeFilterTag = 'All'; // Horizontal category tag filter
 let activeFilterSite = 'All'; // Horizontal website filter
 let activeFilterAuthor = 'All'; // Global active author filter
+let activeFilterPrompt = null; // Selected prompt (lens id) or null: lists what it matched, strongest first
 let searchQuery = ''; // Global search query
 let openDropdownItemId = null; // Track currently open override dropdown item ID
 let expandedItemIds = new Set(); // Track expanded text snippet row IDs
@@ -615,7 +617,7 @@ function renderPauseStatus() {
 // ---------- Drag-to-Scroll pills containers ----------
 
 function initDragToScroll() {
-  [dom.filterPills, dom.filterSitePills, dom.filterAuthorPills].forEach(el => {
+  [dom.filterPromptPills, dom.filterPills, dom.filterSitePills, dom.filterAuthorPills].forEach(el => {
     if (!el) return;
     let isDragging = false;
     let startX;
@@ -959,6 +961,139 @@ function getSearchFilteredStack() {
   });
 }
 
+// ---------- Prompts (lenses): data helpers ----------
+// Everything the panel shows about prompts comes from lib/decision/lenses.js, so the pill count, the
+// list and the card chips use ONE "matched" test (docs/DESIGN.md P-2).
+
+/** Longest prompt text shown in a sentence (D-1: an unnamed prompt is shown by its own text, cut). */
+const PROMPT_NAME_CUT = 40;
+
+function cutText(text, max) {
+  const t = String(text || '').replace(/\s+/g, ' ').trim();
+  return t.length > max ? `${t.slice(0, max - 1).trimEnd()}…` : t;
+}
+
+/** The prompts the panel shows (pills, chips): the user's prompts, and the master prompt while its switch is on. */
+function promptLenses() {
+  return scoredLenses(state.configuration);
+}
+
+/** D-1: a prompt is shown by its name; one without a name (the master prompt) by its own text. */
+function lensName(lens) {
+  return lens.label || lens.text;
+}
+
+/** A prompt's colour: its tag colour; the master prompt has none and uses the accent (D-2). */
+function lensColor(lens) {
+  return lens.id === LENS_MAIN_ID ? 'var(--accent)' : getTagColor(lens.label);
+}
+
+/** The selected prompt's id, or null when none is selected or it no longer exists (disabled, removed). */
+function selectedPromptId() {
+  if (activeFilterPrompt === null) return null;
+  return promptLenses().some(l => l.id === activeFilterPrompt) ? activeFilterPrompt : null;
+}
+
+/**
+ * Whether `item` matched prompt `lensId`: isLensMatch, the test matchedLenses (the chips) is built on.
+ * A post with no `decision.lenses` (manual override, awaiting the backfill) matched nothing.
+ */
+function itemMatchesLens(item, lensId) {
+  return isLensMatch(lensScore(item, lensId), state.configuration);
+}
+
+function lensScore(item, lensId) {
+  const scores = item && item.decision && item.decision.lenses;
+  const s = scores && typeof scores === 'object' ? scores[lensId] : null;
+  return typeof s === 'number' && Number.isFinite(s) ? s : -1;
+}
+
+/** The sentence for a prompt whose Collect is off (the title of its pill and chip). */
+const LABELS_ONLY_TITLE = 'Labels only: this prompt labels and sorts posts but does not decide which are collected.';
+
+/** Names of the collecting prompts, one line (the Stream summary and the Settings hint use this). */
+function collectingNames() {
+  return collectingLenses(state.configuration).map(l => cutText(lensName(l), PROMPT_NAME_CUT)).join(' · ');
+}
+
+function siteFilterMatches(item, site) {
+  if (site === 'All') return true;
+  const rawPlatform = (item.sourcePlatform || '').toLowerCase();
+  if (site === 'Other') {
+    const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
+    const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
+    const configuredSites = state.configuration.sites || [];
+    const enabledDomains = [...defaultSites, ...customSites].filter(d => {
+      const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
+      return !cfg || cfg.isEnabled !== false;
+    });
+    return !enabledDomains.some(domain => rawPlatform === domain || rawPlatform.endsWith('.' + domain));
+  }
+  return rawPlatform === site || rawPlatform.endsWith('.' + site);
+}
+
+/**
+ * The Stream list for a set of filters (tag, site, author, prompt), applied to the search results. The
+ * feed and every prompt pill's count go through this one function, so a count is the list it opens (P-2).
+ * With a prompt, the list is that prompt's matches, strongest first (its raw score; ties newest first).
+ */
+function filterStackBy(searchResults, { tag, site, author, prompt }) {
+  let list = searchResults;
+  if (tag === 'Favorites') list = list.filter(i => i.isFavorite);
+  else if (tag === 'Ads') list = list.filter(isAdItem);
+  else if (tag !== 'All') list = list.filter(i => i.assignedTag === tag);
+  if (site !== 'All') list = list.filter(i => siteFilterMatches(i, site));
+  if (author !== 'All') list = list.filter(i => authorKey(i) === author);
+  if (prompt) {
+    list = list
+      .filter(i => itemMatchesLens(i, prompt))
+      .sort((a, b) => (lensScore(b, prompt) - lensScore(a, prompt)) || ((b.timestamp || 0) - (a.timestamp || 0)));
+  }
+  return list;
+}
+
+/**
+ * The chips of a card (D-3): one per prompt the post matched. The selected prompt first, then the user's
+ * prompt-list order, never by score (P-3). A post with no `decision.lenses` has none.
+ */
+function cardLensChips(item) {
+  const cfg = state.configuration;
+  const matched = new Set(matchedLenses(item && item.decision, cfg).map(m => m.id));
+  if (!matched.size) return [];
+  const selected = selectedPromptId();
+  const chips = promptLenses()
+    .filter(l => matched.has(l.id))
+    .map(l => ({
+      id: l.id,
+      name: lensName(l),
+      color: lensColor(l),
+      score: lensScoreLabel(lensScore(item, l.id)),
+      collects: l.collects,
+      selected: l.id === selected
+    }));
+  return [...chips.filter(c => c.selected), ...chips.filter(c => !c.selected)];
+}
+
+function lensChipsHtml(item) {
+  const chips = cardLensChips(item);
+  if (!chips.length) return '';
+  const html = chips.map(c => {
+    const score = c.score === null ? '' : String(c.score);
+    const bar = c.selected && c.score !== null
+      ? `<span class="lens-bar" aria-hidden="true"><span class="lens-bar-fill" style="width: ${Math.max(0, Math.min(100, c.score))}%"></span></span>`
+      : '';
+    const title = `${c.name}. Match score ${score} out of 100.${c.collects ? '' : ` ${LABELS_ONLY_TITLE}`}`;
+    return `
+      <span class="lens-chip ${c.selected ? 'selected' : ''} ${c.collects ? '' : 'labels-only'}" data-lens="${escapeHTML(c.id)}" style="--lens-color: ${c.color}" title="${escapeHTML(title)}">
+        <span class="lens-dot"></span>
+        <span class="lens-main"><span class="lens-name">${escapeHTML(c.name)}</span>${bar}</span>
+        <span class="lens-score">${escapeHTML(score)}</span>
+        ${c.collects ? '' : '<span class="lens-marker">labels only</span>'}
+      </span>`;
+  }).join('');
+  return `<div class="card-lens-chips" role="group" aria-label="Prompts this post matched">${html}</div>`;
+}
+
 // ---------- Rendering: Tag Filters ----------
 
 function getFilterCategories() {
@@ -1133,6 +1268,83 @@ function renderFilterPills() {
       dom.menuTagsDropdown.appendChild(btn);
     });
   }
+
+  renderPromptPills();
+}
+
+// ---------- Rendering: Prompt row (D-2) and collect summary (D-6) ----------
+
+/**
+ * The prompt row above the tag row: one outlined pill per prompt (the user's prompts, and the master
+ * prompt while its Collect switch is on), each with its name, its count and, when Collect is off, the
+ * "labels only" marker. A count is the list the pill opens (P-2): it goes through filterStackBy with the
+ * same search, tag, site and author filters. No prompts, no row.
+ */
+function renderPromptPills() {
+  const wrapper = $('#wrapper-prompts');
+  const row = dom.filterPromptPills;
+  if (!wrapper || !row) return;
+  const lenses = promptLenses();
+  const selected = selectedPromptId();
+  if (activeFilterPrompt !== selected) activeFilterPrompt = selected;
+
+  const keepScroll = row.scrollLeft;
+  row.textContent = '';
+  wrapper.classList.toggle('hidden', lenses.length === 0);
+
+  const list = getSearchFilteredStack();
+  for (const lens of lenses) {
+    const count = filterStackBy(list, {
+      tag: activeFilterTag, site: activeFilterSite, author: activeFilterAuthor, prompt: lens.id
+    }).length;
+    const name = lensName(lens);
+    const isSelected = lens.id === selected;
+
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = `prompt-pill${isSelected ? ' active' : ''}${lens.collects ? '' : ' labels-only'}`;
+    pill.dataset.prompt = lens.id;
+    pill.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+    pill.style.setProperty('--lens-color', lensColor(lens));
+    pill.title = lens.collects ? name : `${name}. ${LABELS_ONLY_TITLE}`;
+
+    const dot = document.createElement('span');
+    dot.className = 'prompt-dot';
+    const label = document.createElement('span');
+    label.className = 'prompt-name';
+    label.textContent = name;
+    const num = document.createElement('span');
+    num.className = 'prompt-count';
+    num.textContent = String(count);
+    pill.append(dot, label, num);
+    if (!lens.collects) {
+      const marker = document.createElement('span');
+      marker.className = 'prompt-marker';
+      marker.textContent = 'labels only';
+      pill.append(marker);
+    }
+
+    pill.addEventListener('click', () => {
+      activeFilterPrompt = isSelected ? null : lens.id;
+      if (dom.feedContainer) dom.feedContainer.scrollTop = 0;
+      applyFilterChange();
+    });
+    row.appendChild(pill);
+  }
+  row.scrollLeft = keepScroll;
+  renderCollectSummary();
+}
+
+/**
+ * Under the prompt row, only while filtering is on (at least one prompt collects): which prompts are
+ * collecting. One status line, no pills, no colours, so it cannot be mistaken for a control.
+ */
+function renderCollectSummary() {
+  const el = dom.collectSummary;
+  if (!el) return;
+  const on = isLensGateOn(state.configuration);
+  el.classList.toggle('hidden', !on);
+  el.textContent = on ? `Collecting posts that match: ${collectingNames()}` : '';
 }
 
 // ---------- Rendering: Site Filters ----------
@@ -1403,7 +1615,11 @@ function getFilterAuthors() {
       }
     }
     
-    if (tagMatch && siteMatch) {
+    // The selected prompt narrows the list, so it narrows the author counts too.
+    const promptId = selectedPromptId();
+    const promptMatch = !promptId || itemMatchesLens(item, promptId);
+
+    if (tagMatch && siteMatch && promptMatch) {
       counts.All++;
       const auth = authorKey(item);
       if (auth) {
@@ -1543,39 +1759,11 @@ function renderFeed() {
   const oldFilteredStack = [...filteredStack];
   const focusedId = focusedItemIndex !== -1 && filteredStack[focusedItemIndex] ? filteredStack[focusedItemIndex].id : null;
 
-  filteredStack = searchResults;
-
-  // Filter 1: Tag
-  if (activeFilterTag === 'Favorites') {
-    filteredStack = searchResults.filter(i => i.isFavorite);
-  } else if (activeFilterTag === 'Ads') {
-    filteredStack = searchResults.filter(isAdItem);
-  } else if (activeFilterTag !== 'All') {
-    filteredStack = searchResults.filter(i => i.assignedTag === activeFilterTag);
-  }
-
-  // Filter 2: Website
-  if (activeFilterSite !== 'All') {
-    filteredStack = filteredStack.filter(i => {
-      const rawPlatform = (i.sourcePlatform || '').toLowerCase();
-      if (activeFilterSite === 'Other') {
-        const defaultSites = ['linkedin.com', 'x.com', 'youtube.com', 'facebook.com', 'instagram.com', 'medium.com', 'github.com', 'news.ycombinator.com'];
-        const customSites = (state.configuration.sites || []).filter(s => s.isCustom).map(s => s.domain);
-        const configuredSites = state.configuration.sites || [];
-        const enabledDomains = [...defaultSites, ...customSites].filter(d => {
-          const cfg = configuredSites.find(s => s.domain.toLowerCase() === d.toLowerCase());
-          return !cfg || cfg.isEnabled !== false;
-        });
-        return !enabledDomains.some(domain => rawPlatform === domain || rawPlatform.endsWith('.' + domain));
-      }
-      return rawPlatform === activeFilterSite || rawPlatform.endsWith('.' + activeFilterSite);
-    });
-  }
-
-  // Filter 3: Author (same key as the author pills and their counts)
-  if (activeFilterAuthor !== 'All') {
-    filteredStack = filteredStack.filter(i => authorKey(i) === activeFilterAuthor);
-  }
+  // Tag, website and author filters, then the selected prompt (its matches, strongest first).
+  const promptId = selectedPromptId();
+  filteredStack = filterStackBy(searchResults, {
+    tag: activeFilterTag, site: activeFilterSite, author: activeFilterAuthor, prompt: promptId
+  });
 
   // Keep keyboard focus on the same post when items arrive above it.
   if (focusedId !== null) {
@@ -1599,8 +1787,9 @@ function renderFeed() {
   const renderableItems = [];
   let lastDayLabel = '';
   filteredStack.forEach((item, idx) => {
-    const dayLabel = getDaySeparatorLabel(item.timestamp);
-    if (dayLabel !== lastDayLabel) {
+    // Sorted by a prompt's score the list is no longer in date order: no day dividers (D-2).
+    const dayLabel = promptId ? '' : getDaySeparatorLabel(item.timestamp);
+    if (dayLabel && dayLabel !== lastDayLabel) {
       renderableItems.push({
         type: 'separator',
         id: `day_${dayLabel.replace(/[\s,]+/g, '_')}`,
@@ -1700,7 +1889,9 @@ function cardSignature(item) {
     d.at || 0,
     d.provider || '',
     item.matchInfo && item.matchInfo.manual ? 1 : 0,
-    (item.textSnippet || '').length
+    (item.textSnippet || '').length,
+    // The prompt chips: which prompts matched, their scores, Collect on/off, and which one is selected.
+    cardLensChips(item).map(c => `${c.id}:${c.name}:${c.score}:${c.collects ? 1 : 0}:${c.selected ? 1 : 0}`).join(',')
   ].join('|');
 }
 
@@ -1930,7 +2121,8 @@ function populateCardInner(card, item) {
     </div>
     ${bodyHtml}
     ${entityChips}
-    
+    ${lensChipsHtml(item)}
+
     <div class="card-footer">
       <div class="tags-container">
         <span class="card-category-label ${isTagDynamic(tag) ? 'is-dynamic' : ''}" style="--tag-color: ${tagColor}" data-filter-tag="${escapeHTML(tag)}">
@@ -2181,6 +2373,9 @@ function renderTagConfigurator() {
     const isExpanded = expandedTagPrompts.has(label);
 
     const prompt = typeof tag === 'object' ? (tag.prompt || '') : '';
+    // A prompt the user wrote (isLens) also carries a Collect switch, on by default (DEC-6, D-6).
+    const isPrompt = typeof tag === 'object' && tag.isLens === true && !isDynamic && !tag.isPseudo;
+    const collects = isPrompt && tag.collects !== false;
 
     const row = document.createElement('div');
     row.className = isDynamic ? 'tag-row dynamic' : 'tag-row';
@@ -2196,8 +2391,20 @@ function renderTagConfigurator() {
       ? `<button class="btn-tag-action btn-sticky-tag ${isSticky ? 'sticky' : ''}" data-tag="${escapeHTML(label)}" title="${isSticky ? 'Make tag temporary' : 'Make tag sticky'}">${isSticky ? '📌' : '📍'}</button>`
       : '';
 
+    // Always visible on the row (never inside the collapsed editor). With Track off, Collect keeps its value but cannot be changed.
+    const collectHtml = isPrompt
+      ? `<label class="collect-switch" title="${enabled ? 'Collect posts that match this prompt. Off: it only labels and sorts.' : 'Turn Track on to change Collect for this prompt.'}">
+          <span class="collect-label">Collect</span>
+          <span class="tag-toggle">
+            <input type="checkbox" class="collect-input" ${collects ? 'checked' : ''} ${enabled ? '' : 'disabled'} data-tag="${escapeHTML(label)}" aria-label="Collect posts that match ${escapeHTML(label)}">
+            <span class="toggle-track"></span>
+          </span>
+          <span class="filter-state collect-state" data-on="${collects ? 'true' : 'false'}">${collects ? 'On' : 'Off'}</span>
+        </label>`
+      : '';
+
     row.innerHTML = `
-      <div style="display: flex; align-items: center; width: 100%;">
+      <div class="tag-row-head">
         <span class="tag-dot-indicator" style="background: ${color}"></span>
         <span class="tag-label" style="flex: 1;">${escapeHTML(label)} ${isDynamic ? '<span style="font-size: 9px; opacity: 0.5; font-style: italic;">(dynamic)</span>' : ''}</span>
         <button class="btn-expand-prompt" title="Edit tag prompt" aria-expanded="${isExpanded ? 'true' : 'false'}">✎</button>
@@ -2205,6 +2412,7 @@ function renderTagConfigurator() {
           <input type="checkbox" ${enabled ? 'checked' : ''} data-tag="${escapeHTML(label)}" aria-label="Track ${escapeHTML(label)}">
           <span class="toggle-track"></span>
         </label>
+        ${collectHtml}
         ${stickyHtml}
         ${promoteHtml}
         <button class="btn-tag-action btn-delete-tag" data-tag="${escapeHTML(label)}" title="Remove tag">×</button>
@@ -2219,6 +2427,11 @@ function renderTagConfigurator() {
     checkbox.addEventListener('change', () => {
       send(MSG.TAG_TOGGLED, { tag: label, enabled: checkbox.checked });
     });
+
+    const collectInput = row.querySelector('.collect-input');
+    if (collectInput) {
+      collectInput.addEventListener('change', () => toggleCollect(label, collectInput.checked, row));
+    }
 
     // Expand prompt box (remembered across re-renders)
     const expandBtn = row.querySelector('.btn-expand-prompt');
@@ -2280,6 +2493,34 @@ function renderTagConfigurator() {
 
   // Forget editors of tags that no longer exist.
   for (const label of [...expandedTagPrompts]) if (!labelsNow.has(label)) expandedTagPrompts.delete(label);
+}
+
+/**
+ * A prompt's Collect switch (DEC-6): applied at once so the pills, the summary line and the hints follow,
+ * then sent; the service worker re-decides the collection. A failed send puts the switch back.
+ */
+async function toggleCollect(label, collects, row) {
+  const setCollects = (value) => {
+    state.configuration = {
+      ...state.configuration,
+      trackedTags: (state.configuration.trackedTags || []).map(t => (t && typeof t === 'object' && t.label === label ? { ...t, collects: value } : t))
+    };
+    const stateEl = row && row.querySelector('.collect-state');
+    if (stateEl) {
+      stateEl.textContent = value ? 'On' : 'Off';
+      stateEl.dataset.on = value ? 'true' : 'false';
+    }
+    const input = row && row.querySelector('.collect-input');
+    if (input) input.checked = value;
+    renderStreamViews();
+    renderPromptStatus();
+  };
+  setCollects(collects);
+  const reply = await send(MSG.TAG_COLLECTS_TOGGLED, { tag: label, collects });
+  if (!reply || reply.success === false) {
+    setCollects(!collects);
+    notify('error', `Could not change Collect for “${label}”. Try again.`, 'collect-toggle');
+  }
 }
 
 /** The prompt textarea of a tag row currently in the DOM. */
@@ -2449,9 +2690,13 @@ function renderIgnoredLinks() {
 
 /** Known EngineStatus.warnings (lib/pipeline/apply-decision.js promptWarnings and the cascade). */
 const PROMPT_WARNING_TEXT = {
-  empty_prompt: 'The filter is on but the prompt is empty, so every post is collected.',
-  gate_off_with_prompt: 'The filter is off, so every post is collected. Turn it on to keep only posts that match this prompt.'
+  empty_prompt: 'Collect is on but this prompt is empty, so it is not used.',
+  // The master prompt's own switch is off: the prompt is ignored. Whether posts are filtered then depends on
+  // the other prompts (DEC-6, 02:58), so this line never says anything about "every post".
+  gate_off_with_prompt: 'Collect is off, so this prompt is not used. Turn it on to collect posts that match it.'
 };
+/** Nothing is filtered when no prompt collects (DEC-6, 02:58): the reverse of what "off" suggests. */
+const NO_PROMPT_COLLECTS_TEXT = 'No prompt is set to collect, so every post is collected.';
 
 // The prompt is saved explicitly (Save button or Ctrl/Cmd+Enter) so a half-typed prompt never
 // re-decides the stack. GENERATE_PROMPT_TAGS follows the save; `promptGen` identifies the latest
@@ -2618,6 +2863,10 @@ function renderPromptStatus() {
   } else if (!on && hasPrompt) {
     lines.push(PROMPT_WARNING_TEXT.gate_off_with_prompt);
   }
+  // Which prompts are collecting: the same list as the Stream line (D-6). Filtering is on whenever any
+  // prompt collects, the master prompt or a tag the user wrote.
+  if (isLensGateOn(cfg)) lines.push(`Collecting posts that match: ${collectingNames()}.`);
+  else if (hasPrompt || userLenses(cfg).length > 0) lines.push(NO_PROMPT_COLLECTS_TEXT);
   const warnings = state.engineStatus && Array.isArray(state.engineStatus.warnings) ? state.engineStatus.warnings : [];
   for (const w of warnings) {
     if (typeof w !== 'string' || w === 'empty_prompt' || w === 'gate_off_with_prompt') continue;
@@ -2927,6 +3176,8 @@ document.addEventListener('DOMContentLoaded', () => {
     redecideText: $('#redecide-text'),
     redecideBar: $('#redecide-bar'),
     filterPills: $('#filter-pills'),
+    filterPromptPills: $('#filter-prompt-pills'), // Prompt row (D-2)
+    collectSummary: $('#collect-summary'), // Which prompts collect (D-6)
     filterSitePills: $('#filter-site-pills'), // Site filter scroller
     filterAuthorPills: $('#filter-author-pills'), // Author filter scroller
     globalSearch: $('#global-search'), // Search input element
@@ -3164,11 +3415,13 @@ document.addEventListener('DOMContentLoaded', () => {
       if (isPromptDirty()) await saveTypedPrompt();
       state.configuration = { ...state.configuration, isMatchPromptEnabled: isEnabled };
       renderPromptStatus();
+      renderStreamViews(); // its pill and the collecting line follow the switch
       const reply = await send(MSG.TOGGLE_MATCH_PROMPT, { isEnabled });
       if (!reply || reply.success === false) {
-        notify('error', 'Could not change the prompt filter. Try again.', 'prompt-toggle');
+        notify('error', 'Could not change Collect for the prompt. Try again.', 'prompt-toggle');
         state.configuration = { ...state.configuration, isMatchPromptEnabled: !isEnabled };
         renderMatchPromptConfigurator();
+        renderStreamViews();
       }
       // { stale: true } replies only mean the expansion was for an older prompt: nothing to do.
     });
@@ -3266,6 +3519,7 @@ document.addEventListener('DOMContentLoaded', () => {
       activeFilterTag = 'All';
       activeFilterSite = 'All';
       activeFilterAuthor = 'All';
+      activeFilterPrompt = null;
       applyFilterChange();
     });
 
