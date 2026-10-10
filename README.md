@@ -8,7 +8,7 @@ It is designed as a high-performance keyboard-driven curator to capture, filter,
 
 ## Key Features
 
-- **Progressive On-Device AI**: Semantic classification uses a provider chain — **Browser Prompt API** (Chrome Gemini Nano / Edge Phi-4-mini) → **WebGPU** (Transformers.js on Brave) → **Rule-based Classifier** (always available offline).
+- **On-Device AI, no model downloads**: Semantic classification uses the browser's built-in **Prompt API** (Chrome Gemini Nano / Edge Phi-4-mini) and falls back to the **Rule-based Classifier** (always available offline). The extension never downloads a generative model of its own.
 - **Dynamic Tag Generation**: Automatically extracts and suggests new category tags (e.g. *Cooking*, *Space*, *Tesla*) for items that do not match existing tags.
 - **Priority Routing**: Custom and default tags always take classification priority over dynamic tags.
 - **Segmented Workspace**: A clean, modern tabbed interface (**Stream**, **Export**, **Settings**) replacing vertical collapsible widgets to optimize narrow side panels.
@@ -98,8 +98,7 @@ ScrollCollector uses progressive enhancement for semantic inference:
 
 | Tier | Engine | Browsers |
 |------|--------|----------|
-| 1 | Browser Prompt API | Chrome (Gemini Nano), Edge (Phi-4-mini) |
-| 2 | WebGPU + Transformers.js | Brave and others without Prompt API |
+| 1 | Browser Prompt API (built-in model) | Chrome (Gemini Nano), Edge (Phi-4-mini) |
 | 3 | Rule-based Classifier | All browsers (keyword fallback) |
 
 The header status pill shows which tier is active: **green** = semantic AI ready, **orange** = downloading or keyword fallback.
@@ -158,12 +157,9 @@ await LanguageModel.availability({
 
 ### Brave
 
-Brave does not ship Google's Gemini Nano download. ScrollCollector falls back to:
-
-1. **WebGPU (Tier 2)** — if `navigator.gpu` is available, a small Qwen model loads via Transformers.js (first use requires network to download model weights; cached afterward).
-2. **Rule-based Classifier (Tier 3)** — keyword matching if WebGPU is unavailable.
-
-No flags required for the keyword tier. WebGPU tier requires a GPU with WebGPU support and sufficient disk space for the model cache.
+Brave does not ship Google's Gemini Nano download, so ScrollCollector uses the **Rule-based
+Classifier** there (keyword matching, no flags required). It does not download a replacement
+language model.
 
 ---
 
