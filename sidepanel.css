@@ -813,7 +813,7 @@ body {
 
 .card-time {
   font-size: 10px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
   margin-left: 2px;
   flex-shrink: 0;
 }
