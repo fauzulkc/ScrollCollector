@@ -239,3 +239,21 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   (1) a collecting prompt also collects posts the tag classifier files under it (gate = lens OR label); (2) expand each
   user prompt like the master prompt's `matchPromptExpansion` (eval recipe D, best when an expansion exists) via the
   built-in model only (DEC-4); (3) prompt-writing guidance in the panel (words: CEO, form: Design).
+- 2026-10-11 04:50 +0600 · **PRE-REGISTERED (🧭 CEO ruling 04:45): candidates (1) gate = lens OR label and (2) auto-expanded
+  user prompts. Written before any data exists; not to be moved after a run.**
+  - **Data:** only posts no calibration has seen: 🧪 Testing's second-author set, labelled yes / no / borderline against
+    user prompts (borderline excluded), each prompt with a stand-in expansion written by the same author **before any
+    scoring** (the eval's stand-ins exist only for its own 5 prompts, `eval/run-eval.mjs:875`). Nothing from
+    `eval/golden/posts.*` is used for judging. Minimum: **≥ 40 yes and ≥ 40 no posts pooled**; below that the result is
+    reported as **inconclusive** and nothing is adopted.
+  - **Fixed settings:** committed calibration files; strictness balanced (0.5); both models; System 1 only (no
+    escalation). Candidate (2) uses recipe D with its (a, b) fitted **only on `eval/golden/posts.synthetic.jsonl`** with
+    the eval's own stand-in expansions, before the fresh set is opened.
+  - **Baseline:** the current gate (a collecting user prompt collects when its lens ≥ 0.5), on the same posts.
+  - **Rule, per candidate, judged separately:** adopt only if, on **both** models, pooled recall rises **≥ 0.10**
+    (absolute) over the baseline **and** pooled precision falls **≤ 0.05** (absolute). Counts (TP / FP / FN) reported
+    with every rate. For (2) also: with the expansion missing (no built-in model) the result must **equal the
+    baseline**, post for post; any difference fails (2).
+  - **Stated limits, in advance:** (2) measures hand-written stand-ins, not Gemini Nano's text; real Nano expansions stay
+    unverified until measured on a machine that has the Prompt API. The label path in (1) uses the tag calibration,
+    which never saw the fresh posts, so (1) is judged out of sample.
