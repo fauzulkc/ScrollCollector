@@ -9,6 +9,7 @@ date, never written over.
 |---|---|---|
 | **ENG-1** · lenses data model | DEC-6 | ruled 2026-10-11, amended 01:30 for the user-prompts-only addendum; build dispatched |
 | **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | draft plan; queued after ENG-1 (DEC-8) |
+| **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | opened 2026-10-11; first probe after ENG-1 returns |
 
 ---
 
@@ -123,6 +124,45 @@ byte cap, never sent to any cloud provider, the post works with no image.
 
 **To measure before ruling:** the size distribution of real LinkedIn/X thumbnails at 160 px; whether service-worker
 `fetch` of the CDN images works without the page's cookies; fetch-to-store time per image.
+
+---
+
+## ENG-3 · Meet the System 1 tag gates without fitting to them (DEC-9)
+
+### Opening (🧪 Testing's measurement at `ee68247`, not re-run by Engineering yet)
+`scratchpad/team/runs/testing/2026-10-11-release-leg.md:139-160`, `test:eval --assert --check-calibration`, exit 1
+on tag gates only; same values as `eval/reports/2026-10-10-system1.md`:
+
+| Gate (`eval/run-eval.mjs`) | Target | minilm | bge-small |
+|---|---|---|---|
+| tag top-1 | ≥ 0.70 | 0.675 FAIL | 0.636 FAIL |
+| tag top-3 | ≥ 0.90 | 0.896 FAIL | 0.870 FAIL |
+| tag ECE (5-fold CV) | ≤ 0.08 | 0.067 pass | 0.083 FAIL |
+
+Every collection (`matches_prompt`) gate passes on both models. The report already names one suspect: the food and
+false-friend posts carry genre labels (News / Personal Opinion / Blog) that are judgement calls (report line 46).
+
+### Method
+1. **Probe first (research tier, read-only):** a per-tag confusion table for both models, which built-in tags the misses
+   fall on, and how many misses sit between genre tags. Re-run the eval in a clean worktree at HEAD before citing it.
+2. Fix only what moves real accuracy: tag descriptions in `lib/bg/defaults.js`'s prompt text, the tag score recipe or
+   label aggregation (`tag.score`, `tag.agg` in the calibration), lexical boost. Each change evaluated by the existing
+   5-fold cross-validation; never chosen by looking at the gate's own fold.
+
+### Non-goals and refusals
+| Not in ENG-3 | Reopen when |
+|---|---|
+| Lowering a gate or dropping posts from the gate set | never by Engineering: a re-measured gate goes through 🧪 Testing's register (DEC-9) |
+| Refitting on the full set and reporting the in-sample number | never: that is fitting to the gate |
+| Counting Gemini Nano's re-asks as System 1 accuracy | never: the gate measures System 1 |
+| Any outward sentence about tag accuracy | the gates are green (DEC-9 binds the listing, README and store) |
+
+### Gates
+| Gate | Evidence |
+|---|---|
+| All three tag gates green on both models | `npm run test:eval -- --assert --check-calibration` exit 0 in a clean worktree, output pasted |
+| No collection gate regresses | the same run; matches_prompt rows compared with the 2026-10-10 report |
+| A new report, the old one kept | `eval/reports/<date>-system1.md`; 2026-10-10 left as written |
 
 ---
 
