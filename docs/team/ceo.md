@@ -59,7 +59,7 @@ _(measured 2026-10-10 unless marked)_
   (Windows: `\\wsl.localhost\Ubuntu-24.04\home\fauzul\code\ScrollCollector`). Run git/npm from WSL only: from Windows,
   write a script to scratch and run `MSYS_NO_PATHCONV=1 wsl.exe -d Ubuntu-24.04 -- bash -l /mnt/c/<script>`.
 - **Register counts** (§1 step 4): rows `grep -c '^| \*\*DEC-' docs/DECISIONS.md`; ruled
-  `grep -cE '^\| \*\*DEC-.*(✅|❌)' docs/DECISIONS.md`. Both 2 on 2026-10-10; both 5 on 2026-10-11.
+  `grep -cE '^\| \*\*DEC-.*(✅|❌)' docs/DECISIONS.md`. Both 2 on 2026-10-10; both 8 on 2026-10-11.
 - **Health check:** no running service; the product's live state is the built `dist/ext/` loaded in the owner's
   Chrome (via `npm run sync:win` → `/mnt/d/code/ScrollCollector-dev`). Only the owner's Chrome proves "live".
 
@@ -67,8 +67,13 @@ _(measured 2026-10-10 unless marked)_
 - **The code chose before the register did** (rulebook trap 3): the cascade's AI direction was in code
   (`lib/decision/cascade.js` header: "the only LLM tier is the browser's built-in LanguageModel") for days with no
   decision row; closed 2026-10-11 by DEC-3..5.
-- **README drift:** `README.md` describes Gemini Nano plus a rule engine and does not mention the System 1 embedding
-  model (grep for "embedding|System 1|MiniLM" in README.md returns nothing); a claim read from README is a hypothesis.
+- **README drift** (fixed 2026-10-11 by ⚙️ Engineering in `d090913`): `README.md` described Gemini Nano plus a rule
+  engine and not the System 1 embedding model; a claim read from README is still a hypothesis until re-read.
+- **A session rooted outside the repo has no seat skills or tier workers** (2026-10-11): sessions opened in
+  `D:\Projects\scrollcollector` cannot run `/seat-*` or spawn `<team>-worker`, so the work runs on generic agents at
+  the session's own model. Open seats in `D:\code\ScrollCollector`.
+- **Peers commit mid-run:** a release test leg on a moving HEAD proves nothing. Pin the leg to a commit in a detached
+  worktree, and merge that commit, not HEAD (0.10.0: `ee68247`).
 - **Windows git:** shows spurious exec-bit diffs on `.sh` files and its credential helper hangs; use WSL git (setup-facts).
 - **No CI:** "green" exists only as a pasted local run; never infer a colour from a commit subject.
 - **Site DOMs rot:** LinkedIn's 2026 layout broke collection (`c573df6`); a release can go stale without a code change.
