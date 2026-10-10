@@ -300,3 +300,29 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   does support: recall varies by prompt from 0.11 to 0.90 and cannot be predicted from length, so a user needs to
   **see how a prompt is doing** (e.g. how many posts it matched, or a near-miss count just under the line), not only
   a writing rule. Limits: 7 prompts, 8-11 yes posts each, one author.
+- 2026-10-11 (before opening `holdout-2026-10-11.genre.private.jsonl`) · **PRE-REGISTERED: genre cues for the tag gates
+  (ENG-3 hypothesis 1).** Written by ⚙️ Engineering from general knowledge of how each genre is worded, **without reading
+  any golden or held-out post text**; committed before the genre set is opened. Not to be edited after a run.
+  - **Genre tags** (the probe's definition): News, Personal Opinion, Blog, Vlog, Release, Promotion, Ad, Product
+    Showcase, Portfolio, Events. Every other tag is untouched.
+  - **Cue words** (single words; the shipped `lexTerms` stems them and drops its stop words):
+    News: breaking, report, reported, according, announced, official, officials, statement, sources, confirmed, press ·
+    Personal Opinion: opinion, think, believe, unpopular, honestly, disagree, agree, feel, perspective, imho ·
+    Blog: blog, article, wrote, writing, read, medium, substack, newsletter ·
+    Vlog: vlog, video, watch, youtube, episode, subscribe, channel, filmed ·
+    Release: release, released, version, changelog, available, launch, launched, rollout, beta ·
+    Promotion: discount, offer, sale, code, deal, coupon, giveaway, free, save, limited ·
+    Ad: promoted, sponsored, shop, buy, order, enroll, trial ·
+    Product Showcase: introducing, meet, features, demo, showcase, prototype, built ·
+    Portfolio: portfolio, project, client, dribbble, behance, selected, casestudy ·
+    Events: event, conference, webinar, register, join, venue, tickets, rsvp, summit, meetup.
+  - **Mechanism:** the cue words are appended to those ten tags' lexical terms (`labelLexTerms`), so they enter the
+    existing `lexicalOverlap` bonus; β (and cap 3) selected by the harness's own procedure **inside each training fold**;
+    no other change (no description edits, no recipe change, no refit of anything else).
+  - **Evaluation:** (A) the golden tag-coverage set under the eval's own 5-fold CV (the numbers DEC-9's gates read);
+    (B) the genre set (37 posts) out of sample, **nothing chosen on it**. Truth on (B) = the tag the set's author marked
+    primary (strict top-1, as the gates); "any listed tag" reported beside, not deciding.
+  - **Adopt iff, on BOTH models:** (B) strict top-1 rises by ≥ 4 posts of 37 (≈ 0.11) over the current code and top-3
+    does not fall; (A) top-1 and top-3 do not fall and tag ECE rises by no more than 0.01; every match gate row is
+    unchanged. Otherwise not adopted. Whether DEC-9's gates turn green is reported separately and is **not** the adoption
+    bar. Re-hash the genre set (`38aedfac470c8e655607da1d21633a70dcf60795fdf1e81d6998d0252ade76c8`) before reading it.
