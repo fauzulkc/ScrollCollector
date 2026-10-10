@@ -257,3 +257,15 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   - **Stated limits, in advance:** (2) measures hand-written stand-ins, not Gemini Nano's text; real Nano expansions stay
     unverified until measured on a machine that has the Prompt API. The label path in (1) uses the tag calibration,
     which never saw the fresh posts, so (1) is judged out of sample.
+- 2026-10-11 05:20 +0600 · **Candidate (2) calibration FROZEN before the held-out set is opened** (research tier, log
+  `scratchpad/team/runs/engineering/2026-10-11-eng3-recipe-d-freeze.md`; file
+  `scratchpad/team/runs/engineering/eng3-gate/recipe-d-frozen.json`, sha256
+  `bb9dcaf1127f94fa4b751155d296b194637e095e767cc6f3114314b875a42042`, hash checked by me). Recipe D, all 5 eval prompts,
+  `posts.synthetic.jsonl` only (sha256 `a22f06d7…7598`), 667 pairs / 52 yes, the harness's own `fitMatch`/`floorFor`:
+  minilm a = 0.918432590450233, b = −6.2258135455003325, floor 0.68; bge-small a = 1.2679051603436795,
+  b = −7.761974399915981, floor 0.58. Sanity: recipe tables identical to `2026-10-10-system1.md`. Finding (not acted on):
+  bge-small `jobs` held out under D has ECE 0.103 (> 0.08). **Fixed now, before opening the held-out set:** the gate
+  label in (1) is `assignedTag` (the classifier *files* the post under the prompt); "in `decision.tags`" is reported
+  beside it and does not decide. (2) is judged with the calibration switching by expansion presence (D when the
+  expansion exists, the deployed B when it is missing, equal to the baseline by construction); "D calibration
+  everywhere" is reported beside it and does not decide.
