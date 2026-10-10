@@ -9,3 +9,4 @@ appended. Findings are not decisions: rulings stay in `docs/DECISIONS.md`. No fi
 ## Index
 - 2026-10-11 · 🧭 CEO · [prompt-lenses](2026-10-11-prompt-lenses.md): the argument and scope behind DEC-6 (lenses) and DEC-7 (image previews).
 - 2026-10-11 · 🧭 CEO · [release-runbook](2026-10-11-release-runbook.md): the Chrome Web Store release steps behind DEC-8 (seats' preparation, then the owner's).
+- 2026-10-11 · ⚖️ Bar Raiser team · [release-0.10.0-review](2026-10-11-release-0.10.0-review.md): PASS for ee68247 (store listing vs code, privacy, zip, DEC-3..5, version); two non-blocking notes.

@@ -12,8 +12,9 @@ Chosen: lenses now, workspaces later only if collections need keeping apart.
 ## What exists (measured 2026-10-11 at eb720a3)
 - One match prompt is a gate: posts that do not match are hidden (`lib/pipeline/apply-decision.js:38-40`).
 - Up to 10 tags, each with its own prompt (`trackedTags[].prompt`, `lib/decision/questions.js:92-109`).
-  Every enabled tag is scored per post (`tag:<label>` nouls), but only scores >= 0.5 survive into
-  `decision.tags` (`apply-decision.js:159-161`), and the post is filed under one `assignedTag`.
+  System 1 scores only the top 3 tags per post (`system1-math.js:535`), only scores >= 0.5 survive, at most 3
+  (`rankTags`, `lib/decision/cascade.js:344-365`; pointer corrected 2026-10-11 after ⚙️ Engineering's objection),
+  and the post is filed under one `assignedTag`.
 - The side panel's tag pills count by `assignedTag` only, and the list is sorted newest first (`sidepanel.js:944`).
 What is missing is a score per user prompt on every post, showing every match, and sorting by it. Corrected 2026-10-11
 01:40: this line first read "a tag already is a second prompt". Lenses are scored like the match prompt instead,
