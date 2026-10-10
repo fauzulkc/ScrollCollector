@@ -84,7 +84,6 @@ body {
   background: var(--bg);
   color: var(--text-primary);
   min-width: 280px;
-  max-width: 500px;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -709,6 +708,31 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 8px 12px;
+}
+
+/* D-7: the stream is a row-major grid; the panel uses whatever width Chrome gives it. One column
+   below about 636 px, then 2, 3, 4 as it grows. Reading order stays left to right, then down. */
+#stream-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+/* Anything in the list that is not a card (day dividers) spans the whole row. */
+#stream-list > :not(.item-row) {
+  grid-column: 1 / -1;
+}
+
+#stream-list > .item-row {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* D-7: Settings and Export keep the width they were written for, left-aligned under the tabs. */
+#panel-settings > *,
+#panel-export > * {
+  max-width: 560px;
 }
 
 /* Structured Card styling */
