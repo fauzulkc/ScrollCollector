@@ -44,6 +44,16 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.linkedin.com/*"
+      ],
+      "js": [
+        "lib/content/linkedin-urn-bridge.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "side_panel": {

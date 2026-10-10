@@ -571,12 +571,24 @@ function linkedInCardIdentity(card) {
   const key = card.getAttribute('componentkey') || '';
   const m = /^update-card-(?:focus)?(.+?)(?:FeedType_.*)?$/.exec(key);
   if (!m || !m[1]) return null;
-  const link = card.querySelector('a[href*="/feed/update/urn:li:"]');
-  const urn = link ? linkedInUrnFromHref(link.getAttribute('href')) : null;
-  return {
-    postKey: 'li:card:' + m[1],
-    postUrl: urn ? 'https://www.linkedin.com/feed/update/' + urn + '/' : ''
-  };
+  // The post URN only lives in React props: ask the main-world bridge
+  // (lib/content/linkedin-urn-bridge.js). dispatchEvent is synchronous across worlds.
+  let urn = null;
+  try {
+    card.dispatchEvent(new CustomEvent('sc:urn-request', { bubbles: true }));
+    const bridged = card.getAttribute('data-sc-urn');
+    card.removeAttribute('data-sc-urn');
+    const found = bridged ? LI_URN_RE.exec(bridged) : null;
+    if (found) urn = found[0];
+  } catch { /* bridge missing: fall back to an in-card permalink */ }
+  if (!urn) {
+    const link = card.querySelector('a[href*="/feed/update/urn:li:"]');
+    urn = link ? linkedInUrnFromHref(link.getAttribute('href')) : null;
+  }
+  // The URN is stable across page loads (the card token may not be) and matches classic-layout keys.
+  return urn
+    ? { postKey: 'li:' + urn, postUrl: 'https://www.linkedin.com/feed/update/' + urn + '/' }
+    : { postKey: 'li:card:' + m[1], postUrl: '' };
 }
 
 function linkedInCardAuthor(card) {

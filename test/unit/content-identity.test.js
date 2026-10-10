@@ -320,13 +320,56 @@ describe('content.js on the 2026 LinkedIn feed and jobs layout', () => {
     await waitFor(() => page.extracted().length >= 2);
     const posts = page.extracted();
     expect(posts).toHaveLength(2);
-    expect(posts.map((p) => p.postKey)).toEqual(['li:card:TUW0YoO5tm', 'li:card:s4wQRtpbxw']);
+    // With a permalink the stable URN is the key; without one (and no bridge) the card token is.
+    expect(posts.map((p) => p.postKey)).toEqual(['li:urn:li:activity:7510789746537865216', 'li:card:s4wQRtpbxw']);
     expect(posts[0].postUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:7510789746537865216/');
     expect(posts[1].postUrl).toBe('');
     expect(posts[0].authorName).toBe('Cole Bevis');
     expect(posts[0].authorUrl).toContain('/in/cole-bevis');
     expect(posts[0].text).toBe('Post by: Cole Bevis\n\nWe are hiring a senior AI platform engineer to build agent tooling in London, remote friendly.');
     expect(posts[0].text).not.toMatch(/more$|Henry/);
+  });
+
+  /**
+   * Attaches React props shaped like the live feed (captured Oct 2026): prefixed state keys nested
+   * under `children`. A control mentioning another URN comes first in DOM order, twice.
+   */
+  function attachReactProps(card) {
+    const other = document.createElement('div');
+    card.prepend(other);
+    other['__reactProps$abc'] = { children: { props: { id: 'urn:li:activity:7000000000000000001', alt: 'urn:li:activity:7000000000000000001' } } };
+    card.querySelector('[aria-label="Reaction button state: no reaction"]')['__reactProps$abc'] = {
+      children: { props: { text: [{ props: { children: [{ props: { stateKey: 'reactionsCount-urn:li:activity:7513206606860439553' } }] } }] } }
+    };
+  }
+
+  function loadBridge() {
+    delete window.__scLinkedInUrnBridge;
+    vm.runInThisContext(fs.readFileSync(path.resolve(__dirname, '../../lib/content/linkedin-urn-bridge.js'), 'utf8'));
+  }
+
+  test('main-world bridge answers sc:urn-request with the post URN from reaction state, not a comment URN', () => {
+    document.body.innerHTML = linkedIn2026Card('Bridge1', 'Mia Chen', 'Applied AI residency applications are open.');
+    const card = document.querySelector('[componentkey^="update-card"]');
+    attachReactProps(card);
+    loadBridge();
+    card.dispatchEvent(new CustomEvent('sc:urn-request', { bubbles: true }));
+    expect(card.getAttribute('data-sc-urn')).toBe('urn:li:activity:7513206606860439553');
+  });
+
+  test('a card whose URN only exists in React props gets a stable URN key and a /feed/update/ link', async () => {
+    teardownContentScript();
+    loadBridge();
+    const page = loadPage('https://www.linkedin.com/feed/foryou/', linkedIn2026Card('ReactOnly1', 'Mia Chen',
+      'We just opened applications for our applied AI residency; mentors from three research teams are joining.'));
+    // The scan waits for GET_CONTENT_CONFIG, so props attached now are in place before it runs.
+    attachReactProps(document.querySelector('[componentkey^="update-card"]'));
+    await waitFor(() => page.extracted().length >= 1);
+    const [post] = page.extracted();
+    expect(post.postKey).toBe('li:urn:li:activity:7513206606860439553');
+    expect(post.postUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:7513206606860439553/');
+    // The bridge attribute is consumed, never left in the page.
+    expect(document.querySelector('[data-sc-urn]')).toBeNull();
   });
 
   test('"… more" expansion of a componentkey card re-dispatches the same postKey', async () => {
