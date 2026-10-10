@@ -12,3 +12,6 @@ eval/.cache/
 eval/golden/*.private.*
 test-results/
 playwright-report/
+
+# the team's ephemeral workspace (docs/TEAM.md §5)
+scratchpad/

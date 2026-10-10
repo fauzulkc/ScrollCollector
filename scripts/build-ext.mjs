@@ -6,6 +6,8 @@
  *  - vendors the self-contained Transformers.js bundle + ONNX Runtime wasm files from node_modules
  *    (no CDN: MV3 forbids remote code and our CSP is script-src 'self' 'wasm-unsafe-eval')
  *  - bundles the q8 System 1 embedding weights from eval/.cache/models (run `npm run fetch:models` first)
+ *    plus models/manifest.json with each model file's byte size (served as Content-Length, see
+ *    offscreen/model-fetch.js)
  *
  * Usage: node scripts/build-ext.mjs [--out dir] [--no-models] [--models bge-small,minilm]
  */
@@ -94,6 +96,8 @@ for (const file of VENDOR_FILES) {
 }
 
 let modelBytes = 0;
+/** models/manifest.json: byte size per bundled model file (offscreen/model-fetch.js adds them as Content-Length). */
+const modelSizes = {};
 if (WITH_MODELS) {
   const cacheRoot = path.join(ROOT, 'eval/.cache/models');
   for (const key of MODEL_KEYS) {
@@ -111,10 +115,14 @@ if (WITH_MODELS) {
       const dest = path.join(OUT, 'models', spec.id, file);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.copyFileSync(src, dest);
-      modelBytes += fs.statSync(src).size;
+      const size = fs.statSync(src).size;
+      modelSizes[`${spec.id}/${file}`] = size;
+      modelBytes += size;
       fileCount += 1;
     }
   }
+  fs.writeFileSync(path.join(OUT, 'models/manifest.json'), JSON.stringify({ files: modelSizes }, null, 2) + '\n');
+  fileCount += 1;
 }
 
 const mb = (n) => (n / 1024 / 1024).toFixed(1);

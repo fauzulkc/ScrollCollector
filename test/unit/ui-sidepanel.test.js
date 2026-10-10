@@ -236,17 +236,24 @@ describe('Settings tab', () => {
     expect(chips[1].querySelector('.chip-weight').textContent).toBe('3');
   });
 
-  test('UPDATE_MATCH_PROMPT is debounced to 600 ms, then GENERATE_PROMPT_TAGS; stale replies are ignored', async () => {
+  test('the prompt is saved only on Save / Ctrl+Enter, then GENERATE_PROMPT_TAGS; stale replies are ignored', async () => {
     const input = $('#match-prompt-input');
+    const save = $('#match-prompt-save');
     input.focus();
     for (const v of ['r', 'ra', 'ram', 'ramen']) {
       input.value = v;
       input.dispatchEvent(new Event('input', { bubbles: true }));
       await sleep(50);
     }
-    expect(sentOfType('UPDATE_MATCH_PROMPT')).toHaveLength(0);
     await sleep(700);
+    input.blur(); // typing and leaving the field never saves
     await flush();
+    expect(sentOfType('UPDATE_MATCH_PROMPT')).toHaveLength(0);
+    expect(save.disabled).toBe(false);
+    expect($('#match-prompt-save-state').textContent).toContain('Unsaved');
+    save.click();
+    await flush();
+    await sleep(20);
     expect(sentOfType('UPDATE_MATCH_PROMPT').map((m) => m.payload.prompt)).toEqual(['ramen']);
     expect(sentOfType('GENERATE_PROMPT_TAGS').map((m) => m.payload.prompt)).toEqual(['ramen']);
     // The stale reply rendered nothing; the loading note is gone.
@@ -257,7 +264,7 @@ describe('Settings tab', () => {
     handlers.GENERATE_PROMPT_TAGS = (p) => ({ success: true, tags: ['noodles', { name: 'broth' }], enhanced: `${p.prompt} restaurants` });
     input.value = 'ramen bars';
     input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.blur(); // leaving the field saves right away
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', ctrlKey: true, bubbles: true })); // Ctrl+Enter saves
     await flush();
     await sleep(20);
     expect(sentOfType('UPDATE_MATCH_PROMPT').map((m) => m.payload.prompt)).toEqual(['ramen', 'ramen bars']);

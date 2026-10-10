@@ -2,16 +2,16 @@
   "manifest_version": 3,
   "name": "ScrollCollector",
   "description": "Privacy-first, zero-latency content categorization powered by on-device AI. Tracks your mindstream across social feeds in real time.",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "permissions": [
     "storage",
-    "activeTab",
     "sidePanel",
     "favicon",
     "tabs",
     "scripting",
     "alarms",
     "offscreen",
+    "idle",
     "unlimitedStorage"
   ],
   "host_permissions": [
@@ -43,6 +43,16 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.linkedin.com/*"
+      ],
+      "js": [
+        "lib/content/linkedin-urn-bridge.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "side_panel": {

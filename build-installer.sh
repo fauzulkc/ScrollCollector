@@ -17,10 +17,13 @@ cp icons/icon-16.png companion/icon-16.png
 cp icons/icon.ico companion/icon.ico
 cp install-guide.html installer/install-guide.html
 
-# 2. Package extension runtime files into zip
-echo "[+] Archiving extension files to installer/ScrollCollector.zip..."
+# 2. Package the built extension (dist/ext: runtime files, vendored wasm, bundled models) into zip.
+#    Zipping the source files instead ships without the models and the ui/ folder.
+echo "[+] Building dist/ext and archiving it to installer/ScrollCollector.zip..."
+node scripts/build-ext.mjs || { echo "[!] build-ext failed (run npm install and npm run fetch:models)."; exit 1; }
 rm -f installer/ScrollCollector.zip
-zip -r installer/ScrollCollector.zip icons/ lib/ offscreen/ manifest.json background.js content.js sidepanel.css sidepanel.html sidepanel.js install-guide.html README.md -x "*.DS_Store"
+(cd dist/ext && zip -qr ../../installer/ScrollCollector.zip . -x "*.DS_Store")
+zip -qj installer/ScrollCollector.zip install-guide.html README.md
 
 if [ ! -f "installer/ScrollCollector.zip" ]; then
     echo "[!] Error generating ScrollCollector.zip archive."

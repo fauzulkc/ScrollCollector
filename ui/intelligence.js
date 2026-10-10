@@ -233,6 +233,47 @@ export function cloudFieldPatch(id, field, raw) {
   return { ok: false, error: 'Unknown field' };
 }
 
+/** @param {boolean} enabled */
+export function refinePatch(enabled) {
+  return { refine: { enabled: !!enabled } };
+}
+
+/**
+ * "3 min ago" style age of an epoch-ms time.
+ * @param {number|null|undefined} at
+ * @param {number} nowMs
+ */
+export function agoText(at, nowMs) {
+  if (!Number.isFinite(at)) return '';
+  const s = Math.max(0, Math.round((nowMs - /** @type {number} */ (at)) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h} h ago`;
+  return `${Math.round(h / 24)} d ago`;
+}
+
+/**
+ * Status line of the idle refinement (EngineStatus.refine, see lib/bg/decision-runtime.js).
+ * @param {any} refine
+ * @param {{ enabled?: boolean, now?: number }} [opts]   enabled: the stored setting
+ * @returns {string}
+ */
+export function refineStatusText(refine, { enabled = true, now = Date.now() } = {}) {
+  const r = refine && typeof refine === 'object' ? refine : {};
+  if (!enabled || r.enabled === false) return 'Off';
+  if (r.state === 'running') {
+    return Number.isFinite(r.pending) && r.pending > 0 ? `Running… ${r.done || 0} of ${r.pending}` : 'Running…';
+  }
+  if (!Number.isFinite(r.total)) return 'Waiting for idle';
+  if (r.total === 0) return 'Nothing to refine yet';
+  const parts = [`Refined ${r.refined || 0} of ${r.total}`];
+  if (Number.isFinite(r.lastRunAt)) parts.push(`last run ${agoText(r.lastRunAt, now)}`);
+  if ((r.refined || 0) < r.total) parts.push('Waiting for idle');
+  return parts.join(' · ');
+}
+
 /**
  * @param {'strictness'|'whenUnsure'} field
  * @param {string} value
@@ -513,6 +554,20 @@ function templateHtml() {
     ${cloudCardHtml('jev')}
     ${cloudCardHtml('openai')}
 
+    <section class="intel-card" id="intel-refine" aria-labelledby="refine-title">
+      <label class="switch-row" for="refine-enabled">
+        <span class="switch-text">
+          <span class="switch-title" id="refine-title">Refine collected posts when idle (second model + on-device AI)</span>
+          <span class="intel-hint">While you are away, posts you already collected are checked again by the second local model; posts it is still unsure about go to Gemini Nano on this device. Nothing is sent to the cloud.</span>
+        </span>
+        <span class="tag-toggle"><input type="checkbox" id="refine-enabled"><span class="toggle-track"></span></span>
+      </label>
+      <div class="intel-actions">
+        <span class="intel-meta" id="refine-status" aria-live="polite">Waiting for idle</span>
+        <button type="button" class="btn-sm ghost" id="refine-now">Refine now</button>
+      </div>
+    </section>
+
     <div class="intel-block">
       <span class="field-label" id="intel-strictness-label">Strictness</span>
       <div class="segmented" role="radiogroup" aria-labelledby="intel-strictness-label" id="intel-strictness">${strictness}
@@ -582,6 +637,7 @@ export function mountIntelligence(root, deps) {
     /** @type {any} */ engineStatus: null,
     /** @type {any} */ secrets: null,
     /** @type {any} */ diagnostics: null,
+    /** @type {any} EngineStatus.refine from a REFINE_NOW reply (until the next push) */ refine: null,
     /** @type {Record<string, any>} */ calibration: {},
     s1Override: /** @type {any} */ (null),
     nanoLocal: { api: false, availability: /** @type {string|null} */ (null), downloading: false, progress: /** @type {number|null} */ (null), error: /** @type {string|null} */ (null) }
@@ -817,6 +873,24 @@ export function mountIntelligence(root, deps) {
     wireTest(id, `${id}-test`, `${id}-test-result`);
   }
 
+  // ----- Idle refinement -----
+  $('refine-enabled').addEventListener('change', (e) => {
+    const on = !!e.target.checked;
+    apply(refinePatch(on), 'refine-enabled', on);
+  });
+  $('refine-now').addEventListener('click', async () => {
+    const btn = $('refine-now');
+    btn.disabled = true;
+    const reply = await send(MSG.REFINE_NOW, {});
+    btn.disabled = false;
+    if (isUnsupportedReply(reply) || !reply || reply.success === false) {
+      toast.show({ level: 'error', text: `Could not start refining: ${redact((reply && reply.error) || 'no answer')}`, key: 'refine' });
+      return;
+    }
+    if (reply.refine && typeof reply.refine === 'object') model.refine = reply.refine;
+    render();
+  });
+
   // ----- Behaviour -----
   $('intel-strictness').addEventListener('change', (e) => {
     const v = e.target.value;
@@ -930,6 +1004,15 @@ export function mountIntelligence(root, deps) {
     }
     $('intel-nano').classList.toggle('is-primary', provider === 'nano');
 
+    // Idle refinement
+    const refineCfg = intel.refine || {};
+    const refineEl = $('refine-enabled');
+    if (!pending.has(refineEl.id) && refineEl.checked !== (refineCfg.enabled !== false)) refineEl.checked = refineCfg.enabled !== false;
+    const refineState = (es && es.refine) || model.refine || (model.diagnostics && model.diagnostics.refine) || null;
+    const refineOn = (pending.has(refineEl.id) ? pending.get(refineEl.id) : refineCfg.enabled) !== false && !(intel.system1 && intel.system1.enabled === false);
+    $('refine-status').textContent = refineStatusText(refineState, { enabled: refineOn });
+    $('refine-now').disabled = !refineOn || (refineState && refineState.state === 'running');
+
     // Behaviour
     const gate = intel.gate || {};
     const group = $('intel-strictness');
@@ -975,6 +1058,7 @@ export function mountIntelligence(root, deps) {
     }
     if (engineStatus !== undefined) {
       model.engineStatus = engineStatus;
+      if (engineStatus && engineStatus.refine) model.refine = null;
       if (engineStatus && engineStatus.system1 && engineStatus.system1.state) model.s1Override = null;
     }
     if (diagnostics !== undefined) {

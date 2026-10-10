@@ -418,3 +418,52 @@ describe('mountIntelligence', () => {
     expect(root.querySelector('#floor-tag').placeholder).toBe('default 0.3');
   });
 });
+
+describe('idle refinement (Settings › Intelligence)', () => {
+  test('status line and patch', async () => {
+    const { refineStatusText, refinePatch, agoText } = await import('../../ui/intelligence.js');
+    const { refineStats } = await import('../../ui/diagnostics.js');
+    expect(validateIntelligencePatch(refinePatch(false))).toMatchObject({ ok: true, patch: { refine: { enabled: false } } });
+    expect(validateIntelligencePatch({ refine: { idleSeconds: 5 } }).ok).toBe(false);
+    expect(validateIntelligencePatch({ refine: { idleSeconds: 120, nano: false } }).ok).toBe(true);
+    const now = 10 * 60_000;
+    expect(refineStatusText(null)).toBe('Waiting for idle');
+    expect(refineStatusText({ state: 'waiting' }, { enabled: false })).toBe('Off');
+    expect(refineStatusText({ state: 'running', done: 8, pending: 20 })).toBe('Running… 8 of 20');
+    expect(refineStatusText({ state: 'done', refined: 0, total: 0 })).toBe('Nothing to refine yet');
+    expect(refineStatusText({ state: 'waiting', refined: 12, total: 40, lastRunAt: now - 3 * 60_000 }, { now })).toBe('Refined 12 of 40 · last run 3 min ago · Waiting for idle');
+    expect(refineStatusText({ state: 'done', refined: 40, total: 40, lastRunAt: now - 10_000 }, { now })).toBe('Refined 40 of 40 · last run just now');
+    expect(agoText(null, now)).toBe('');
+    expect(refineStats({ refine: { counters: { refined: 5, changedVerdicts: 2, changedTags: 1, nanoCalls: 3 } } }).map((s) => s.value)).toEqual(['5', '2', '1', '3']);
+  });
+
+  test('toggle, status from ENGINE_STATUS and "Refine now"', async () => {
+    document.body.innerHTML = '<div id="root"></div>';
+    const root = document.getElementById('root');
+    const sent = [];
+    const send = vi.fn(async (type, payload) => {
+      sent.push({ type, payload });
+      if (type === MSG.REFINE_NOW) return { success: true, running: true, refine: { state: 'running', done: 0, pending: 3 } };
+      return { success: true };
+    });
+    const ui = mountIntelligence(root, { send, toast: { show: () => {} }, getLanguageModel: () => undefined });
+    ui.update({ configuration: {} });
+    const toggle = root.querySelector('#refine-enabled');
+    expect(toggle.checked).toBe(true);
+    expect(root.querySelector('#intel-refine').textContent).toContain('Refine collected posts when idle (second model + on-device AI)');
+    ui.update({ engineStatus: { refine: { enabled: true, state: 'waiting', refined: 2, total: 5, lastRunAt: null } } });
+    expect(root.querySelector('#refine-status').textContent).toBe('Refined 2 of 5 · Waiting for idle');
+
+    root.querySelector('#refine-now').click();
+    await flush();
+    expect(sent.map((s) => s.type)).toContain(MSG.REFINE_NOW);
+
+    toggle.checked = false;
+    toggle.dispatchEvent(new Event('change'));
+    await flush();
+    expect(sent).toContainEqual({ type: MSG.UPDATE_INTELLIGENCE_SETTINGS, payload: { patch: { refine: { enabled: false } } } });
+    ui.update({ configuration: { intelligence: { refine: { enabled: false } } } });
+    expect(root.querySelector('#refine-status').textContent).toBe('Off');
+    expect(root.querySelector('#refine-now').disabled).toBe(true);
+  });
+});

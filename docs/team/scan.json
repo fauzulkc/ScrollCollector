@@ -1,0 +1,32 @@
+{
+  "scanned": "2026-10-10",
+  "root": "ScrollCollector",
+  "size": {
+    "files": 492,
+    "code_files": 126,
+    "manifests": [
+      "package.json",
+      "go.mod"
+    ],
+    "ui_apps": [],
+    "ui_app_count": 0,
+    "contributors": 1,
+    "commits": 76,
+    "first_commit": "2026-10-10"
+  },
+  "signals": {
+    "code": [
+      "126 source files"
+    ],
+    "extension": [
+      "manifest.json"
+    ],
+    "tests": [
+      "playwright.config.mjs",
+      "vitest.config.mjs",
+      "test/integration.test.js",
+      "test/fixtures/linkedin-feed.html",
+      "test/fixtures/x-feed.html"
+    ]
+  }
+}

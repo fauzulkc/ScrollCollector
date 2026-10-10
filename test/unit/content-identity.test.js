@@ -272,12 +272,146 @@ describe('content.js identity on a LinkedIn feed', () => {
       </div>`;
     feed.appendChild(wrapper);
 
-    await waitFor(() => page.extracted().length === 5);
+    // Generous timeout: the observer debounce is slow on a heavily loaded machine.
+    await waitFor(() => page.extracted().length === 5, 15000);
     const added = page.extracted()[4];
     expect(added.postKey).toBe('li:urn:li:activity:7301000000000000005');
     expect(added.postUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:7301000000000000005/');
     expect(added.authorUrl).toBe('https://www.linkedin.com/company/harbor-bakery/');
     expect(added.text).toBe('Post by: Harbor Bakery\n\nOur croissant dough rests for 72 hours before it is laminated with Normandy butter.');
+  }, 20000);
+});
+
+// ─── LinkedIn 2026 layout (obfuscated classes, componentkey cards) ──────────
+
+/** Modelled on the live /feed/foryou/ and /jobs/ markup captured in October 2026. */
+function linkedIn2026Card(token, author, body, { permalink = '', socialProof = '' } = {}) {
+  return `
+  <div data-display-contents="true" componentkey="expanded${token}FeedType_" id="expanded${token}FeedType_">
+    <div role="listitem" class="gfllid gfluf" componentkey="update-card-focus${token}FeedType_MAIN_FEED_RELEVANCE">
+      ${socialProof ? `<a href="https://www.linkedin.com/in/${socialProof.toLowerCase().replace(/\W+/g, '')}/" aria-label="View ${socialProof}’s profile">${socialProof}</a><span>likes this</span>` : ''}
+      <span>Feed post</span>
+      <button aria-label="Open control menu for post by ${author}"><svg></svg></button>
+      <button aria-label="Hide post by ${author}"><svg></svg></button>
+      <a href="https://www.linkedin.com/in/${author.toLowerCase().replace(/\W+/g, '-')}/?miniProfileUrn=x"><img alt=""></a>
+      <a href="https://www.linkedin.com/in/${author.toLowerCase().replace(/\W+/g, '-')}/">${author}</a>
+      <span>18h • Edited</span>
+      <div data-testid="expandable-text-box"><span>${body}</span></div>
+      <button data-testid="expandable-text-button"><span>…</span><span>more</span></button>
+      ${permalink ? `<a href="${permalink}">see post</a>` : ''}
+      <button aria-label="Reaction button state: no reaction">Like</button>
+      <button>Comment</button><button>Repost</button>
+    </div>
+  </div>`;
+}
+
+describe('content.js on the 2026 LinkedIn feed and jobs layout', () => {
+  afterEach(() => teardownContentScript());
+
+  test('componentkey cards are collected: one per post, author from the "Hide post by" label', async () => {
+    teardownContentScript();
+    const html = `<main><div class="gflk0d">${
+      linkedIn2026Card('TUW0YoO5tm', 'Cole Bevis', 'We are hiring a senior AI platform engineer to build agent tooling in London, remote friendly.', {
+        permalink: 'https://www.linkedin.com/feed/update/urn:li:activity:7510789746537865216/', socialProof: 'Henry Scott-Green'
+      })}${
+      linkedIn2026Card('s4wQRtpbxw', 'Vlad Pogrebinsky', 'Stripe just shipped a new payments API for marketplaces; here is what changed for platform teams this week.')
+    }</div></main>`;
+    const page = loadPage('https://www.linkedin.com/feed/foryou/', html);
+    await waitFor(() => page.extracted().length >= 2);
+    const posts = page.extracted();
+    expect(posts).toHaveLength(2);
+    // With a permalink the stable URN is the key; without one (and no bridge) the card token is.
+    expect(posts.map((p) => p.postKey)).toEqual(['li:urn:li:activity:7510789746537865216', 'li:card:s4wQRtpbxw']);
+    expect(posts[0].postUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:7510789746537865216/');
+    expect(posts[1].postUrl).toBe('');
+    expect(posts[0].authorName).toBe('Cole Bevis');
+    expect(posts[0].authorUrl).toContain('/in/cole-bevis');
+    expect(posts[0].text).toBe('Post by: Cole Bevis\n\nWe are hiring a senior AI platform engineer to build agent tooling in London, remote friendly.');
+    expect(posts[0].text).not.toMatch(/more$|Henry/);
+  });
+
+  /**
+   * Attaches React props shaped like the live feed (captured Oct 2026): prefixed state keys nested
+   * under `children`. A control mentioning another URN comes first in DOM order, twice.
+   */
+  function attachReactProps(card) {
+    const other = document.createElement('div');
+    card.prepend(other);
+    other['__reactProps$abc'] = { children: { props: { id: 'urn:li:activity:7000000000000000001', alt: 'urn:li:activity:7000000000000000001' } } };
+    card.querySelector('[aria-label="Reaction button state: no reaction"]')['__reactProps$abc'] = {
+      children: { props: { text: [{ props: { children: [{ props: { stateKey: 'reactionsCount-urn:li:activity:7513206606860439553' } }] } }] } }
+    };
+  }
+
+  function loadBridge() {
+    delete window.__scLinkedInUrnBridge;
+    vm.runInThisContext(fs.readFileSync(path.resolve(__dirname, '../../lib/content/linkedin-urn-bridge.js'), 'utf8'));
+  }
+
+  test('main-world bridge answers sc:urn-request with the post URN from reaction state, not a comment URN', () => {
+    document.body.innerHTML = linkedIn2026Card('Bridge1', 'Mia Chen', 'Applied AI residency applications are open.');
+    const card = document.querySelector('[componentkey^="update-card"]');
+    attachReactProps(card);
+    loadBridge();
+    card.dispatchEvent(new CustomEvent('sc:urn-request', { bubbles: true }));
+    expect(card.getAttribute('data-sc-urn')).toBe('urn:li:activity:7513206606860439553');
+  });
+
+  test('a card whose URN only exists in React props gets a stable URN key and a /feed/update/ link', async () => {
+    teardownContentScript();
+    loadBridge();
+    const page = loadPage('https://www.linkedin.com/feed/foryou/', linkedIn2026Card('ReactOnly1', 'Mia Chen',
+      'We just opened applications for our applied AI residency; mentors from three research teams are joining.'));
+    // The scan waits for GET_CONTENT_CONFIG, so props attached now are in place before it runs.
+    attachReactProps(document.querySelector('[componentkey^="update-card"]'));
+    await waitFor(() => page.extracted().length >= 1);
+    const [post] = page.extracted();
+    expect(post.postKey).toBe('li:urn:li:activity:7513206606860439553');
+    expect(post.postUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:7513206606860439553/');
+    // The bridge attribute is consumed, never left in the page.
+    expect(document.querySelector('[data-sc-urn]')).toBeNull();
+  });
+
+  test("on a post's own page the detail card takes the URN from the address", async () => {
+    teardownContentScript();
+    const html = linkedIn2026Card('DetailTok9', 'Jean Lee',
+      'AI Engineer job postings are sending a clear signal: knowing how to call an LLM is not enough anymore.')
+      .replace('FeedType_MAIN_FEED_RELEVANCE', 'FeedType_FEED_DETAIL');
+    const page = loadPage('https://www.linkedin.com/feed/update/urn:li:activity:7513953899620352001/', html);
+    await waitFor(() => page.extracted().length >= 1);
+    const [p] = page.extracted();
+    expect(p.postKey).toBe('li:urn:li:activity:7513953899620352001');
+    expect(p.postUrl).toBe('https://www.linkedin.com/feed/update/urn:li:activity:7513953899620352001/');
+  });
+
+  test('"… more" expansion of a componentkey card re-dispatches the same postKey', async () => {
+    teardownContentScript();
+    const page = loadPage('https://www.linkedin.com/feed/foryou/', linkedIn2026Card('AbC123xyz', 'Ana Ruiz',
+      'Our team is opening three machine learning roles focused on retrieval and evaluation pipelines'));
+    await waitFor(() => page.extracted().length >= 1);
+    document.querySelector('[data-testid="expandable-text-box"] span').textContent +=
+      '. We sponsor visas, offer hybrid work in Berlin, and the interview loop takes two weeks end to end.';
+    const update = await waitFor(() => page.extracted().find((p) => p.isUpdate));
+    expect(update.postKey).toBe('li:card:AbC123xyz');
+    expect(update.text).toContain('interview loop takes two weeks');
+  });
+
+  test('jobs home link cards are collected as job postings keyed by currentJobId', async () => {
+    teardownContentScript();
+    const job = (id, title, company) => `
+      <div data-display-contents="true"><div><div componentkey="d44bdcf5-ba36">
+        <a componentkey="5ef28cc1-${id}" href="https://www.linkedin.com/jobs/search-results/?keywords=AI&currentJobId=${id}&origin=JOBS_HOME">
+          <div><span>${title}</span></div><div><span>${company} • London Area, United Kingdom (Hybrid)</span></div><span>1 week ago</span>
+        </a></div></div></div>`;
+    const html = `<section aria-label="Primary content"><div data-testid="JobsHomeFeedModuleListCollection" componentkey="JobsHomeFeedModuleListLazyColumn">${
+      job('4012345678', 'Staff Applied AI Engineer', 'kadence')}${job('4087654321', 'Senior Software Engineer', 'Oho Group')}</div></section>`;
+    const page = loadPage('https://www.linkedin.com/jobs/', html);
+    await waitFor(() => page.extracted().length >= 2);
+    const posts = page.extracted();
+    expect(posts.map((p) => p.postKey)).toEqual(['li:job:4012345678', 'li:job:4087654321']);
+    expect(posts[0].postUrl).toBe('https://www.linkedin.com/jobs/view/4012345678/');
+    expect(posts[0].text).toContain('Staff Applied AI Engineer');
+    expect(posts[0].text).toContain('kadence');
   });
 });
 

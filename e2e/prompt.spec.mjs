@@ -100,7 +100,7 @@ test('a prompt change hides what no longer matches, collects the new matches on 
     const before = await readStack(sw);
     const idsBefore = Object.fromEntries(before.map((i) => [i.postKey, i.id]));
 
-    // Edit the prompt in Settings like a user (debounced save, then the re-decide).
+    // Edit the prompt in Settings like a user (explicit Save, then the re-decide).
     const { page: panel } = await openPanel(ext, { tab: 'settings' });
     await panel.evaluate(() => {
       window.__progress = [];
@@ -108,6 +108,9 @@ test('a prompt change hides what no longer matches, collects the new matches on 
     });
     await panel.locator('#match-prompt-input').fill(CODING_PROMPT);
     await panel.locator('#match-prompt-input').blur();
+    // Leaving the field no longer saves: the prompt applies only on Save.
+    await expect(panel.locator('#match-prompt-save')).toBeEnabled();
+    await panel.locator('#match-prompt-save').click();
 
     const after = await waitForStack(sw, (s) => {
       const food = s.filter((i) => foodKeys.includes(i.postKey));

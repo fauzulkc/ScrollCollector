@@ -8,6 +8,7 @@ import { formatMs, formatPct, formatProb } from './util.js';
 /** Display names for provider / path ids (same names as lib/decision/engine-status.js). */
 export const PROVIDER_LABELS = Object.freeze({
   system1: 'System 1',
+  ensemble: 'Two-model ensemble',
   nano: 'Gemini Nano',
   jev: 'TypeSafe Jev',
   openai: 'OpenAI',

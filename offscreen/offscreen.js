@@ -11,12 +11,12 @@
  * channel open (return true). OFFSCREEN_PING is answered synchronously and never waits for a model
  * load.
  *
- *   OFFSCREEN_PING  -> { ok, caps: { crossOriginIsolated, webgpu, threads, hardwareConcurrency }, s1 }
+ *   OFFSCREEN_PING  -> { ok, caps: { crossOriginIsolated, webgpu, threads, hardwareConcurrency }, s1, cspViolations, consoleWarnings }
  *   S1_LOAD         { model, device, dtype }          -> { ok, model, device, loadMs, calibrationId, floor }
- *   S1_DECIDE       { model, items, spec }            -> { ok, model, results: [{ id, answers, ms }], ms }
+ *   S1_DECIDE       { model, items, spec, secondary? } -> { ok, model, results: [{ id, answers, ms }], ms }
  *   S1_EMBED        { texts, isQuery, model, cache }  -> { ok, model, vectors, ms }
  *   S1_CLEAR_CACHE  -> { ok }
- *   S1_UNLOAD       -> { ok }
+ *   S1_UNLOAD       { model? }  -> { ok }  (a secondary model only when `model` names one)
  * Pushes: S1_STATUS { status, model, progress?, detail?, device?, loadMs?, error? } (target 'background').
  */
 import { MSG, TARGET } from '../lib/messages.js';
@@ -40,7 +40,7 @@ export function createOffscreenRouter(host, { extensionOrigin, pingExtras } = {}
     [MSG.S1_DECIDE]: (p) => host.decide(p),
     [MSG.S1_EMBED]: (p) => host.embed(p),
     [MSG.S1_CLEAR_CACHE]: () => host.clearCache(),
-    [MSG.S1_UNLOAD]: () => host.unload()
+    [MSG.S1_UNLOAD]: (p) => host.unload(p)
   };
 
   return function onMessage(message, sender, sendResponse) {
@@ -81,5 +81,16 @@ if (globalThis.chrome?.runtime?.onMessage) {
   globalThis.document?.addEventListener?.('securitypolicyviolation', (e) => {
     if (cspViolations.length < 20) cspViolations.push({ directive: e.violatedDirective, blocked: String(e.blockedURI || '').slice(0, 120) });
   });
-  chrome.runtime.onMessage.addListener(createOffscreenRouter(createSystem1Host(), { pingExtras: () => ({ cspViolations: [...cspViolations] }) }));
+  /** The first console warnings / errors of this document (Transformers.js, ONNX Runtime), reported by OFFSCREEN_PING. */
+  const consoleWarnings = [];
+  for (const level of /** @type {const} */ (['warn', 'error'])) {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      if (consoleWarnings.length < 20) {
+        consoleWarnings.push({ level, text: args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ').slice(0, 200) });
+      }
+      original(...args);
+    };
+  }
+  chrome.runtime.onMessage.addListener(createOffscreenRouter(createSystem1Host(), { pingExtras: () => ({ cspViolations: [...cspViolations], consoleWarnings: [...consoleWarnings] }) }));
 }

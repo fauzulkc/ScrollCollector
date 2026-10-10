@@ -134,6 +134,10 @@ const IS_PREDEFINED = PLATFORM !== 'generic';
  */
 const PLATFORM_BOUNDARY_SELECTORS = {
   linkedin: [
+    // 2026 feed (/feed/foryou/): obfuscated classes, one listitem card per post
+    '[role="listitem"][componentkey^="update-card"]',
+    '[data-testid="JobsHomeFeedModuleListCollection"] a[componentkey][href*="/jobs/"]',
+    'a[componentkey][href*="currentJobId="]',
     'div.feed-shared-update-v2', 'div.occludable-update',
     '[data-urn*="urn:li:activity:"]', '[data-urn*="urn:li:share:"]', '[data-urn*="urn:li:ugcPost:"]',
     '[data-id*="urn:li:activity:"]',
@@ -549,7 +553,110 @@ function linkedInUrnFromHref(href) {
   return slug ? 'urn:li:' + slug[1] + ':' + slug[2] : null;
 }
 
+/**
+ * 2026 LinkedIn feed card: `[role=listitem][componentkey="update-card-focus<token>FeedType_…"]`.
+ * Classes are obfuscated and there is no data-urn; the body lives in
+ * [data-testid="expandable-text-box"] and the author only in "Hide post by <name>" labels.
+ */
+const LI_CARD_SEL = '[role="listitem"][componentkey^="update-card"]';
+const LI_CARD_TEXT_SEL = '[data-testid="expandable-text-box"]';
+const LI_CARD_AUTHOR_LABEL_RE = /^(?:Hide post by|Open control menu for post by)\s+(.+?)\s*$/;
+
+function linkedInCardOf(container) {
+  if (!container || !container.closest) return null;
+  return container.closest(LI_CARD_SEL);
+}
+
+function linkedInCardIdentity(card) {
+  const key = card.getAttribute('componentkey') || '';
+  const m = /^update-card-(?:focus)?(.+?)(?:FeedType_.*)?$/.exec(key);
+  if (!m || !m[1]) return null;
+  // The post URN only lives in React props: ask the main-world bridge
+  // (lib/content/linkedin-urn-bridge.js). dispatchEvent is synchronous across worlds.
+  let urn = null;
+  try {
+    card.dispatchEvent(new CustomEvent('sc:urn-request', { bubbles: true }));
+    const bridged = card.getAttribute('data-sc-urn');
+    card.removeAttribute('data-sc-urn');
+    const found = bridged ? LI_URN_RE.exec(bridged) : null;
+    if (found) urn = found[0];
+  } catch { /* bridge missing: fall back to an in-card permalink */ }
+  if (!urn && /FeedType_FEED_DETAIL/.test(key)) {
+    // The post's own page (/feed/update/<urn>/): the detail card IS that post.
+    urn = linkedInUrnFromHref(window.location.pathname);
+  }
+  if (!urn) {
+    const link = card.querySelector('a[href*="/feed/update/urn:li:"]');
+    urn = link ? linkedInUrnFromHref(link.getAttribute('href')) : null;
+  }
+  // The URN is stable across page loads (the card token may not be) and matches classic-layout keys.
+  return urn
+    ? { postKey: 'li:' + urn, postUrl: 'https://www.linkedin.com/feed/update/' + urn + '/' }
+    : { postKey: 'li:card:' + m[1], postUrl: '' };
+}
+
+function linkedInCardAuthor(card) {
+  let name = '';
+  for (const el of card.querySelectorAll('[aria-label]')) {
+    const m = LI_CARD_AUTHOR_LABEL_RE.exec(el.getAttribute('aria-label') || '');
+    if (m) { name = m[1]; break; }
+  }
+  let url = '';
+  if (name) {
+    for (const a of card.querySelectorAll('a[href*="/in/"], a[href*="/company/"]')) {
+      if ((a.textContent || '').trim() === name) {
+        url = normalizeLinkedInAuthorUrl(a.getAttribute('href'));
+        break;
+      }
+    }
+  }
+  return { name, url };
+}
+
+/** 2026 jobs home: each job is a link card `<a componentkey=…>` (title, company, location, age). */
+const LI_JOB_CARD_SEL = '[data-testid="JobsHomeFeedModuleListCollection"] a[componentkey][href*="/jobs/"], a[componentkey][href*="currentJobId="]';
+
+function linkedInJobCardOf(container) {
+  if (!container || !container.matches) return null;
+  if (container.matches(LI_JOB_CARD_SEL)) return container;
+  return container.closest ? container.closest(LI_JOB_CARD_SEL) : null;
+}
+
+function linkedInJobIdFromHref(href) {
+  const m = /[?&]currentJobId=(\d+)/.exec(href || '') || /\/jobs\/view\/(\d+)/.exec(href || '');
+  return m ? m[1] : '';
+}
+
+function extractLinkedInText(container, ownUrn) {
+  const jobCard = linkedInJobCardOf(container);
+  if (jobCard) {
+    const text = readText(jobCard, true).replace(/\n{2,}/g, '\n').trim();
+    return text ? `Job posting:\n${text}` : '';
+  }
+  return extractLinkedInPostText(container, ownUrn);
+}
+
+function extractLinkedInCardText(card) {
+  const box = card.querySelector(LI_CARD_TEXT_SEL);
+  const body = box ? stripMoreMarkers(readText(box, true)) : '';
+  if (!body) return '';
+  const { name } = linkedInCardAuthor(card);
+  return name ? `Post by: ${name}\n\n${body}` : body;
+}
+
 function linkedInIdentity(container) {
+  const jobCard = linkedInJobCardOf(container);
+  if (jobCard) {
+    const jobId = linkedInJobIdFromHref(jobCard.getAttribute('href'));
+    if (jobId) return { postKey: 'li:job:' + jobId, postUrl: 'https://www.linkedin.com/jobs/view/' + jobId + '/' };
+  }
+
+  const card = linkedInCardOf(container);
+  if (card) {
+    const cardIdentity = linkedInCardIdentity(card);
+    if (cardIdentity) return cardIdentity;
+  }
+
   let urn = linkedInUrnOf(container.closest(LI_URN_SEL));
   if (!urn) {
     for (const el of container.querySelectorAll(LI_URN_SEL)) {
@@ -1089,7 +1196,10 @@ function collectBoundaries(root) {
  * original — never comments, never another post. Returns '' when the container has
  * no LinkedIn update markup (the generic extraction then applies).
  */
-function extractLinkedInText(container, ownUrn) {
+function extractLinkedInPostText(container, ownUrn) {
+  const card = linkedInCardOf(container);
+  if (card) return extractLinkedInCardText(card);
+
   const ownTextEl = firstInRegion(container, LI_TEXT_SEL, ownUrn, 'own');
   const nestedTextEl = firstInRegion(container, LI_TEXT_SEL, ownUrn, 'nested');
   let body = ownTextEl ? stripMoreMarkers(readText(ownTextEl, true)) : '';
@@ -1482,6 +1592,11 @@ function extractAuthor(container, identity) {
   let authorName = '';
 
   if (PLATFORM === 'linkedin') {
+    const card = linkedInCardOf(container);
+    if (card) {
+      const author = linkedInCardAuthor(card);
+      return { authorName: author.name, authorUrl: author.url };
+    }
     const actor = linkedInActor(container, ownUrnOf(identity), 'own');
     return { authorName: actor.name, authorUrl: actor.url };
   }

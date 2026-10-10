@@ -1,0 +1,61 @@
+{
+  "project": "ScrollCollector",
+  "option": "recommended",
+  "size": "small",
+  "owner_acts": "publishing, sending, spending and signing",
+  "push_rule": "a seat pushes its landed work once the checks pass and a reviewing seat has passed it, and reports the push after.",
+  "seats": [
+    {
+      "team": "ceo",
+      "type": "catalogue",
+      "why": "every team keeps one decision register"
+    },
+    {
+      "team": "chief-of-staff",
+      "type": "catalogue",
+      "why": "6 other seats: one seat talks to you and keeps the tracker"
+    },
+    {
+      "team": "engineering",
+      "type": "catalogue",
+      "why": "code: 126 source files"
+    },
+    {
+      "team": "testing",
+      "type": "catalogue",
+      "why": "tests: playwright.config.mjs"
+    },
+    {
+      "team": "bar-raiser",
+      "type": "catalogue",
+      "why": "every team keeps one independent check"
+    },
+    {
+      "team": "design",
+      "type": "catalogue",
+      "why": "extension: manifest.json"
+    },
+    {
+      "team": "extension",
+      "seat": "Browser-extension engineer",
+      "mark": "🧷",
+      "kind": "implementation",
+      "base": "seat-frontend",
+      "register": "the extension code, manifest and store listing",
+      "reports_to": "Engineering",
+      "scope": "the browser extension: permissions and store review decide what ships",
+      "type": "derive",
+      "why": "extension: manifest.json"
+    }
+  ],
+  "retire": [],
+  "offered": [
+    "bar-raiser",
+    "ceo",
+    "chief-of-staff",
+    "design",
+    "engineering",
+    "extension",
+    "testing"
+  ]
+}

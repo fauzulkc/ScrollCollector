@@ -572,4 +572,53 @@ describe('provider + offscreen host contract', () => {
     expect(reply).toMatchObject({ ok: false, code: 'unsupported' });
     expect(route({ type: 'S1_LOAD', target: 'offscreen', payload: { model: 'minilm' } }, {}, () => {})).toBe(true);
   });
+
+  test('a secondary model decides next to the active one without unloading it, then is released', async () => {
+    const { client, send, pushes, model, wire } = hostSetup();
+    const provider = createLocalSystem1({ client, getConfig: () => ({ system1: { model: 'minilm' } }), batchWindowMs: 1 });
+    wire.relay = (msg) => provider.handleStatusPush(msg);
+    expect(await provider.ensureLoaded()).toBe(true);
+    const pushesBefore = pushes.length;
+
+    const texts = ['Our chef earned a Michelin star for the tasting menu.', 'We are hiring a backend engineer.'];
+    const [primary, secondary] = await Promise.all([
+      provider.decideBatch(contextReq(texts)),
+      provider.decideBatch({ ...contextReq(texts), model: 'bge-small' })
+    ]);
+    for (const r of [...primary.results, ...secondary.results]) expect(r.answers[Q.MATCHES_PROMPT]).toMatchObject({ type: 'noul' });
+    // different calibrations: different calibrated probabilities for the same post
+    expect(secondary.results[0].answers[Q.MATCHES_PROMPT].noul).not.toBe(primary.results[0].answers[Q.MATCHES_PROMPT].noul);
+    expect(model.pipelines.map((p) => p.id)).toEqual(['/models/Xenova/all-MiniLM-L6-v2', '/models/Xenova/bge-small-en-v1.5']);
+    // the active model stays loaded and nothing was pushed about the secondary one
+    expect(pushes.slice(pushesBefore).filter((p) => p.model === 'bge-small')).toEqual([]);
+    expect(provider.status()).toMatchObject({ state: 'ready', model: 'minilm' });
+    expect((await send('OFFSCREEN_PING')).s1).toMatchObject({ state: 'ready', model: 'minilm', secondary: ['bge-small'] });
+    expect(provider.diagnostics()).toMatchObject({ secondaryCalls: 1, secondaryItems: 2 });
+
+    // the old protocol is unchanged: another model without `secondary` is refused
+    expect(await send('S1_DECIDE', { model: 'bge-small', items: [], spec: {} })).toMatchObject({ ok: false, code: 'model_mismatch' });
+    // a second use reuses the loaded secondary pipeline
+    await provider.decideBatch({ ...contextReq(['Fresh pasta tonight']), model: 'bge-small' });
+    expect(model.pipelines).toHaveLength(2);
+
+    expect(await provider.release('minilm')).toBe(false); // never the active model
+    expect(await provider.release('bge-small')).toBe(true);
+    expect((await send('OFFSCREEN_PING')).s1).toMatchObject({ state: 'ready', model: 'minilm', secondary: [] });
+    expect(provider.status().state).toBe('ready');
+  });
+
+  test('S1_LOAD of the model held as secondary promotes it; S1_UNLOAD frees both', async () => {
+    const { send, model } = hostSetup();
+    await send('S1_LOAD', { model: 'minilm' });
+    const spec = { specHash: 's', prompt: { raw: PROMPT }, tags: [], questions: [Q.MATCHES_PROMPT] };
+    expect(await send('S1_DECIDE', { model: 'bge-small', secondary: true, items: [{ id: 'a', text: 'Fine dining menu' }], spec })).toMatchObject({ ok: true, model: 'bge-small', secondary: true });
+    expect(await send('S1_DECIDE', { model: 'nope', secondary: true, items: [], spec })).toMatchObject({ ok: false, code: 'unknown_model' });
+    expect(await send('S1_LOAD', { model: 'bge-small' })).toMatchObject({ ok: true, model: 'bge-small' });
+    expect(model.pipelines).toHaveLength(2);
+    expect((await send('OFFSCREEN_PING')).s1).toMatchObject({ model: 'bge-small', secondary: [] });
+    await send('S1_DECIDE', { model: 'minilm', secondary: true, items: [{ id: 'a', text: 'Fine dining menu' }], spec });
+    expect((await send('OFFSCREEN_PING')).s1.secondary).toEqual(['minilm']);
+    expect(await send('S1_UNLOAD')).toMatchObject({ ok: true });
+    expect((await send('OFFSCREEN_PING')).s1).toMatchObject({ state: 'idle', secondary: [] });
+  });
 });
