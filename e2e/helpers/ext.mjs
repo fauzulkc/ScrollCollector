@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { launchWithExtension, collectConsole, ROOT, EXT_DIR } from './launch.mjs';
 import { startMockDecisionServer } from '../mock-decision-server.mjs';
+import { SCHEMA_VERSION } from '../../lib/storage/schema.js';
 
 export { launchWithExtension, collectConsole, ROOT, EXT_DIR, startMockDecisionServer };
 
@@ -42,7 +43,7 @@ export async function swPoll(sw, fn, arg, timeout = 60000) {
 
 /** Waits for startup (schema migration done). @param {import('@playwright/test').Worker} sw */
 export async function waitForStartup(sw) {
-  await swPoll(sw, async () => (await chrome.storage.local.get('schemaVersion')).schemaVersion === 2);
+  await swPoll(sw, async (v) => (await chrome.storage.local.get('schemaVersion')).schemaVersion === v, SCHEMA_VERSION);
 }
 
 /**

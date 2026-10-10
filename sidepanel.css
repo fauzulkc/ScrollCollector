@@ -84,7 +84,6 @@ body {
   background: var(--bg);
   color: var(--text-primary);
   min-width: 280px;
-  max-width: 500px;
   height: 100vh;
   display: flex;
   flex-direction: column;
@@ -709,6 +708,31 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 8px 12px;
+}
+
+/* D-7: the stream is a row-major grid; the panel uses whatever width Chrome gives it. One column
+   below about 636 px, then 2, 3, 4 as it grows. Reading order stays left to right, then down. */
+#stream-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+/* Anything in the list that is not a card (day dividers) spans the whole row. */
+#stream-list > :not(.item-row) {
+  grid-column: 1 / -1;
+}
+
+#stream-list > .item-row {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+/* D-7: Settings and Export keep the width they were written for, left-aligned under the tabs. */
+#panel-settings > *,
+#panel-export > * {
+  max-width: 560px;
 }
 
 /* Structured Card styling */
@@ -1742,15 +1766,9 @@ kbd {
   stroke-width: 2.2;
 }
 
+/* A secondary label is a claim ("labelled Jobs"): never faded, shrunk or dashed (P-1, D-3). */
 .card-category-label.secondary {
-  opacity: 0.7;
-  transform: scale(0.9);
-  transform-origin: left center;
-  border-style: dashed;
-}
-
-.card-category-label.secondary:hover {
-  opacity: 1;
+  border-style: solid;
 }
 
 /* Dynamic chips dotted border styling */
@@ -2985,5 +3003,197 @@ kbd {
   .status-pill[data-tone="loading"] .status-pill-dot,
   .progress.indeterminate .progress-fill {
     animation: none;
+  }
+}
+
+/* ---------- Prompts: the prompt row, chips and the Collect switch (D-2, D-3, D-6) ---------- */
+
+/* Every colour here is solid (no opacity, no gradient): what the system decided is never faded (P-1). */
+.prompt-pills {
+  align-items: center;
+}
+
+.prompt-pill {
+  --lens-color: var(--accent);
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  padding: 3px 10px;
+  border-radius: 14px;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--lens-color);
+  cursor: pointer;
+}
+
+.prompt-pill:hover {
+  background: var(--bg-hover);
+}
+
+/* Selected: the same outline, thickened without moving the layout, on a tint of the prompt colour. */
+.prompt-pill.active {
+  background: color-mix(in srgb, var(--lens-color) 14%, var(--bg-elevated));
+  box-shadow: 0 0 0 1px var(--lens-color);
+}
+
+.prompt-pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.prompt-dot,
+.lens-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--lens-color);
+}
+
+/* The name gives way first: ellipsis, the full text is in the title (D-1). */
+.prompt-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prompt-count {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* "labels only": the one mark of a prompt whose Collect is off; solid primary text (4.5:1 on every ground, P-1), never shrunk (D-6). */
+.prompt-marker,
+.lens-marker {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--text-primary);
+  border-left: 1px solid var(--border-light);
+  padding-left: 6px;
+}
+
+.collect-summary {
+  margin: 0;
+  padding: 0 12px 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Chips: one row between the card body and the footer. */
+.card-lens-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.lens-chip {
+  --lens-color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-light);
+}
+
+.lens-chip.selected {
+  border-color: var(--lens-color);
+}
+
+.lens-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lens-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Only the selected prompt chip has a bar: 2 px, filled to the score on an axis that starts at 0 (D-3, P-3). */
+.lens-bar {
+  display: block;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border-light);
+  overflow: hidden;
+}
+
+.lens-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--lens-color);
+}
+
+.lens-score {
+  flex-shrink: 0;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Settings: the Collect switch on a prompt row, and on the master prompt section title. */
+.tag-row-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  width: 100%;
+}
+
+.tag-row-head .tag-label {
+  flex: 1 1 90px;
+  min-width: 90px;
+}
+
+.collect-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.collect-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.collect-input:disabled + .toggle-track {
+  cursor: not-allowed;
+}
+
+/* Narrow panel: the row header is full, so Collect takes its own line under it (still on the row, not in the editor). */
+@media (max-width: 380px) {
+  .tag-row-head .collect-switch {
+    order: 10;
+    flex-basis: 100%;
+    justify-content: flex-end;
   }
 }

@@ -4,6 +4,7 @@
  * decision cascade. Used by the card tooltip and the exports.
  */
 import { formatMs, formatPct, formatProb } from './util.js';
+import { collectingLenses, isLensGateOn, matchedLenses, userLenses } from '../lib/decision/lenses.js';
 
 /** Display names for provider / path ids (same names as lib/decision/engine-status.js). */
 export const PROVIDER_LABELS = Object.freeze({
@@ -180,12 +181,41 @@ export function decisionLine(item) {
   return parts.join(' · ');
 }
 
+/** Name a prompt as the panel does: its tag label, or the master prompt's text (cut like the panel). */
+function promptName(lens) {
+  const t = String(lens.label || lens.text || '').replace(/\s+/g, ' ').trim();
+  return t.length > 40 ? `${t.slice(0, 39).trimEnd()}…` : t;
+}
+
+/**
+ * The hover line for a decision with no P(match). Filtering is on whenever any prompt collects
+ * (DEC-6 02:58), master switch or not: then say which collecting prompts this post matched.
+ * Without a configuration it never says "off" when a prompt score shows one may be collecting.
+ * @param {any} item
+ * @param {any} configuration
+ * @returns {string}
+ */
+function filterLine(item, configuration) {
+  if (!configuration) {
+    const scores = item && item.decision && item.decision.lenses;
+    return scores && typeof scores === 'object' && Object.keys(scores).length ? '' : 'Prompt filter: off';
+  }
+  if (!isLensGateOn(configuration)) return 'Prompt filter: off';
+  const collecting = new Set(collectingLenses(configuration).map((l) => l.id));
+  const all = userLenses(configuration);
+  const names = matchedLenses(item.decision, configuration)
+    .filter((m) => collecting.has(m.id))
+    .map((m) => promptName(all.find((l) => l.id === m.id) || m));
+  return names.length ? `Collected: matches ${names.join(' · ')}` : 'Collected: matches no prompt';
+}
+
 /**
  * Multi-line tooltip for a feed card.
  * @param {any} item
+ * @param {any} [configuration]  lets the filter line name the matched prompts
  * @returns {string}
  */
-export function decisionTooltip(item) {
+export function decisionTooltip(item, configuration) {
   const f = decisionFacts(item);
   const mi = item && item.matchInfo && typeof item.matchInfo === 'object' ? item.matchInfo : {};
   /** @type {string[]} */
@@ -200,7 +230,8 @@ export function decisionTooltip(item) {
     if (f.pMatch !== null) {
       lines.push(`P(match): ${formatProb(f.pMatch)}${f.matchConfidence !== null ? ` · confidence ${formatPct(f.matchConfidence)}` : ''}`);
     } else {
-      lines.push('Prompt filter: off');
+      const line = filterLine(item, configuration);
+      if (line) lines.push(line);
     }
     if (f.tagConfidence !== null) lines.push(`Tag confidence: ${formatPct(f.tagConfidence)}`);
     if (f.latencyMs !== null) lines.push(`Latency: ${formatMs(f.latencyMs)}`);

@@ -216,16 +216,23 @@ describe('Settings tab', () => {
     expect(row().querySelector('.tag-prompt-container').style.display).toBe('none');
   });
 
-  test('prompt filter shows ON/OFF and a hint when a prompt is set but the filter is off', async () => {
+  test('prompt filter shows ON/OFF and a hint for each master-prompt state (DEC-6 02:58: Collect, not "filter")', async () => {
+    // Master Collect off, a prompt written, no other prompt: the prompt is unused AND nothing is filtered.
     await setState(baseConfig({ matchPrompt: 'ramen spots', isMatchPromptEnabled: false }), []);
     expect($('#match-prompt-state').textContent).toBe('Off');
     expect($('#match-prompt-hint').classList.contains('hidden')).toBe(false);
-    expect($('#match-prompt-hint').textContent).toContain('filter is off');
+    const off = $('#match-prompt-hint').textContent;
+    expect(off).toContain('Collect is off, so this prompt is not used.');
+    expect(off).toContain('No prompt is set to collect, so every post is collected.');
+    expect(off).not.toContain('filter is off');
+    // Master on, empty prompt, nothing else collecting.
     await setState(baseConfig({ matchPrompt: '', isMatchPromptEnabled: true }), []);
     expect($('#match-prompt-state').textContent).toBe('On');
-    expect($('#match-prompt-hint').textContent).toContain('prompt is empty');
+    expect($('#match-prompt-hint').textContent).toContain('Collect is on but this prompt is empty, so it is not used.');
+    // Master on with a prompt: filtering is on, so the hint names what collects (D-6) and is shown.
     await setState(baseConfig({ matchPrompt: 'ramen', isMatchPromptEnabled: true }), []);
-    expect($('#match-prompt-hint').classList.contains('hidden')).toBe(true);
+    expect($('#match-prompt-hint').classList.contains('hidden')).toBe(false);
+    expect($('#match-prompt-hint').textContent).toBe('Collecting posts that match: ramen.');
   });
 
   test('prompt chips use textContent and accept strings or { name }', async () => {
@@ -483,5 +490,111 @@ describe('only the extension itself updates the panel', () => {
     expect(document.querySelector('#sites-list b')).toBeNull();
     expect(document.querySelector('#sites-list input[type="checkbox"]').getAttribute('data-id')).toBe(evil);
     expect(document.querySelector('#sites-list .btn-delete-site').getAttribute('data-id')).toBe(evil);
+  });
+});
+
+describe('lens panel: which prompts collect (docs/DESIGN.md D-6, DEC-6 02:27 / 02:58)', () => {
+  const lensTag = (id, label, extra = {}) => ({ id, label, prompt: `Find posts about ${label}.`, isEnabled: true, isLens: true, ...extra });
+  const cfg = (over = {}) => baseConfig({ trackedTags: [...baseConfig().trackedTags, ...(over.lenses || [])], ...(over.rest || {}) });
+  const summary = () => $('#collect-summary');
+  const promptPill = (id) => document.querySelector(`#filter-prompt-pills .prompt-pill[data-prompt="${id}"]`);
+  const lensItem = (id, lenses, extra = {}) => mkItem(id, { decision: { ...mkItem(id).decision, lenses }, ...extra });
+
+  test('master Collect off but a tag collects: the line names that tag, the hint never says every post is collected', async () => {
+    await setState(cfg({ lenses: [lensTag('t_r', 'Ramen')], rest: { matchPrompt: 'ramen spots', isMatchPromptEnabled: false } }), []);
+    expect(summary().classList.contains('hidden')).toBe(false);
+    expect(summary().textContent).toBe('Collecting posts that match: Ramen');
+    expect(summary().getAttribute('role')).toBe('status');
+    const hint = $('#match-prompt-hint').textContent;
+    expect(hint).toContain('Collect is off, so this prompt is not used.');
+    expect(hint).toContain('Collecting posts that match: Ramen.');
+    expect(hint).not.toContain('every post is collected');
+  });
+
+  test('the line lists exactly the collecting prompts, master by its own text, joined by " · "; a labels-only tag is left out', async () => {
+    await setState(cfg({
+      lenses: [lensTag('t_r', 'Ramen'), lensTag('t_c', 'Climbing', { collects: false }), lensTag('t_k', 'Chess')],
+      rest: { matchPrompt: 'find me michelin star restaurants', isMatchPromptEnabled: true }
+    }), []);
+    expect(summary().textContent).toBe('Collecting posts that match: find me michelin star restaurants · Ramen · Chess');
+  });
+
+  test('a long master prompt is cut in the line', async () => {
+    await setState(cfg({ rest: { matchPrompt: 'x'.repeat(80), isMatchPromptEnabled: true } }), []);
+    expect(summary().textContent.length).toBeLessThan('Collecting posts that match: '.length + 60);
+    expect(summary().textContent).not.toContain('x'.repeat(80));
+  });
+
+  test('no prompt collects: no line (hidden and empty), and the settings hint says every post is collected', async () => {
+    await setState(cfg({ lenses: [lensTag('t_r', 'Ramen', { collects: false })], rest: { matchPrompt: '', isMatchPromptEnabled: false } }), []);
+    expect(summary().classList.contains('hidden')).toBe(true);
+    expect(summary().textContent).toBe('');
+    expect($('#match-prompt-hint').textContent).toContain('No prompt is set to collect, so every post is collected.');
+    // with no prompt at all the sentence is not shown (it would sit on every fresh install)
+    await setState(baseConfig(), []);
+    expect($('#match-prompt-hint').textContent).not.toContain('No prompt is set to collect');
+  });
+
+  test('a prompt pill carries "labels only" exactly when its Collect is off; a collecting pill has none', async () => {
+    await setState(cfg({ lenses: [lensTag('t_r', 'Ramen'), lensTag('t_c', 'Climbing', { collects: false })] }), [lensItem('a', { t_r: 0.9, t_c: 0.8 })]);
+    expect(promptPill('t_c').classList.contains('labels-only')).toBe(true);
+    expect(promptPill('t_c').querySelector('.prompt-marker').textContent).toBe('labels only');
+    expect(promptPill('t_c').title).toContain('Labels only:');
+    expect(promptPill('t_r').classList.contains('labels-only')).toBe(false);
+    expect(promptPill('t_r').querySelector('.prompt-marker')).toBeNull();
+  });
+
+  test('a card chip of a labels-only prompt says so too', async () => {
+    await setState(cfg({ lenses: [lensTag('t_r', 'Ramen'), lensTag('t_c', 'Climbing', { collects: false })] }), [lensItem('a', { t_r: 0.9, t_c: 0.8 })]);
+    const chip = (id) => document.querySelector(`#stream-list [data-id="a"] .lens-chip[data-lens="${id}"]`);
+    expect(chip('t_c').classList.contains('labels-only')).toBe(true);
+    expect(chip('t_c').textContent).toContain('labels only');
+    expect(chip('t_r').classList.contains('labels-only')).toBe(false);
+    expect(chip('t_r').textContent).not.toContain('labels only');
+  });
+
+  test('P-2: with a prompt selected its pill count equals the cards shown, for a labels-only prompt too', async () => {
+    await setState(cfg({ lenses: [lensTag('t_r', 'Ramen'), lensTag('t_c', 'Climbing', { collects: false })] }), [
+      lensItem('a', { t_r: 0.9, t_c: 0.8 }), lensItem('b', { t_r: 0.2, t_c: 0.7 }), lensItem('c', { t_r: 0.1, t_c: 0.1 })
+    ]);
+    promptPill('t_c').click();
+    await flush();
+    expect(promptPill('t_c').getAttribute('aria-pressed')).toBe('true');
+    expect(feedIds()).toEqual(['a', 'b']);
+    expect(Number(promptPill('t_c').querySelector('.prompt-count').textContent)).toBe(feedIds().length);
+    promptPill('t_r').click();
+    await flush();
+    expect(feedIds()).toEqual(['a']);
+    expect(Number(promptPill('t_r').querySelector('.prompt-count').textContent)).toBe(feedIds().length);
+  });
+
+  test('chip order does not follow the score (P-3)', async () => {
+    const lenses = [lensTag('t_r', 'Ramen'), lensTag('t_c', 'Climbing')];
+    const order = () => [...document.querySelectorAll('#stream-list [data-id="a"] .lens-chip')].map((c) => c.dataset.lens);
+    await setState(cfg({ lenses }), [lensItem('a', { t_r: 0.9, t_c: 0.6 })]);
+    const before = order();
+    expect(before).toHaveLength(2);
+    await setState(cfg({ lenses }), [lensItem('a', { t_r: 0.6, t_c: 0.9 })]);
+    expect(order()).toEqual(before);
+  });
+
+  test('the Collect switch of a prompt row sends TAG_COLLECTS_TOGGLED { tag, collects } and the line follows at once', async () => {
+    await setState(cfg({ lenses: [lensTag('t_r', 'Ramen')] }), []);
+    document.querySelector('.tab-btn[data-tab="settings"]').click();
+    const input = () => document.querySelector('#tag-list .tag-row[data-tag="Ramen"] .collect-input');
+    expect(input().checked).toBe(true);
+    expect(input().getAttribute('aria-label')).toBe('Collect posts that match Ramen');
+    expect(summary().classList.contains('hidden')).toBe(false);
+    input().click();
+    await flush();
+    expect(sentOfType('TAG_COLLECTS_TOGGLED').map((m) => m.payload)).toEqual([{ tag: 'Ramen', collects: false }]);
+    expect(summary().classList.contains('hidden')).toBe(true);
+  });
+
+  test('a built-in tag has no Collect switch', async () => {
+    await setState(cfg({ lenses: [lensTag('t_r', 'Ramen')] }), []);
+    document.querySelector('.tab-btn[data-tab="settings"]').click();
+    expect(document.querySelector('#tag-list .tag-row[data-tag="Food"] .collect-input')).toBeNull();
+    expect(document.querySelector('#tag-list .tag-row[data-tag="Ramen"] .collect-input')).not.toBeNull();
   });
 });

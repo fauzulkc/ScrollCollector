@@ -4,6 +4,7 @@
 import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
 import { launchWithExtension, collectConsole } from './helpers/launch.mjs';
+import { SCHEMA_VERSION } from '../lib/storage/schema.js';
 
 const XSS = '<img src=x onerror=alert(1)>';
 
@@ -19,7 +20,7 @@ async function swPoll(sw, fn, arg, timeout = 30000) {
 }
 
 async function waitForStartup(sw) {
-  await swPoll(sw, async () => (await chrome.storage.local.get('schemaVersion')).schemaVersion === 2);
+  await swPoll(sw, async (v) => (await chrome.storage.local.get('schemaVersion')).schemaVersion === v, SCHEMA_VERSION);
 }
 
 /** Records every value the header badge's data-level takes, from the first parse on. */

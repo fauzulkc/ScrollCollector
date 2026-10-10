@@ -7,6 +7,7 @@ import { test, expect } from '@playwright/test';
 import { launchWithExtension, collectConsole } from './helpers/launch.mjs';
 import { annotations, waitDecided } from './helpers/ext.mjs';
 import { startMockDecisionServer } from './mock-decision-server.mjs';
+import { SCHEMA_VERSION } from '../lib/storage/schema.js';
 
 const PROMPT = 'find me restaurant and 5 star quality food posts. I am fascinated by michelin star cooking';
 const KEY = 'jev-e2e-SECRET-0123456789';
@@ -76,7 +77,7 @@ async function routeFeed(ext) {
 
 /** Seeds the prompt, Jev as the (allowed) escalator at the mock, and a key. */
 async function seed(sw, { baseUrl, extraIntelligence = {} }) {
-  await swPoll(sw, async () => (await chrome.storage.local.get('schemaVersion')).schemaVersion === 2);
+  await swPoll(sw, async (v) => (await chrome.storage.local.get('schemaVersion')).schemaVersion === v, SCHEMA_VERSION);
   await sw.evaluate(async ({ prompt, baseUrl, key, extra }) => {
     const { configuration } = await chrome.storage.local.get('configuration');
     await chrome.storage.local.set({

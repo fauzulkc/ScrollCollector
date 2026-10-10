@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+import { defaultTrackedTags } from '../../lib/bg/defaults.js';
 import { migrateState, postKeyFromUrl, parsePermalink, toTagStringList } from '../../lib/storage/migrations.js';
 import {
   SCHEMA_VERSION,
@@ -186,16 +187,16 @@ describe('migrateState v1 -> v2', () => {
   });
 
   test('empty or foreign input', () => {
-    expect(migrateState(undefined)).toEqual({ state: { schemaVersion: 2 }, changed: true });
-    expect(migrateState({ schemaVersion: 2 })).toEqual({ state: { schemaVersion: 2 }, changed: false });
+    expect(migrateState(undefined)).toEqual({ state: { schemaVersion: SCHEMA_VERSION }, changed: true });
+    expect(migrateState({ schemaVersion: SCHEMA_VERSION })).toEqual({ state: { schemaVersion: SCHEMA_VERSION }, changed: false });
     // a newer schema is left alone
-    const newer = { schemaVersion: 3, configuration: { trackedTags: [{ label: 'Ads' }] } };
+    const newer = { schemaVersion: SCHEMA_VERSION + 1, configuration: { trackedTags: [{ label: 'Ads' }] } };
     expect(migrateState(newer)).toEqual({ state: newer, changed: false });
   });
 
-  test('a v2 state written by the current defaults is already migrated', () => {
+  test('a state written by the current defaults at the current schema is already migrated', () => {
     const { state } = migrateState({
-      schemaVersion: 2,
+      schemaVersion: SCHEMA_VERSION,
       configuration: { intelligence: defaultIntelligence(), promptVersion: 1, matchPromptTags: ['a'], trackedTags: [{ label: 'Ads', isPseudo: true }] },
       stack: [{ id: 'x', decision: { v: 1 }, sourceUrl: 'https://example.com/a', textSnippet: 'short' }]
     });
@@ -335,5 +336,68 @@ describe('schema helpers', () => {
     expect(validateIntelligencePatch({ providers: { jev: { baseUrl: 'http://127.0.0.1:8787' } } }).ok).toBe(true);
     expect(validateIntelligencePatch({ providers: { jev: { baseUrl: 'https://user:pw@api.typesafe.ai' } } }).ok).toBe(false);
     expect(validateIntelligencePatch({ providers: { jev: { baseUrl: 'ftp://api.typesafe.ai' } } }).ok).toBe(false);
+  });
+});
+
+describe('schema v3: prompt lenses (DEC-6) and the per-prompt collect switch', () => {
+  /** A v2 snapshot as an upgrading user has it: 25 built-ins, Ads, two tags the user wrote, one built-in label retyped in other case. */
+  const v2 = (gateOn) => ({
+    schemaVersion: 2,
+    configuration: {
+      matchPrompt: gateOn ? 'find me posts about ramen' : '',
+      isMatchPromptEnabled: gateOn,
+      promptVersion: 1,
+      trackedTags: [
+        ...defaultTrackedTags(),
+        { id: 't_ads', label: 'Ads', isEnabled: true, isPseudo: true },
+        { id: 'u1', label: 'Ramen', prompt: 'Find posts about ramen.', isEnabled: true },
+        { id: 'u2', label: 'Climbing', prompt: 'Find posts about climbing.', isEnabled: false }
+      ]
+    },
+    stack: []
+  });
+  const userTags = (state) => state.configuration.trackedTags.filter((t) => t.id === 'u1' || t.id === 'u2');
+
+  test('a v2 state is stamped with the current schema, and that schema is v3 (the lens release)', () => {
+    expect(migrateState(v2(true)).state.schemaVersion).toBe(SCHEMA_VERSION);
+    // The pin Engineering bumps: lens fields in storage are v3 data, so a v2 reader must not mistake them for its own.
+    expect(SCHEMA_VERSION).toBe(3);
+  });
+
+  // Re-pinned by Engineering (DEC-6 cdd1490, Bar Raiser F3): before lenses a tag never collected, so every
+  // migrated user tag is labels-only whatever the master switch was; the old pin was collects = master state.
+  test.each([[true, false], [false, false]])('master switch %s: every user tag gets isLens and collects = %s (an upgrade changes no feed)', (gateOn, collects) => {
+    const { state } = migrateState(v2(gateOn));
+    expect(userTags(state).map((t) => [t.isLens, t.collects])).toEqual([[true, collects], [true, collects]]);
+  });
+
+  test('built-in tags, Ads and dynamic tags are never lenses: no isLens, no collects, nothing else changed', () => {
+    const before = v2(true);
+    const { state } = migrateState(before);
+    const builtIns = state.configuration.trackedTags.filter((t) => !userTags(state).includes(t));
+    expect(builtIns).toHaveLength(defaultTrackedTags().length + 1);
+    for (const tag of builtIns) {
+      expect(tag, tag.label).not.toHaveProperty('isLens');
+      expect(tag, tag.label).not.toHaveProperty('collects');
+    }
+    // the built-ins are otherwise exactly what they were (the Ads tag was already a pseudo-tag)
+    expect(builtIns).toEqual(before.configuration.trackedTags.filter((t) => t.id !== 'u1' && t.id !== 'u2'));
+  });
+
+  test('a user tag typed with a built-in label (any case) is that built-in, not a lens', () => {
+    const input = v2(true);
+    const [first] = defaultTrackedTags();
+    input.configuration.trackedTags.push({ id: 'u3', label: first.label.toUpperCase(), prompt: 'x', isEnabled: true });
+    const { state } = migrateState(input);
+    expect(state.configuration.trackedTags.find((t) => t.id === 'u3')).not.toHaveProperty('isLens');
+  });
+
+  test('re-running the migration is a no-op, and a collects the user already set is kept', () => {
+    const input = v2(true);
+    // true, not false (re-pinned by Engineering): with the labels-only default a stored false would pass even if ignored
+    input.configuration.trackedTags.find((t) => t.id === 'u1').collects = true;
+    const once = migrateState(input);
+    expect(once.state.configuration.trackedTags.find((t) => t.id === 'u1').collects).toBe(true);
+    expect(migrateState(once.state).changed).toBe(false);
   });
 });

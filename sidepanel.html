@@ -100,6 +100,15 @@
         </div>
       </div>
 
+      <!-- Prompt row (D-2): one outlined pill per enabled prompt; no prompts, no row. -->
+      <div class="filter-wrapper hidden" id="wrapper-prompts">
+        <div id="filter-prompt-pills" class="filter-pills prompt-pills" role="group" aria-label="Prompts">
+          <!-- Dynamically populated: one pill per prompt (name, count, "labels only" when Collect is off) -->
+        </div>
+      </div>
+      <!-- Which prompts are collecting (D-6); shown only while filtering is on -->
+      <p id="collect-summary" class="collect-summary hidden" role="status"></p>
+
       <!-- Horizontal Filter Pills (Tags & Sites & Authors) -->
       <div class="filter-wrapper" id="wrapper-tags">
         <div id="filter-pills" class="filter-pills">
@@ -243,6 +252,7 @@
         <div class="settings-title section-title-row">
           <label for="match-prompt-input">Prompt filter</label>
           <label class="filter-switch" for="match-prompt-toggle">
+            <span class="collect-label">Collect</span>
             <span id="match-prompt-state" class="filter-state" data-on="false">Off</span>
             <span class="tag-toggle">
               <input type="checkbox" id="match-prompt-toggle" aria-describedby="match-prompt-help">
@@ -250,7 +260,7 @@
             </span>
           </label>
         </div>
-        <p id="match-prompt-help" class="section-help">When the filter is on, only posts that match this prompt are collected. Posts that stop matching after you edit it are hidden, never deleted.</p>
+        <p id="match-prompt-help" class="section-help">When Collect is on, posts that match this prompt are collected. Posts that stop matching after you edit it are hidden, never deleted.</p>
         <textarea id="match-prompt-input" class="match-prompt-textarea" placeholder="e.g. Find posts about AI tools that help with coding…" rows="3" aria-describedby="match-prompt-save-state"></textarea>
         <div class="prompt-save-row">
           <span id="match-prompt-save-state" class="prompt-save-state" role="status"></span>
