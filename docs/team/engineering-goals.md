@@ -7,7 +7,7 @@ date, never written over.
 
 | Goal | For decision | State |
 |---|---|---|
-| **ENG-1** · lenses data model | DEC-6 | built `5090b29` on `feat/prompt-lenses`; not green: e2e `tags.spec.mjs:25` and the schema-version pins wait on 🧪 Testing |
+| **ENG-1** · lenses data model | DEC-6 | `5090b29` built; amended 02:45 for the per-prompt collect switch (owner), rebuild dispatched |
 | **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | draft plan; queued after ENG-1 (DEC-8) |
 | **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | probe done 2026-10-11: gates hold red; no honest change found yet (see Record) |
 
@@ -46,29 +46,35 @@ date, never written over.
    softmax. Reason, measured in `eval/reports/2026-10-10-system1.md`: match ECE 0.019 / 0.031 leave-one-prompt-out
    (PASS) against tag ECE 0.067 / 0.083 (bge-small FAIL, fitted on the 25 built-in topics); lenses are user prompts.
    Same post vector; one prompt vector per lens (cached with the spec).
-4. **Any-lens gate:** the gate is on when `isMatchPromptEnabled` is true and at least one lens exists; then
-   `collect` is true when **any** lens score reaches `STRICTNESS_THRESHOLDS[gate.strictness]`. Gate off:
-   unchanged (collect everything).
+4. **Any-collecting-prompt gate** (DEC-6, owner 02:27): each `isLens` tag carries **`collects`** (boolean; absent =
+   `true`). A *collecting* lens is `main` while `isMatchPromptEnabled` is on and the prompt is non-empty, or an
+   `isLens` tag with `collects !== false`. The gate is on when at least one collecting lens exists; then `collect` is
+   true when **any collecting** lens reaches `STRICTNESS_THRESHOLDS[gate.strictness]`. A non-collecting lens is still
+   scored (it sorts) but never collects. No collecting lens: gate off, collect everything.
 5. **"Matched" is one test, one function:** a lens matched a post when its score ≥ that same threshold.
    `lib/decision/lenses.js` exports it (`isLensMatch(score, configuration)`), plus `userLenses(configuration)`,
    `lensThreshold(configuration)`, `matchedLenses(decision, configuration)` and `lensScoreLabel(score)` =
    `Math.round(score × 100)` (📐 D-3's one function). The panel's pill count, list and chips all use it (P-2).
 6. **Escalation:** a lens question below its floor is uncertain like `matches_prompt` today; one post's
    uncertain lens questions go in its **one** call to the **one** primary provider (DEC-5), at most 10 lenses.
-7. **A lens is not a tag:** `isLens` tags leave tag classification (the tag questions, `primary_tag`, tag nouls,
-   `rankTags`, `decision.tags`, `assignedTag` candidates, dynamic-tag matching). Built-in and dynamic tags classify
-   exactly as today; `decision.tags`, `decision.tag`, `assignedTag` keep their meaning over that set; `pMatch` = the
-   `main` lens's score. A stored post filed under a lens tag is re-filed by the v3 backfill; manual overrides keep
-   their tag (`lib/pipeline/redecide.js:19,134` never re-decides them).
+7. **A user tag is both a lens and a label** (DEC-6, owner 02:27, superseding this rule as built in `5090b29`):
+   `isLens` tags stay in tag classification exactly as before ENG-1 (tag questions, `primary_tag`, tag nouls,
+   `rankTags`, `decision.tags`, `assignedTag`, dynamic-tag matching), whatever their `collects`. Built-in and dynamic
+   tags unchanged. `pMatch` = the `main` lens's score. Manual overrides keep their tag
+   (`lib/pipeline/redecide.js:19,134`). Known: a post's label comes from tag classification and its chip from the lens
+   score, two signals that can disagree (sent to 📐 Design).
 8. **Migration:** `SCHEMA_VERSION` 2 → 3. Configuration: existing user-added tags get `isLens: true` (rule 1:
-   not a built-in label, not dynamic, not pseudo, not Ads). Stack: posts without `decision.lenses` are marked
+   not a built-in label, not dynamic, not pseudo, not Ads) and **`collects` = whether the master gate was on**
+   (`isGateOn` at migration time): an upgrade never starts filtering for a user who was collecting everything. New
+   tags from `TAG_ADDED` get `collects: true` (the owner's default). For 🧭 CEO / owner review. Stack: posts without `decision.lenses` are marked
    for a lens backfill and re-scored by the existing re-decide job under the state lock, System 1 only, no
    escalation, no cloud. Idempotent.
 9. **Re-decide on prompt change:** adding, removing, enabling, renaming or editing a lens's prompt changes
    `decisionFingerprint` and re-decides, as the match prompt does today.
 10. **`userLenses(configuration)`** returns one ordered array: `main` first (when the match prompt is non-empty),
-   then enabled `isLens` tags in configured order, each `{ id, label, text }` (`label` null for `main`; `text` the
-   prompt, a blank tag prompt being the stored default "Find posts related to <label>."). No colour is stored: the
+   then enabled `isLens` tags in configured order, each `{ id, label, text, collects }` (`label` null for `main`;
+   `text` the prompt, a blank tag prompt being the stored default "Find posts related to <label>."; `collects` true
+   when that lens is collecting per rule 4). A new message sets one tag's `collects` (🧷 Extension wires the switch). No colour is stored: the
    panel derives it (`getTagColor`, `sidepanel.js:1775`). 📐 D-1's Settings list and D-2's row read this.
 
 ### Rejected implementations
@@ -93,6 +99,9 @@ date, never written over.
 | Every enabled lens has a score on every decided post, below 0.5 included | unit test, 3 lenses + built-in tags; seen failing on the parent commit |
 | Any-lens gate: a post matching only a user tag lens is collected with the gate on | unit test; seen failing on the parent commit |
 | Built-in tags never gate: a post matching only a built-in tag is not collected with the gate on | unit test |
+| A lens with `collects: false` is scored and labels but never collects; flipping it re-decides | unit tests; seen failing on `5090b29` |
+| User tags label as before ENG-1 (assignedTag / decision.tags), whatever `collects` | unit test; `e2e/tags.spec.mjs:25` result reported |
+| Migration sets `collects` from the master gate; an upgrade newly refuses nothing | unit test + the grid's "newly refused" column |
 | Lens scores use the match calibration | unit test: a lens score equals `matches_prompt` for the same prompt text |
 | Migration v2 → v3: idempotent, flags only user tags, a backfilled post's lenses equal a fresh decide | unit tests on `migrateState` + re-decide |
 | Editing one lens's prompt re-decides and changes that lens's score | unit test on `decisionFingerprint` + re-decide |
@@ -191,3 +200,8 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   **For Testing (findings, not softening):** strict top-1 marks a listed second tag wrong with no written primary rule;
   one post = 1.3 points and the 95 % interval is ±0.105 (checked: `sqrt(.675·.325/77)·1.96`), so the gate cannot tell a
   2-3 point gain from fold noise. DEC-9 stands: the gates stay red and nothing outward claims tag accuracy.
+- 2026-10-11 02:45 +0600 · ENG-1 amended for the owner's per-prompt collect switch (DEC-6, `591499d`). Rule 4: the gate
+  counts only *collecting* lenses (`collects`, absent = true; `main` collects while its switch is on). Rule 7 as built
+  in `5090b29` ~~"`isLens` tags leave tag classification"~~ → user tags label exactly as before ENG-1. Rule 8: migration
+  sets `collects` from the master gate so an upgrade starts no filtering (for CEO/owner review); new tags default on.
+  Rule 10: `userLenses` entries carry `collects`. Gates added.
