@@ -91,7 +91,14 @@ _(measured 2026-10-10 from `package.json`, the tree and the code)_
 - `c573df6`: LinkedIn's 2026 feed and jobs layout broke collection: upstream DOM rot shows up as "the cascade decided nothing".
 - `e0c0df6`: legacy inference router retired; MV3 forbids remote code, so no CDN: vendor everything through `build:ext`.
 - Windows git (exec-bit noise, GCM hangs) and Chrome loading from `\\wsl.localhost` are unreliable: WSL git, `sync:win`.
-- `README.md` does not describe System 1 (no "embedding"/"MiniLM" in it): README is not a source for the cascade.
+- 2026-10-11: a worktree for a parallel branch (`~/code/ScrollCollector-lenses`) symlinks the main tree's
+  `node_modules`, and `.gitignore`'s `node_modules/` does not match a symlink (add it to `.git/info/exclude`). Any
+  `npm install`/`npm ci` in the main tree changes the deps under every worker in such a worktree: a dependency
+  update gets its own worktree and its own `npm ci`.
+- 2026-10-11: a correction propagated by one phrasing misses sites: `d090913` fixed the README licence line's
+  "100% locally" and missed README:45 (fixed `336c362`). Search several phrasings before calling a correction done.
+- ~~`README.md` does not describe System 1 (no "embedding"/"MiniLM" in it)~~ 2026-10-11: it does since `d090913`
+  (10 hits). README is still not a source for the cascade: the code and `lib/decision/cascade.js`'s header are.
 
 ## Done means here
 - The slice names its row; `npm test` green uncached, counts in the commit message; `npm run test:e2e` green for any
