@@ -71,7 +71,8 @@ _(measured 2026-10-10 unless marked)_
   engine and not the System 1 embedding model; a claim read from README is still a hypothesis until re-read.
 - **A session rooted outside the repo has no seat skills or tier workers** (2026-10-11): sessions opened in
   `D:\Projects\scrollcollector` cannot run `/seat-*` or spawn `<team>-worker`, so the work runs on generic agents at
-  the session's own model. Open seats in `D:\code\ScrollCollector`.
+  the session's own model. Open or move seats to `\\wsl.localhost\Ubuntu-24.04\home\fauzul\code\ScrollCollector`
+  (the app's change-directory tool rejects the `D:\code` symlink; moving a session there loads the skills and workers).
 - **Peers commit mid-run:** a release test leg on a moving HEAD proves nothing. Pin the leg to a commit in a detached
   worktree, and merge that commit, not HEAD (0.10.0: `ee68247`).
 - **Windows git:** shows spurious exec-bit diffs on `.sh` files and its credential helper hangs; use WSL git (setup-facts).
