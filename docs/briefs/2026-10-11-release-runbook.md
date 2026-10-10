@@ -21,6 +21,8 @@ the seat confirms on return); row 7: `origin/main` = `c1fbd92`, tag `v0.10.0`. T
 `releases/ScrollCollector-0.10.0-store.zip` (46 MB; Windows: `\\wsl.localhost\Ubuntu-24.04\home\fauzul\code\ScrollCollector\releases\`).
 Waiting on the owner: approving the wording in `docs/STORE-LISTING.md` and `docs/PRIVACY.md`, and a contact address.
 
+**Superseded 2026-10-11 by DEC-10:** the owner uploads **0.11.0** instead (`v0.11.0`, zip on the GitHub release and at `releases/ScrollCollector-0.11.0-store.zip`). 0.10.0 was never submitted. Part B below is unchanged apart from the file.
+
 ## Part B · The owner (after Part A)
 1. **Developer account** (one time): sign in at the Chrome Web Store developer dashboard
    (`chrome.google.com/webstore/devconsole`), pay the one-time registration fee (_check_ the amount), verify
