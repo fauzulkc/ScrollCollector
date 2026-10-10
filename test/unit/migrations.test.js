@@ -255,6 +255,7 @@ describe('schema helpers', () => {
         openai: { enabled: false, baseUrl: 'https://api.openai.com/v1', model: 'gpt-6-luna', api: 'chat', reasoningEffort: 'none', timeoutMs: 15000 }
       },
       gate: { strictness: 'balanced', whenUnsure: 'collect' },
+      refine: { enabled: true, idleSeconds: 60, nano: true },
       dynamicTags: false,
       debugAnnotate: false
     });

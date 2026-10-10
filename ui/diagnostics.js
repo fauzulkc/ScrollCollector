@@ -42,7 +42,24 @@ export function diagnosticsStats(diag, engineStatus) {
     { label: 'Cache hits', value: lookups > 0 ? `${formatPct((hits || 0) / lookups)} of ${lookups}` : (num(c.cacheHits) !== null ? String(c.cacheHits) : '—') },
     { label: 'Avg / p95', value: num(c.avgMs) === null ? '—' : `${formatMs(c.avgMs)} / ${formatMs(c.p95Ms)}` },
     { label: 'Escalations today', value: num(budget.dayUsed) === null ? '—' : `${budget.dayUsed}${num(budget.perDay) !== null ? ` / ${budget.perDay}` : ''}` },
-    { label: 'Est. cost', value: cost === null ? '—' : formatUsd(cost) }
+    { label: 'Est. cost', value: cost === null ? '—' : formatUsd(cost) },
+    ...refineStats(diag)
+  ];
+}
+
+/**
+ * Idle refinement counters (GET_DIAGNOSTICS.refine.counters, since the service worker started).
+ * @param {any} diag
+ * @returns {{ label: string, value: string }[]}
+ */
+export function refineStats(diag) {
+  const c = (diag && diag.refine && diag.refine.counters) || {};
+  const v = (x) => (num(x) === null ? '—' : String(x));
+  return [
+    { label: 'Refined (idle)', value: v(c.refined) },
+    { label: 'Changed verdicts', value: v(c.changedVerdicts) },
+    { label: 'Changed tags', value: v(c.changedTags) },
+    { label: 'Nano calls (refine)', value: v(c.nanoCalls) }
   ];
 }
 

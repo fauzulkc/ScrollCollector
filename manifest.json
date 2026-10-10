@@ -12,6 +12,7 @@
     "scripting",
     "alarms",
     "offscreen",
+    "idle",
     "unlimitedStorage"
   ],
   "host_permissions": [

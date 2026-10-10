@@ -160,6 +160,16 @@ export function createFakeChrome({
   const tabSent = [];
   const alarms = new Map();
   const executed = [];
+  /** chrome.idle: tests set idleApi.state and dispatch idleApi.onStateChanged. */
+  const idleApi = {
+    state: 'active',
+    detectionInterval: 60,
+    onStateChanged: createEvent(),
+    setDetectionInterval(seconds) { idleApi.detectionInterval = seconds; },
+    async queryState(_seconds) { await tick(); return idleApi.state; },
+    /** Test helper: change the state and notify listeners (like Chrome does). */
+    setState(state) { idleApi.state = state; return idleApi.onStateChanged.dispatch(state); }
+  };
   /** @type {object[]} */
   const offscreenDocuments = [];
 
@@ -235,6 +245,7 @@ export function createFakeChrome({
     },
     runtime,
     tabs: tabsApi,
+    idle: idleApi,
     alarms: {
       created: alarms,
       onAlarm: createEvent(),

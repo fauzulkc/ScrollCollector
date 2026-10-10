@@ -11,6 +11,9 @@
  *                               ENGINE_STATUS and diagnostics
  *  - lib/pipeline/ingest.js     TEXT_EXTRACTED queue -> decisions (outside the lock) -> batched commits
  *  - lib/pipeline/redecide.js   re-decides the stored stack when the prompt, tags or model change
+ *  - lib/pipeline/refine.js     while the user is idle, refines stored posts with the second bundled
+ *                               model + Gemini Nano (owned by the decision runtime; chrome.idle and
+ *                               its alarm are forwarded below)
  *
  * Every handler awaits startup(): access level, default seeding, schema migration and the
  * restore of posts queued by a previous service-worker instance.
@@ -37,6 +40,7 @@ import { createIngest } from './lib/pipeline/ingest.js';
 import { migrateCanonicalAuthors } from './lib/pipeline/authors.js';
 import { createRedecider } from './lib/pipeline/redecide.js';
 import { createIdleRetry } from './lib/pipeline/retry.js';
+import { REFINE_ALARM } from './lib/pipeline/refine.js';
 
 // ---------------------------------------------------------------------------
 // Composition
@@ -193,12 +197,38 @@ if (chrome.alarms) {
   chrome.alarms.create('idleRetry', { periodInMinutes: 1 });
 
   chrome.alarms.onAlarm.addListener(async (alarm) => {
+    if (alarm.name === REFINE_ALARM) {
+      await startup();
+      try {
+        await decision.onRefineAlarm();
+      } catch (err) {
+        console.warn('[background] idle refinement failed:', err);
+      }
+      return;
+    }
     if (alarm.name !== 'idleRetry') return;
     await startup();
     try {
       await idleRetry.run();
     } catch (err) {
       console.warn('[background] idle retry failed:', err);
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Idle refinement (second model + on-device AI) of collected posts
+// ---------------------------------------------------------------------------
+
+// Registered at top level so an idle / active transition wakes the worker. The periodic
+// REFINE_ALARM (created by decision.start()) covers worker restarts without a state change.
+if (chrome.idle && chrome.idle.onStateChanged) {
+  chrome.idle.onStateChanged.addListener(async (state) => {
+    await startup();
+    try {
+      await decision.onIdleState(state);
+    } catch (err) {
+      console.warn('[background] idle refinement failed:', err);
     }
   });
 }

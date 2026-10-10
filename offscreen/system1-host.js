@@ -20,12 +20,23 @@
  *    disposed and S1_STATUS { status: 'unloaded', detail: 'idle' } is pushed; the service worker
  *    then closes this document, which frees the WASM heap and its worker threads (a WebAssembly
  *    memory never shrinks while the document lives). The next post loads the model again.
+ *  - Secondary model (the idle refinement pass, lib/pipeline/refine.js): S1_DECIDE { model,
+ *    secondary: true } decides with `model` WITHOUT unloading the active one. Up to MAX_EXTRA_MODELS
+ *    such pipelines are kept next to the active model (2 loaded at most), lazy-loaded on first use,
+ *    released by S1_UNLOAD { model } (after the pass), after `extraIdleUnloadMs` without use, or
+ *    together with the active model. They never push S1_STATUS (that describes the active model).
+ *    S1_LOAD of a model held as secondary promotes it instead of loading it again.
+ *  - Bundled model files are served without a Content-Length header, so Transformers.js warns
+ *    "Unable to determine content-length" for each file when a progress callback is passed. The
+ *    build writes models/manifest.json (byte size per file) and the host's fetch adds the header for
+ *    /models/ URLs (offscreen/model-fetch.js), which keeps load progress and silences the warning.
  */
 import { MSG, TARGET } from '../lib/messages.js';
 import { MODEL_REGISTRY } from '../lib/decision/models.js';
 import { createSystem1Scorer, validateCalibration } from '../lib/decision/system1-scorer.js';
 import { textHash } from '../lib/decision/state.js';
 import { createEmbeddingCache, embeddingKey } from './embedding-cache.js';
+import { MODEL_MANIFEST_PATH, installModelFetch } from './model-fetch.js';
 
 /** Relative to this module (offscreen/), i.e. dist/ext/lib/vendor/transformers.min.js. */
 const TRANSFORMERS_MODULE = '../lib/vendor/transformers.min.js';
@@ -40,6 +51,10 @@ const MAX_TEXT_CHARS = 20000;
 const MAX_EMBED_TEXTS = 64;
 /** The model is disposed after this long without a load / decide / embed call (0 = never). */
 export const S1_IDLE_UNLOAD_MS = 10 * 60 * 1000;
+/** A secondary model is disposed after this long without a decide call (0 = never). */
+export const S1_EXTRA_IDLE_UNLOAD_MS = 2 * 60 * 1000;
+/** Secondary pipelines kept next to the active model. */
+export const MAX_EXTRA_MODELS = 1;
 /** Timers may fire a little early: a call within this margin of the deadline still counts as idle. */
 const IDLE_SLACK_MS = 1000;
 
@@ -68,6 +83,7 @@ function errorCode(err, fallback) {
  *   now?: () => number,
  *   globals?: { crossOriginIsolated?: boolean, navigator?: any },
  *   idleUnloadMs?: number,
+ *   extraIdleUnloadMs?: number,
  *   setTimer?: typeof setTimeout,
  *   clearTimer?: typeof clearTimeout
  * }} [deps]
@@ -85,6 +101,7 @@ export function createSystem1Host({
   now = () => performance.now(),
   globals = globalThis,
   idleUnloadMs = S1_IDLE_UNLOAD_MS,
+  extraIdleUnloadMs = S1_EXTRA_IDLE_UNLOAD_MS,
   setTimer = setTimeout,
   clearTimer = clearTimeout
 } = {}) {
@@ -108,6 +125,10 @@ export function createSystem1Host({
    *   scorer: ReturnType<typeof createSystem1Scorer>, device: string, loadMs: number, pipelineMs: number, warmupMs: number, calibrateMs: number }}
    */
   let current = null;
+  /** Secondary models (S1_DECIDE { secondary: true }), key -> loaded model, at most MAX_EXTRA_MODELS. @type {Map<string, any>} */
+  const extras = new Map();
+  /** key -> { timer, lastUsed } of a secondary model */
+  const extraUse = new Map();
   /** @type {null|{ key: string, promise: Promise<object> }} */
   let loading = null;
   /** @type {{ status: string, model: string|null, progress?: number|null, detail?: string|null, error?: string|null }} */
@@ -167,6 +188,8 @@ export function createSystem1Host({
       if (!current || loading || now() - lastUsed < idleUnloadMs - IDLE_SLACK_MS) return;
       const had = current.key;
       await disposeCurrent();
+      // The service worker closes the document next: secondary models go with it.
+      await disposeExtras();
       status({ status: 'unloaded', model: had, detail: 'idle' });
     }).catch(() => {});
   }
@@ -204,6 +227,7 @@ export function createSystem1Host({
       model: current?.key ?? loading?.key ?? lastStatus.model ?? null,
       device: current?.device ?? null,
       loadMs: current?.loadMs ?? null,
+      secondary: [...extras.keys()],
       ...(lastStatus.status === 'loading' && Number.isFinite(lastStatus.progress) ? { progress: lastStatus.progress } : {}),
       ...(lastStatus.status === 'error' && lastStatus.error ? { error: lastStatus.error } : {})
     };
@@ -212,6 +236,9 @@ export function createSystem1Host({
   async function transformers() {
     if (!tfPromise) {
       tfPromise = Promise.resolve()
+        // Content-Length for the bundled model files (best effort: without the manifest the
+        // files still load, Transformers.js just warns once per file).
+        .then(() => installModelFetch({ target: globals, loadManifest: () => fetchJson(runtime.getURL(MODEL_MANIFEST_PATH)) }).catch(() => false))
         .then(() => importTransformers())
         .then((mod) => {
           const env = mod.env;
@@ -295,20 +322,110 @@ export function createSystem1Host({
     }
   }
 
+  /** Drops a secondary model from the bookkeeping (no dispose). @param {string} key */
+  function forgetExtra(key) {
+    const use = extraUse.get(key);
+    if (use && use.timer !== null) clearTimer(use.timer);
+    extraUse.delete(key);
+    extras.delete(key);
+  }
+
+  /** Disposes one secondary model. @param {string} key */
+  async function disposeExtra(key) {
+    const entry = extras.get(key);
+    forgetExtra(key);
+    if (!entry) return false;
+    try {
+      await entry.extractor?.dispose?.();
+    } catch {
+      /* best effort */
+    }
+    return true;
+  }
+
+  async function disposeExtras() {
+    for (const key of [...extras.keys()]) await disposeExtra(key);
+  }
+
+  /** Restarts a secondary model's idle countdown. @param {string} key */
+  function touchExtra(key) {
+    const prev = extraUse.get(key);
+    if (prev && prev.timer !== null) clearTimer(prev.timer);
+    const use = { lastUsed: now(), timer: /** @type {any} */ (null) };
+    if (extraIdleUnloadMs > 0) {
+      use.timer = setTimer(() => {
+        use.timer = null;
+        run(async () => {
+          if (extraUse.get(key) !== use || now() - use.lastUsed < extraIdleUnloadMs - IDLE_SLACK_MS) return;
+          await disposeExtra(key);
+        }).catch(() => {});
+      }, extraIdleUnloadMs);
+      /** @type {any} */ (use.timer)?.unref?.();
+    }
+    extraUse.set(key, use);
+  }
+
+  /**
+   * The secondary model `key`, loaded on first use (inside the serial queue). Evicts another
+   * secondary model when MAX_EXTRA_MODELS are held.
+   * @param {string} key
+   */
+  async function extraModel(key) {
+    const held = extras.get(key);
+    if (held) return held;
+    for (const other of [...extras.keys()]) {
+      if (extras.size < MAX_EXTRA_MODELS) break;
+      await disposeExtra(other);
+    }
+    const built = await buildModel(key, () => {});
+    extras.set(key, built);
+    return built;
+  }
+
   /**
    * @param {string} key
    * @returns {Promise<object>}
    */
   async function doLoad(key) {
-    const spec = MODEL_REGISTRY[key];
     // A queued load whose model got loaded meanwhile (A, B, A requested quickly) has nothing to do.
     if (current?.key === key) return readyReply(true);
+    // Held as the secondary model (refinement pass): promote it instead of loading it again.
+    const held = extras.get(key);
+    if (held) {
+      forgetExtra(key);
+      await disposeCurrent();
+      current = held;
+      status({ status: 'ready', model: key, device: held.device, loadMs: held.loadMs });
+      return readyReply(true);
+    }
+    try {
+      await disposeCurrent();
+      const built = await buildModel(key, status);
+      current = built;
+      status({ status: 'ready', model: key, device: 'wasm', loadMs: built.loadMs });
+      return { ...readyReply(false), pipelineMs: built.pipelineMs, warmupMs: built.warmupMs, calibrateMs: built.calibrateMs };
+    } catch (err) {
+      current = null;
+      const error = errorText(err);
+      const code = errorCode(err, 's1_load_error');
+      status({ status: 'error', model: key, error, detail: code });
+      return { ok: false, model: key, error, code };
+    }
+  }
+
+  /**
+   * Loads `key` (pipeline, warm-up, calibrated scorer) without touching `current`.
+   * @param {string} key
+   * @param {(payload: object) => void} report   load progress (S1_STATUS for the active model, nothing for a secondary one)
+   * @returns {Promise<{ key: string, spec: any, extractor: any, scorer: any, device: string, loadMs: number, pipelineMs: number, warmupMs: number, calibrateMs: number }>}
+   */
+  async function buildModel(key, report) {
+    const spec = MODEL_REGISTRY[key];
     const started = now();
     /** @type {any} */
     let extractor = null;
     try {
-      await disposeCurrent();
-      status({ status: 'loading', model: key, progress: 0, detail: 'starting' });
+      report({ status: 'loading', model: key, progress: 0, detail: 'starting' });
 
       const calibration = await fetchJson(runtime.getURL(`lib/decision/calibration/${key}.${spec.dtype}.json`));
       validateCalibration(calibration, { modelSpec: spec });
@@ -336,38 +453,31 @@ export function createSystem1Host({
         if (p > lastProgress && (t - lastPush >= PROGRESS_PUSH_MS || p - lastProgress >= 0.1)) {
           lastPush = t;
           lastProgress = p;
-          status({ status: 'loading', model: key, progress: Math.round(p * 1000) / 1000, detail: 'loading weights' });
+          report({ status: 'loading', model: key, progress: Math.round(p * 1000) / 1000, detail: 'loading weights' });
         }
       };
       extractor = await tf.pipeline('feature-extraction', `/models/${spec.id}`, { dtype: spec.dtype, device: 'wasm', progress_callback });
       const loadMs = round1(now() - started);
 
-      status({ status: 'loading', model: key, progress: DOWNLOAD_SHARE, detail: 'warming up' });
+      report({ status: 'loading', model: key, progress: DOWNLOAD_SHARE, detail: 'warming up' });
       const tw = now();
       await embedOne(extractor, spec, 'Warming up the local decision model.');
       const warmupMs = round1(now() - tw);
 
       const scorer = createSystem1Scorer({ embed: makeEmbed(key, spec, extractor), calibration, modelSpec: spec });
-      status({ status: 'loading', model: key, progress: 0.9, detail: 'background corpus' });
+      report({ status: 'loading', model: key, progress: 0.9, detail: 'background corpus' });
       const tc = now();
       await scorer.warm();
       const calibrateMs = round1(now() - tc);
 
-      const totalMs = round1(now() - started);
-      current = { key, spec, extractor, scorer, device: 'wasm', loadMs: totalMs, pipelineMs: loadMs, warmupMs, calibrateMs };
-      status({ status: 'ready', model: key, device: 'wasm', loadMs: totalMs });
-      return { ...readyReply(false), pipelineMs: loadMs, warmupMs, calibrateMs };
+      return { key, spec, extractor, scorer, device: 'wasm', loadMs: round1(now() - started), pipelineMs: loadMs, warmupMs, calibrateMs };
     } catch (err) {
       try {
         await extractor?.dispose?.();
       } catch {
         /* best effort */
       }
-      current = null;
-      const error = errorText(err);
-      const code = errorCode(err, 's1_load_error');
-      status({ status: 'error', model: key, error, detail: code });
-      return { ok: false, model: key, error, code };
+      throw err;
     }
   }
 
@@ -428,12 +538,16 @@ export function createSystem1Host({
    * @param {{ model?: string, items?: { id: string, text: string }[], spec?: object }} [payload]
    */
   function decide(payload = {}) {
-    const refused = refuse(payload?.model);
-    if (refused) return Promise.resolve(refused);
     const items = (Array.isArray(payload?.items) ? payload.items : []).slice(0, MAX_ITEMS_PER_DECIDE).map((it) => ({
       id: String(it?.id ?? ''),
       text: String(it?.text ?? '').slice(0, MAX_TEXT_CHARS)
     }));
+    const target = loading?.key ?? current?.key ?? null;
+    if (payload?.secondary === true && typeof payload.model === 'string' && payload.model !== target) {
+      return decideSecondary(payload.model, items, payload.spec);
+    }
+    const refused = refuse(payload?.model);
+    if (refused) return Promise.resolve(refused);
     return touching(run(async () => {
       const cur = current;
       if (!cur || (payload?.model && cur.key !== payload.model)) {
@@ -452,6 +566,40 @@ export function createSystem1Host({
         return { ok: false, model: cur.key, code: errorCode(err, 's1_error'), error: errorText(err), ms: round1(now() - t0) };
       }
     }));
+  }
+
+  /**
+   * S1_DECIDE { model, secondary: true }: decides with `model` next to the active model, loading it
+   * on first use. The active model's idle countdown is not touched.
+   * @param {string} key
+   * @param {{ id: string, text: string }[]} items
+   * @param {unknown} specIn
+   */
+  function decideSecondary(key, items, specIn) {
+    if (!MODEL_REGISTRY[key]) {
+      return Promise.resolve({ ok: false, code: 'unknown_model', error: `Unknown System 1 model: ${String(key).slice(0, 40)}` });
+    }
+    return run(async () => {
+      const t0 = now();
+      let entry;
+      try {
+        entry = await extraModel(key);
+      } catch (err) {
+        return { ok: false, model: key, secondary: true, code: errorCode(err, 's1_load_error'), error: errorText(err) };
+      }
+      touchExtra(key);
+      try {
+        const spec = specIn && typeof specIn === 'object' ? specIn : {};
+        const results = await entry.scorer.decideItems(items, /** @type {any} */ (spec));
+        counters.decideCalls += 1;
+        counters.decidedItems += items.length;
+        return { ok: true, model: key, secondary: true, results, ms: round1(now() - t0), calibrationId: entry.scorer.calibrationId };
+      } catch (err) {
+        return { ok: false, model: key, secondary: true, code: errorCode(err, 's1_error'), error: errorText(err), ms: round1(now() - t0) };
+      } finally {
+        touchExtra(key);
+      }
+    });
   }
 
   /**
@@ -486,11 +634,20 @@ export function createSystem1Host({
     });
   }
 
-  /** S1_UNLOAD -> { ok } */
-  function unload() {
+  /**
+   * S1_UNLOAD -> { ok }: the active model and every secondary one. S1_UNLOAD { model } naming a
+   * secondary model releases only that one (no S1_STATUS).
+   * @param {{ model?: string }} [payload]
+   */
+  function unload(payload = {}) {
+    const only = payload && typeof payload.model === 'string' ? payload.model : null;
+    if (only && only !== current?.key && only !== loading?.key) {
+      return run(async () => ({ ok: true, model: only, secondary: true, released: await disposeExtra(only) }));
+    }
     return run(async () => {
       const had = current?.key ?? null;
       await disposeCurrent();
+      await disposeExtras();
       clearIdle();
       status({ status: 'unloaded', model: had });
       return { ok: true, model: had };
