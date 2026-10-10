@@ -7,7 +7,7 @@ date, never written over.
 
 | Goal | For decision | State |
 |---|---|---|
-| **ENG-1** · lenses data model | DEC-6 | ruled 2026-10-11, amended 01:30 for the user-prompts-only addendum; build dispatched |
+| **ENG-1** · lenses data model | DEC-6 | built `5090b29` on `feat/prompt-lenses`; not green: e2e `tags.spec.mjs:25` and the schema-version pins wait on 🧪 Testing |
 | **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | draft plan; queued after ENG-1 (DEC-8) |
 | **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | opened 2026-10-11; first probe after ENG-1 returns |
 
