@@ -7,7 +7,7 @@ date, never written over.
 
 | Goal | For decision | State |
 |---|---|---|
-| **ENG-1** · lenses data model | DEC-6 | `5090b29` built; amended 02:45 for the per-prompt collect switch (owner), rebuild dispatched |
+| **ENG-1** · lenses data model | DEC-6 | `1b9bdfd` on `feat/prompt-lenses` (collect switch): unit 820/820, e2e 38/38; schema bump waits on 🧪 Testing; panel is 🧷 Extension's next |
 | **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | draft plan; queued after ENG-1 (DEC-8) |
 | **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | probe done 2026-10-11: gates hold red; no honest change found yet (see Record) |
 

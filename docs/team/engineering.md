@@ -95,6 +95,10 @@ _(measured 2026-10-10 from `package.json`, the tree and the code)_
   `node_modules`, and `.gitignore`'s `node_modules/` does not match a symlink (add it to `.git/info/exclude`). Any
   `npm install`/`npm ci` in the main tree changes the deps under every worker in such a worktree: a dependency
   update gets its own worktree and its own `npm ci`.
+- 2026-10-11: after a WSL restart fnm cannot create `/run/user/1000/fnm_multishells`, so a login shell has **no
+  node**. A fallback to "the newest installed" picked v26.2.0, where `content-identity.test.js` has timing failures,
+  and briefly contradicted a worker's green run. Use the fnm default explicitly:
+  `PATH=$HOME/.local/share/fnm/node-versions/v24.14.0/installation/bin:$PATH`. Nothing in the repo pins node.
 - 2026-10-11: a correction propagated by one phrasing misses sites: `d090913` fixed the README licence line's
   "100% locally" and missed README:45 (fixed `336c362`). Search several phrasings before calling a correction done.
 - ~~`README.md` does not describe System 1 (no "embedding"/"MiniLM" in it)~~ 2026-10-11: it does since `d090913`
