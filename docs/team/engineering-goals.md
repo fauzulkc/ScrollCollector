@@ -8,7 +8,7 @@ date, never written over.
 | Goal | For decision | State |
 |---|---|---|
 | **ENG-1** · lenses data model | DEC-6 | **shipped in 0.11.0** (tag `v0.11.0`, origin/main `dad4faa`): merged leg 842/842 unit, 42/42 e2e (🧭 CEO's run) |
-| **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | trial built: `0ea9017` + `b13a446` on `feat/image-previews`, synced to `D:deScrollCollector-previews-dev`; M1/M2 await the owner's feed |
+| **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | trial built: `0ea9017` + `b13a446` on `feat/image-previews`, synced to `D:\code\ScrollCollector-previews-dev`; M1/M2 await the owner's feed |
 | **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | parked 2026-10-11: probe + pre-registered genre cues failed; gates stay red (see Record) |
 
 ---
