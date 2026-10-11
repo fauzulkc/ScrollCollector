@@ -51,4 +51,4 @@ your collection.
 
 ## Changes and contact
 If this policy changes, the new version is posted at this address with a new date. Questions:
-[contact address the owner chooses].
+hi@fauzul.com.

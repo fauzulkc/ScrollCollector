@@ -182,6 +182,14 @@ not download a replacement language model.
 
 ---
 
-## License
+## Licence
 
-MIT License. No external network tracking. By default every decision is made on your device; post text leaves it only if you turn on a cloud provider (TypeSafe Jev or OpenAI).
+ScrollCollector is **source-available, not open source**. It is free for personal and other non-commercial use: you may use, change and share it under the [PolyForm Noncommercial License 1.0.0](LICENSE). Commercial use needs a licence from the owner: hi@fauzul.com.
+
+Copies you obtained under the earlier MIT declaration (up to and including version 0.11.0) keep that licence. The parts bundled with the extension keep their own licences; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+No external network tracking. By default every decision is made on your device; post text leaves it only if you turn on a cloud provider (TypeSafe Jev or OpenAI).
+
+## Contributing
+
+Issues and suggestions are welcome. Outside code contributions are not accepted for now (see [CONTRIBUTING.md](CONTRIBUTING.md)). Report security problems privately (see [SECURITY.md](SECURITY.md)).

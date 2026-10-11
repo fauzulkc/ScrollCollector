@@ -89,3 +89,5 @@ itself is never uploaded (DEC-5). The panel's "Telemetry Overview" card counts p
 nothing is reported anywhere.
 
 **Privacy policy URL:** the owner hosts `docs/PRIVACY.md` publicly and pastes the URL (runbook Part B step 2).
+
+**Contact (developer and support email):** hi@fauzul.com.

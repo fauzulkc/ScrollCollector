@@ -5,6 +5,7 @@
  *  - copies the runtime sources (manifest, background, content, side panel, ui, lib, offscreen, icons)
  *  - vendors the self-contained Transformers.js bundle + ONNX Runtime wasm files from node_modules
  *    (no CDN: MV3 forbids remote code and our CSP is script-src 'self' 'wasm-unsafe-eval')
+ *  - ships LICENSE, THIRD_PARTY_NOTICES.md and third_party/licenses/* under licenses/
  *  - bundles the q8 System 1 embedding weights from eval/.cache/models (run `npm run fetch:models` first)
  *    plus models/manifest.json with each model file's byte size (served as Content-Length, see
  *    offscreen/model-fetch.js)
@@ -122,6 +123,30 @@ if (WITH_MODELS) {
     }
   }
   fs.writeFileSync(path.join(OUT, 'models/manifest.json'), JSON.stringify({ files: modelSizes }, null, 2) + '\n');
+  fileCount += 1;
+}
+
+// Licence notices ship inside the package (Apache-2.0 and MIT require the text to travel with the bundled
+// parts): ScrollCollector's LICENSE, THIRD_PARTY_NOTICES.md and every text in third_party/licenses/.
+const licOut = path.join(OUT, 'licenses');
+fs.mkdirSync(path.join(licOut, 'third-party'), { recursive: true });
+for (const f of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
+  const src = path.join(ROOT, f);
+  if (!fs.existsSync(src)) {
+    console.error(`[build-ext] Missing ${src}: the package must ship its licence notices.`);
+    process.exit(1);
+  }
+  fs.copyFileSync(src, path.join(licOut, f));
+  fileCount += 1;
+}
+const thirdDir = path.join(ROOT, 'third_party/licenses');
+const thirdFiles = fs.existsSync(thirdDir) ? fs.readdirSync(thirdDir) : [];
+if (!thirdFiles.length) {
+  console.error(`[build-ext] Missing ${thirdDir}: the package must ship the third-party licence texts.`);
+  process.exit(1);
+}
+for (const f of thirdFiles) {
+  fs.copyFileSync(path.join(thirdDir, f), path.join(licOut, 'third-party', f));
   fileCount += 1;
 }
 

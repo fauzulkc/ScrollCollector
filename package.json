@@ -15,7 +15,7 @@
     "vendor:ai": "node scripts/build-ext.mjs"
   },
   "author": "Fauzul Chowdhury",
-  "license": "MIT",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "devDependencies": {
     "@playwright/test": "^1.63.0",
     "fake-indexeddb": "^6.2.5",

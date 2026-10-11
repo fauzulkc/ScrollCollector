@@ -31,6 +31,16 @@ if (!fs.existsSync(modelsManifest)) fail("no bundled models in dist/ext (run npm
 const models = Object.keys(JSON.parse(fs.readFileSync(modelsManifest, "utf8")).files || {});
 if (!models.length) fail("models/manifest.json lists no model files");
 named.push(...models.map((f) => "models/" + f));
+// Licence notices must ship (Apache-2.0 and MIT parts are bundled): LICENSE, THIRD_PARTY_NOTICES.md and
+// the licence text of each bundled part.
+named.push(
+  "licenses/LICENSE",
+  "licenses/THIRD_PARTY_NOTICES.md",
+  "licenses/third-party/Apache-2.0.txt",
+  "licenses/third-party/huggingface-jinja-MIT.txt",
+  "licenses/third-party/onnxruntime-MIT.txt",
+  "licenses/third-party/bge-small-en-v1.5-MIT.txt"
+);
 const missing = named.filter((f) => !fs.existsSync(path.join(ext, f)));
 if (missing.length) fail("missing from dist/ext: " + missing.join(", "));
 console.log(`[package-store] ${m.version}: ${named.length} named files present (${models.length} model files)`);
