@@ -8,7 +8,7 @@ date, never written over.
 | Goal | For decision | State |
 |---|---|---|
 | **ENG-1** · lenses data model | DEC-6 | **shipped in 0.11.0** (tag `v0.11.0`, origin/main `dad4faa`): merged leg 842/842 unit, 42/42 e2e (🧭 CEO's run) |
-| **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | started 2026-10-11 (CEO QUEUE after 0.11.0); measurements pre-registered, not yet run |
+| **ENG-2** · thumbnail fetch, shrink and byte cap | DEC-7 | trial built: `0ea9017` + `b13a446` on `feat/image-previews`, synced to `D:deScrollCollector-previews-dev`; M1/M2 await the owner's feed |
 | **ENG-3** · meet the System 1 tag gates honestly | DEC-9 | parked 2026-10-11: probe + pre-registered genre cues failed; gates stay red (see Record) |
 
 ---
@@ -386,3 +386,13 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   images generated locally (no network). Listing widening approved by the CEO as worded (+ the same sentence in
   PRIVACY.md), landing only in the release that ships previews, on that release's branch: `docs/STORE-LISTING.md` and
   `docs/PRIVACY.md` on main stay as 0.11.0 ships.
+- 2026-10-11 (commits `0ea9017`, `b13a446` on `feat/image-previews`) · **ENG-2 trial built.** Unit 990/990 uncached,
+  test.mjs 18/0, build 99 files, e2e 42/42 (my runs, node v24.14.0). Probe in Chrome for Testing (served LinkedIn-style
+  feed, photo from a real local HTTP server): 2 of 2 photo posts got a 480 × 320 WebP of 28,736 B, the photo-less post
+  none; the extension's fetches carried no Cookie or Referer; the panel showed two 48 px thumbs from `blob:` URLs and the
+  D-4 grow on hover. **M3 (CfT, synthetic):** p95 175 ms > 150 ms ⇒ concurrency 1 (rule: throttle, never move the cap).
+  Rulings during the build: orphan sweep at startup (`listThumbKeys`); a post sent before its image loads is re-sent once
+  and fetched at most once (`thumbAttempted`). Known gaps: a worker killed mid-fetch may retry a post once. For 📐 Design:
+  the grown view also closes on scroll (not in D-4). Next: the owner browses LinkedIn / X / YouTube on the trial; M1
+  (sizes at 480/320 per quality) and M2 (fetch success per site) are read from `THUMB_MEASUREMENTS_GET`, and the cap is
+  set by the pre-registered rule.
