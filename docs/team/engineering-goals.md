@@ -411,3 +411,11 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   collected, and for YouTube videos already collected, later in the background". Reason: since `d5cb1d4` the backfill
   fetches YouTube posters with no YouTube page open; the listing must never claim less than the code does. Lands only on
   the previews release branch, by 🧷 Extension's team, word for word; main keeps the 0.11.0 text.
+- 2026-10-11 (commits `b6c083a`, `caa202d` on `feat/image-previews`) · **Trial-only "Image size stats" in Diagnostics**
+  (🧭 CEO ruling: the owner reads M1/M2 from their own trial and pastes it; no in-scope route existed for Engineering).
+  Pure summary + the pre-registered rule in `lib/pipeline/thumb-stats.js`; the block and "Copy" by 🧷 Extension's team,
+  behind `SHOW_IMAGE_STATS` (removed before the previews release). Aggregates only: host names, counts, byte percentiles,
+  the pick; copied text opens with "ScrollCollector trial: image size stats (aggregates only; no web addresses, images or
+  post text)". The record is not reset (DB unchanged). Unit 1080/1080 five runs, test.mjs 18/0, e2e 42/42, CfT render +
+  Copy capture checked (my runs). **When the owner pastes it, Engineering re-derives the pick from the pasted cells by
+  hand before recording the cap.**
