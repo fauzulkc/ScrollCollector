@@ -405,3 +405,9 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   attempted (their URLs don't expire). After: **89 of 89** on the same grid, 89/89 fetched, 0 errors; unit 1042/1042
   three runs; test.mjs 18/0; **e2e 42/42** on this tree (the count `d5cb1d4`'s message points to). Measurement log
   evicts backfill rows first, so M1 capture rows survive. Trial re-synced to `D:\code\ScrollCollector-previews-dev`.
+- 2026-10-11 (after `2618b14`) · **Listing and privacy wording for the previews release, 🧭 CEO ruling (exact text;
+  supersedes the sentence approved on `54c1d6b`).** In `docs/STORE-LISTING.md` (host-access justification) and in
+  `docs/PRIVACY.md`, the extension: "fetches the post's preview image from the site's own image server when the post is
+  collected, and for YouTube videos already collected, later in the background". Reason: since `d5cb1d4` the backfill
+  fetches YouTube posters with no YouTube page open; the listing must never claim less than the code does. Lands only on
+  the previews release branch, by 🧷 Extension's team, word for word; main keeps the 0.11.0 text.
