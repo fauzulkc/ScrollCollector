@@ -396,3 +396,12 @@ false-friend posts carry genre labels (News / Personal Opinion / Blog) that are 
   the grown view also closes on scroll (not in D-4). Next: the owner browses LinkedIn / X / YouTube on the trial; M1
   (sizes at 480/320 per quality) and M2 (fetch success per site) are read from `THUMB_MEASUREMENTS_GET`, and the cap is
   set by the pre-registered rule.
+- 2026-10-11 (commit `d5cb1d4` on `feat/image-previews`) · **YouTube previews fixed** after the owner's trial (LinkedIn
+  worked, YouTube 0 of 168). The owner's own measurement record could not be read inside the scope they gave
+  (Claude-in-Chrome cannot open `chrome-extension://` pages; `chrome://extensions` would show other extensions), so
+  their 0/168 stays unexplained. Reproduced in Chrome for Testing on real public youtube.com: fetch fine (56/56), capture
+  the weak point (44 of 89 attempted on a lazy channel grid). Fix: source = `i.ytimg.com/vi/<ID>/hqdefault.jpg` from the
+  permalink, always on YouTube (same host as the page; no listing change), plus a paced backfill of YouTube items never
+  attempted (their URLs don't expire). After: **89 of 89** on the same grid, 89/89 fetched, 0 errors; unit 1042/1042
+  three runs; test.mjs 18/0; **e2e 42/42** on this tree (the count `d5cb1d4`'s message points to). Measurement log
+  evicts backfill rows first, so M1 capture rows survive. Trial re-synced to `D:\code\ScrollCollector-previews-dev`.
